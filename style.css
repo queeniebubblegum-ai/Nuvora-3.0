@@ -1,0 +1,47 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+body { font-family: 'Montserrat', sans-serif !important; background-color: #FCFBFF; color: #1f0f42; }
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #E5E0EB; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #8b6ca3; }
+
+/* UTILS */
+.btn-core {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    padding: 0.6rem 1.2rem; border-radius: 0.75rem; font-weight: 600; font-size: 0.875rem;
+    transition: all 0.2s ease; border: none; cursor: pointer;
+}
+
+/* COMPONENTES */
+.nav-item { border-radius: 0.75rem; color: #6B7280; font-weight: 500; margin-bottom: 4px; transition: all 0.2s; }
+.nav-item:hover { background-color: #F4F0F8; color: #1f0f42; }
+.nav-item.active { background-color: #F4F0F8; color: #1f0f42; font-weight: 700; }
+.nav-item.active i { color: #8b6ca3; }
+
+/* TOAST NOTIFICATIONS */
+#toast-container {
+    position: fixed; top: 1rem; right: 1rem; z-index: 100;
+    display: flex; flex-direction: column; gap: 0.5rem;
+}
+.toast {
+    background: white; padding: 1rem 1.5rem; border-radius: 1rem;
+    box-shadow: 0 10px 25px -5px rgba(31, 15, 66, 0.08);
+    border-left: 4px solid #1f0f42;
+    animation: slideIn 0.3s ease-out forwards;
+    display: flex; align-items: center; gap: 0.75rem; font-size: 0.875rem; font-weight: 600;
+}
+.toast.error { border-left-color: #F43F5E; }
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+@keyframes fadeOut {
+    to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* MOBILE OVERLAY */
+.mobile-overlay {
+    background: rgba(31, 15, 66, 0.3); backdrop-filter: blur(4px);
+}

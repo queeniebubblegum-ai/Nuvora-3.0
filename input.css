@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Playfair+Display:ital,wght@0,600;1,600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+:root {
+  --c-bg: #F7F8FB;
+  --c-surface: #FFFFFF;
+  --c-border: #E6E8EF;
+  --c-text-primary: #1A1A1A;
+  --c-text-secondary: #6B7280;
+  --c-brand-deep: #1F0F42;
+  --c-brand-dark: #2E1760;
+  --c-brand-medium: #6C3BB6;
+  --c-brand-soft: #B8A6D9;
+}
+
+.dark {
+  --c-bg: #0D061A;
+  --c-surface: #170A2E;
+  --c-border: #2D1A54;
+  --c-text-primary: #F7F8FB;
+  --c-text-secondary: #A396BD;
+  --c-brand-deep: #0A0414;
+  --c-brand-dark: #1A0D36;
+  --c-brand-medium: #6C3BB6;
+  --c-brand-soft: #B8A6D9;
+}
+
+body { 
+    font-family: 'Montserrat', sans-serif !important; 
+    background-color: var(--c-bg); 
+    color: var(--c-text-primary); 
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--c-brand-medium); }
