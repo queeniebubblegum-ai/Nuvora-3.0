@@ -89,7 +89,7 @@ export const ChartCategorias = {
                         callbacks: {
                             label: function(context) {
                                 if (context.label === 'Sem despesas') return ' R$ 0,00';
-                                return ' R$ ' + context.raw.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+                                return ' R$ ' + Number(context.raw || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
                             }
                         }
                     }

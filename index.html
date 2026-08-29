@@ -109,9 +109,6 @@
                 <button data-action="navigate" data-payload="Transacoes" id="nav-Transacoes" class="nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
                     <i class="fa-solid fa-arrow-right-arrow-left w-5 text-center"></i> Transações
                 </button>
-                <button data-action="navigate" data-payload="Agendamentos" id="nav-Agendamentos" class="nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-regular fa-calendar-check w-5 text-center"></i> Agenda
-                </button>
                 <button data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
                     <i class="fa-solid fa-chart-line w-5 text-center"></i> Planejamento
                 </button>
@@ -127,31 +124,21 @@
                     <p class="px-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Gestão</p>
                 </div>
                 <button data-action="navigate" data-payload="Contas" id="nav-Contas" class="nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-wallet w-5 text-center"></i> Carteira
-                </button>
-                <button data-action="navigate" data-payload="Categorias" id="nav-Categorias" class="nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-tags w-5 text-center"></i> Categorias
-                </button>
-                <button data-action="navigate" data-payload="Contatos" id="nav-Contatos" class="nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-address-book w-5 text-center"></i> Contatos
+                    <i class="fa-solid fa-wallet w-5 text-center"></i> Contas
                 </button>
 
             </nav>
 
             <div class="p-6 border-t border-white/10 space-y-2 shrink-0">
-                <button data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes" class="flex items-center gap-3 text-white/80 hover:text-white hover:bg-white/10 rounded-[12px] text-sm font-medium w-full px-4 py-2.5 transition-colors mb-2">
-                    <i class="fa-solid fa-gear w-5 text-center"></i> Configurações
-                </button>
-                <button onclick="toggleDarkMode()" class="flex items-center gap-3 text-white/80 hover:text-white hover:bg-white/10 rounded-[12px] text-sm font-medium w-full px-4 py-2.5 transition-colors">
-                    <i class="fa-solid fa-moon w-5 text-center"></i> Tema Escuro
-                </button>
                 <input type="file" id="backup-input" class="hidden" accept=".json">
-                <button data-action="exportBackup" class="flex items-center gap-3 text-white/80 hover:text-success hover:bg-white/10 rounded-[12px] text-sm font-medium w-full px-4 py-2.5 transition-colors">
-                    <i class="fa-solid fa-download w-5 text-center"></i> Exportar Dados
+                <div class="flex justify-end gap-2">
+                <button data-action="exportBackup" title="Exportar dados" aria-label="Exportar dados" class="flex items-center justify-center text-white/80 hover:text-success hover:bg-white/10 rounded-[12px] text-sm font-medium w-10 h-10 transition-colors">
+                    <i class="fa-solid fa-download"></i>
                 </button>
-                <button onclick="document.getElementById('backup-input').click()" class="flex items-center gap-3 text-white/80 hover:text-brand-soft hover:bg-white/10 rounded-[12px] text-sm font-medium w-full px-4 py-2.5 transition-colors">
-                    <i class="fa-solid fa-upload w-5 text-center"></i> Importar Dados
+                <button onclick="document.getElementById('backup-input').click()" title="Importar dados" aria-label="Importar dados" class="flex items-center justify-center text-white/80 hover:text-brand-soft hover:bg-white/10 rounded-[12px] text-sm font-medium w-10 h-10 transition-colors">
+                    <i class="fa-solid fa-upload"></i>
                 </button>
+                </div>
 
                 <div class="pt-4 mt-4 border-t border-white/10">
                     <div data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes-perfil" class="flex items-center gap-3 w-full px-3 py-2 rounded-[12px] hover:bg-white/10 transition-colors cursor-pointer group">
@@ -160,7 +147,7 @@
                             <span class="block text-sm font-bold text-white truncate">Usuário</span>
                             <span class="block text-[10px] text-white/50 truncate font-mono"></span>
                         </div>
-                        <i class="fa-solid fa-gear text-white/40 group-hover:text-white transition-colors text-xs"></i>
+                        <button onclick="toggleDarkMode(); event.stopPropagation()" title="Alternar tema" aria-label="Alternar tema" class="w-7 h-7 rounded-lg flex items-center justify-center text-white/40 hover:text-white hover:bg-white/10 transition-colors"><i class="fa-solid fa-circle-half-stroke text-xs"></i></button><i class="fa-solid fa-gear text-white/40 group-hover:text-white transition-colors text-xs"></i>
                     </div>
                 </div>
             </div>

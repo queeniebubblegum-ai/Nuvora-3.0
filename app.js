@@ -200,7 +200,7 @@ export const App = {
         invoiceYear: new Date().getFullYear(),
         budgetMonth: new Date().getMonth(),
         budgetYear: new Date().getFullYear(),
-        filters: { desc: '', categoria: '', bancoId: '', mes: '' },
+        filters: { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' },
         reportTab: 'fluxo',
         isNotifOpen: false,
         notifTab: 'alertas',
@@ -702,10 +702,27 @@ export const App = {
     
     clearFilters: () => { 
         App.viewState.selectedTransactions = []; 
-        App.viewState.filters = { desc: '', categoria: '', bancoId: '', mes: '' }; 
+        App.viewState.filters = { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' }; 
         App.viewState.txPage = 1; 
     },
     
+    showAgendaDay: (date) => {
+        const items = [...(db.agendamentos || []), ...(db.receitasFuturas || [])].filter(i => (i.dataVencimento || i.data) === date);
+        const dataFormatada = new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
+        const lista = document.getElementById('agenda-dia-lista');
+        const label = document.getElementById('agenda-dia-data');
+        const botao = document.getElementById('agenda-dia-adicionar');
+        if (label) label.innerText = dataFormatada;
+        if (lista) lista.innerHTML = items.length ? items.map(i => `<div class="flex items-center justify-between p-3 rounded-lg bg-bg border border-border"><span class="text-sm text-text-primary"><i class="fa-solid ${i.tipo === 'receita' ? 'fa-arrow-trend-up text-success' : 'fa-arrow-trend-down text-danger'} mr-2"></i>${Utils.escapeHTML(i.desc || i.nome || 'Lançamento')}</span><strong class="text-sm font-mono ${i.tipo === 'receita' ? 'text-success' : 'text-danger'}">${i.tipo === 'receita' ? '+' : '-'}${Utils.formatMoney(i.valor)}</strong></div>`).join('') : '<p class="text-sm text-text-secondary text-center py-6">Nenhuma previsão neste dia.</p>';
+        if (botao) botao.dataset.date = date;
+        App.openModal('modal-agenda-dia');
+    },
+    addAgendaOnDate: () => {
+        const date = document.getElementById('agenda-dia-adicionar')?.dataset.date;
+        App.closeModal(); App.openModal('modal-agendamento');
+        const campoData = document.getElementById('agendamento-data'); if (campoData) campoData.value = date || '';
+    },
+
     changeMonth: (type, direction) => {
         App.viewState.selectedTransactions = [];
         let m = type === 'invoice' ? App.viewState.invoiceMonth : App.viewState.budgetMonth;
@@ -800,21 +817,25 @@ export const App = {
         const file = e.target.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = async (event) => {
             try {
-                const importedDB = JSON.parse(e.target.result);
-                Database.replaceAll(importedDB).then(() => {
-                    Utils.showToast('Backup restaurado com sucesso!', 'success');
-                    setTimeout(() => window.location.reload(), 1000);
-                }).catch(() => {
-                    Utils.showToast('Erro ao importar arquivo. Estrutura inválida.', 'error');
-                });
+                const importedDB = JSON.parse(event.target.result);
+                const required = ['transacoes', 'bancos', 'cartoes', 'categorias'];
+                const valido = required.every(col => Array.isArray(importedDB[col]));
+                if (!valido) throw new Error('Estrutura inválida');
+                const total = required.reduce((s, col) => s + importedDB[col].length, 0);
+                if (!window.confirm(`Este backup contém ${total} registros principais e substituirá os dados atuais. Continuar?`)) return;
+                localStorage.setItem('nuvora_backup_antes_importacao', JSON.stringify(db));
+                await Database.replaceAll(importedDB);
+                Utils.showToast('Backup restaurado com sucesso!', 'success');
+                setTimeout(() => window.location.reload(), 1000);
             } catch (err) {
-                Utils.showToast('Erro ao importar arquivo. Formato inválido.', 'error');
-            }
+                Utils.showToast('Não foi possível importar: o arquivo não tem uma estrutura válida.', 'error');
+            } finally { e.target.value = ''; }
         };
         reader.readAsText(file);
     }
+
 };
 
 window.App = App;

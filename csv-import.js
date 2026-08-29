@@ -10,6 +10,8 @@ const parseDate = (raw) => {
     const value = String(raw ?? '').trim();
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
         const [d, m, y] = value.split('/');
+        const date = new Date(Number(y), Number(m) - 1, Number(d));
+        if (date.getFullYear() !== Number(y) || date.getMonth() !== Number(m) - 1 || date.getDate() !== Number(d)) return null;
         return `${y}-${m}-${d}`;
     }
     if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;

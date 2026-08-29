@@ -1,8 +1,10 @@
 import { UtilDate } from './util-date.js';
 export const UtilFinance = {
     formatMoney: (v) => {
-        if (isNaN(v)) return 'R$ 0,00';
-        return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        if (v === null || v === undefined || v === '') return 'R$ 0,00';
+        const valor = Number(v);
+        if (!Number.isFinite(valor)) return 'R$ 0,00';
+        return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     },
 
     formatBankName: (banco) => {

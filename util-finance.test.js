@@ -34,4 +34,9 @@ describe('UtilFinance - Matemática Financeira', () => {
     it('formatMoney: deve retornar zero quando o valor for inválido', () => {
         expect(UtilFinance.formatMoney(NaN)).toBe('R$ 0,00');
     });
+
+    it('formatMoney: deve tolerar valores nulos sem quebrar a tela', () => {
+        expect(UtilFinance.formatMoney(null)).toBe('R$ 0,00');
+        expect(UtilFinance.formatMoney(undefined)).toBe('R$ 0,00');
+    });
 });

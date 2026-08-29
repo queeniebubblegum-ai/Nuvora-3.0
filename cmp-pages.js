@@ -155,35 +155,21 @@ export const PageComponents = {
     },
 
     filtersSection: (f, bancos, categorias = [], cartoes = []) => {
-        const orcamentosDoMes = orcamentos.filter(o => (o.ano == null || (o.ano === state.budgetYear && o.mes === state.budgetMonth)));
-        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        
-        let selectContaOptions = '<option value="">Todos</option>';
-        if(bancos && bancos.length > 0) {
-            selectContaOptions += '<optgroup label="Contas Bancárias">';
-            selectContaOptions += bancos.map(b => {
-                const displayName = b.instituicao && b.instituicao !== 'Outro' ? `${Utils.escapeHTML(b.instituicao)} (${Utils.escapeHTML(b.nome)})` : Utils.escapeHTML(b.nome);
-                return `<option value="banco_${b.id}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${displayName}</option>`;
-            }).join('');
-            selectContaOptions += '</optgroup>';
-        }
-        if(cartoes && cartoes.length > 0) {
-            selectContaOptions += '<optgroup label="Cartões de Crédito">';
-            selectContaOptions += cartoes.map(c => `<option value="cartao_${c.id}" ${f.bancoId === 'cartao_'+c.id ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('');
-            selectContaOptions += '</optgroup>';
-        }
+        const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
+        let contas = '<option value="">Todas</option>';
+        if (bancos?.length) contas += '<optgroup label="Contas">' + bancos.map(b => `<option value="banco_${b.id}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${Utils.escapeHTML(b.instituicao && b.instituicao !== 'Outro' ? b.instituicao + ' (' + b.nome + ')' : b.nome)}</option>`).join('') + '</optgroup>';
+        if (cartoes?.length) contas += '<optgroup label="Cartões">' + cartoes.map(c => `<option value="cartao_${c.id}" ${f.bancoId === 'cartao_'+c.id ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('') + '</optgroup>';
+        const cats = categorias.map(c => { const nome = typeof c === 'string' ? c : c.nome; return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`; }).join('');
+        return `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"><div class="sm:col-span-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Buscar</label><input type="text" placeholder="Descrição ou ID" value="${Utils.escapeHTML(f.desc)}" data-input="setFilterDesc" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Mês</label><select data-change="setFilter" data-filter-key="mes" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todos</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Tipo</label><select data-change="setFilter" data-filter-key="tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todos</option><option value="receita" ${f.tipo==='receita'?'selected':''}>Receitas</option><option value="despesa" ${f.tipo==='despesa'?'selected':''}>Despesas</option></select></div></div><details class="mt-3 border-t border-border pt-3 group"><summary class="cursor-pointer list-none text-xs font-bold text-brand-medium"><i class="fa-solid fa-sliders mr-1"></i>Mais filtros <i class="fa-solid fa-chevron-down text-[10px] ml-1 group-open:rotate-180 transition-transform"></i></summary><div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3"><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todas</option>${cats}</select></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Conta/Cartão</label><select data-change="setFilter" data-filter-key="bancoId" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary">${contas}</select></div><div class="flex gap-2"><div class="flex-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">De</label><input type="date" data-change="setFilter" data-filter-key="dataInicio" value="${f.dataInicio || ''}" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div><div class="flex-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Até</label><input type="date" data-change="setFilter" data-filter-key="dataFim" value="${f.dataFim || ''}" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div></div><button data-action="clearFilters" class="sm:col-span-3 justify-self-start px-3 py-2 bg-bg text-text-primary rounded-[10px] text-xs font-bold"><i class="fa-solid fa-eraser mr-1"></i>Limpar filtros</button></div></details>`;
+    },
 
-        return `
-        <div class="flex flex-col lg:flex-row gap-4 items-end">
-            <div class="flex-1 w-full"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Buscar</label><div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-text-secondary"></i><input type="text" placeholder="Ex: Mercado, Uber..." value="${Utils.escapeHTML(f.desc)}" data-input="setFilterDesc" class="w-full pl-10 p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-all text-text-primary"></div></div>
-            <div class="w-full lg:w-40"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Mês</label><select data-change="setFilter" data-filter-key="mes" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todos</option>${meses.map((m, i) => `<option value="${i}" ${f.mes === i.toString() ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-            <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todas</option>${categorias.map(c => {
-                const nome = typeof c === 'string' ? c : c.nome;
-                return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`;
-            }).join('')}</select></div>
-            <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Conta/Cartão</label><select data-change="setFilter" data-filter-key="bancoId" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary">${selectContaOptions}</select></div>
-            <div class="w-full lg:w-auto"><button data-action="clearFilters" class="w-full lg:w-auto px-4 py-2.5 bg-bg text-text-primary hover:bg-border rounded-[12px] text-sm font-bold transition-colors flex items-center justify-center gap-2"><i class="fa-solid fa-eraser"></i> Limpar</button></div>
-        </div>`;
+    transactionSummary: (transacoes = []) => {
+        const receitas = transacoes.filter(t => t.tipo === 'receita').reduce((s,t) => s + (Number(t.valor)||0), 0);
+        const despesas = transacoes.filter(t => t.tipo === 'despesa').reduce((s,t) => s + (Number(t.valor)||0), 0);
+        const cats = {}; transacoes.filter(t => t.tipo === 'despesa').forEach(t => cats[t.categoria] = (cats[t.categoria] || 0) + (Number(t.valor)||0));
+        const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3);
+        const card=(label,value,cor)=>`<div class="bg-surface border border-border rounded-[10px] px-3 py-2 min-w-0"><span class="block text-[9px] uppercase font-bold text-text-secondary truncate">${label}</span><strong class="block text-sm font-mono ${cor} mt-0.5 truncate">${value}</strong></div>`;
+        return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">${card('Receitas',Utils.formatMoney(receitas),'text-success')}${card('Despesas',Utils.formatMoney(despesas),'text-danger')}${card('Saldo',Utils.formatMoney(receitas-despesas),receitas-despesas>=0?'text-success':'text-danger')}${card('Transações',transacoes.length,'text-text-primary')}<div class="col-span-2 sm:col-span-4 flex items-center gap-2 px-2 py-1.5 overflow-x-auto whitespace-nowrap"><span class="text-[9px] uppercase font-bold text-text-secondary">Categorias:</span>${topCats.length ? topCats.map(([cat,val])=>`<span class="text-[10px] text-text-primary"><strong>${Utils.escapeHTML(cat)}</strong> ${Utils.formatMoney(val)}</span>`).join('<span class="text-border">•</span>') : '<span class="text-[10px] text-text-secondary">Sem despesas</span>'}</div></div>`;
     },
 
     transactionList: (list, state) => {
@@ -249,6 +235,7 @@ export const PageComponents = {
                                 <div class="flex flex-wrap items-center gap-2 mt-1.5">
                                     <span class="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-white" style="background-color: ${catObj.cor}99">${Utils.escapeHTML(t.categoria)}</span>
                                     <span class="text-[10px] text-text-secondary flex items-center gap-1"><i class="fa-regular fa-calendar"></i> ${dataFormatada}</span>
+                                    ${(() => { const banco = db.bancos.find(b => String(b.id) === String(t.bancoId)); return banco ? `<span class="text-[10px] text-text-secondary flex items-center gap-1"><i class="fa-solid fa-building-columns"></i> ${Utils.escapeHTML(banco.nome || banco.instituicao)}</span>` : ''; })()}
                                     ${t.isCartao ? `<span class="text-[10px] text-credit bg-bg border border-border px-1.5 py-0.5 rounded flex items-center gap-1 font-bold"><i class="fa-regular fa-credit-card"></i> Cartão (Parc. ${t.parcelaAtual}/${t.totalParcelas})</span>` : ''}
                                     ${!t.isCartao && t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="text-[10px] text-text-secondary border border-border px-1.5 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-money-check"></i> ${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}
                                     ${badgeRecorrente}
