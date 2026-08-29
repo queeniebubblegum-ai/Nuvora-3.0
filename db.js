@@ -454,10 +454,10 @@ export const GoalRepo = {
 export const BudgetRepo = {
     add: (item) => { db.orcamentos.unshift(item); persist('orcamentos'); return true; },
     remove: (id) => { db.orcamentos = db.orcamentos.filter(i => i.id.toString() !== id.toString()); persist('orcamentos'); },
-    updateLimit: (categoria, limite) => {
-        const existe = db.orcamentos.findIndex(o => o.categoria === categoria);
+    updateLimit: (categoria, limite, ano = null, mes = null) => {
+        const existe = db.orcamentos.findIndex(o => o.categoria === categoria && o.ano === ano && o.mes === mes);
         if (existe >= 0) db.orcamentos[existe].limite = limite;
-        else db.orcamentos.push({ id: Date.now(), categoria, limite });
+        else db.orcamentos.push({ id: Date.now(), categoria, limite, ano, mes });
         persist('orcamentos');
     }
 };

@@ -155,6 +155,7 @@ export const PageComponents = {
     },
 
     filtersSection: (f, bancos, categorias = [], cartoes = []) => {
+        const orcamentosDoMes = orcamentos.filter(o => (o.ano == null || (o.ano === state.budgetYear && o.mes === state.budgetMonth)));
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
         
         let selectContaOptions = '<option value="">Todos</option>';
@@ -597,23 +598,26 @@ export const PageComponents = {
             <h3 class="font-bold text-text-primary text-lg mb-6 tracking-tight font-primary">Metas Ativas</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">${metasHtml}</div>`;
     },
 
-    budgetView: (orcamentos, transacoes, state) => {
+    budgetView: (orcamentos, transacoes, state = {}) => {
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        const mesAtualNome = meses[state.budgetMonth]; 
+        const anoSelecionado = state.budgetYear || new Date().getFullYear();
+        const mesSelecionado = state.budgetMonth ?? new Date().getMonth();
+        const mesAtualNome = meses[mesSelecionado];
+        const orcamentosDoMes = (orcamentos || []).filter(o => o.ano == null || (Number(o.ano) === Number(anoSelecionado) && Number(o.mes) === Number(mesSelecionado))); 
         const gastosPorCat = {}; 
         let totalGastoMes = 0;
         
-        const transacoesMes = Database.getTransacoesPorMes(state.budgetYear, state.budgetMonth);
+        const transacoesMes = Database.getTransacoesPorMes(anoSelecionado, mesSelecionado);
         transacoesMes.filter(t => t.tipo === 'despesa').forEach(t => { 
             if(!gastosPorCat[t.categoria]) gastosPorCat[t.categoria] = 0; 
             gastosPorCat[t.categoria] += t.valor; 
             totalGastoMes += t.valor; 
         });
         
-        const totalOrcado = orcamentos.reduce((a, b) => a + b.limite, 0); 
+        const totalOrcado = orcamentosDoMes.reduce((a, b) => a + b.limite, 0); 
         const disponivelGeral = totalOrcado - totalGastoMes;
 
-        const listHTML = orcamentos.map(o => {
+        const listHTML = orcamentosDoMes.map(o => {
             const gasto = gastosPorCat[o.categoria] || 0; 
             return CoreComponents._buildBudgetCard(o, gasto);
         }).join('');
@@ -632,7 +636,7 @@ export const PageComponents = {
         return `
         <div class="flex items-center justify-center gap-8 mb-10"><button data-action="changeMonth" data-type="budget" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors"><i class="fa-solid fa-chevron-left"></i></button><span class="text-lg font-bold text-text-primary min-w-[180px] text-center capitalize font-primary">${mesAtualNome} de ${state.budgetYear}</span><button data-action="changeMonth" data-type="budget" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors"><i class="fa-solid fa-chevron-right"></i></button></div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Orçamento Total</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalOrcado)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Total Gasto</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalGastoMes)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Disponível</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(disponivelGeral)}</h3></div></div>
-        <div>${orcamentos.length > 0 ? listHTML : emptyState}</div>`;
+        <div>${orcamentosDoMes.length > 0 ? listHTML : emptyState}</div>`;
     }, 
 
     settingsPage: (db) => {
@@ -642,7 +646,7 @@ export const PageComponents = {
                 <h3 class="font-bold text-text-primary text-lg mb-4 font-primary">Meu Perfil</h3>
                 <form data-submit="usuario" class="flex flex-col gap-4 max-w-xl">
                     <div class="flex gap-4 items-center mb-2">
-                        <img src="${db.usuario?.fotoUrl || 'assets/perfil.png'}" id="preview-foto-perfil" class="w-16 h-16 rounded-full object-cover border-2 border-border shadow-sm">
+                        <img src="${db.usuario?.fotoUrl || 'assets/perfil.svg'}" id="preview-foto-perfil" class="w-16 h-16 rounded-full object-cover border-2 border-border shadow-sm">
                         <div>
                             <input type="file" id="input-foto-perfil" accept="image/*" class="hidden" data-change="processarFotoPerfil">
                             <button type="button" onclick="document.getElementById('input-foto-perfil').click()" class="bg-bg text-text-primary px-4 py-2 rounded-[12px] text-xs font-bold hover:bg-border transition-colors border border-border shadow-sm"><i class="fa-solid fa-camera mr-2"></i>Alterar Foto</button>

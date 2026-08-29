@@ -91,7 +91,7 @@ export const PlaneamentoController = {
         e.preventDefault();
         const categoria = document.getElementById('orcamento-categoria').value;
         const limite = parseFloat(document.getElementById('orcamento-valor').value);
-        Database.updateBudget(categoria, limite);
+        Database.updateBudget(categoria, limite, App.viewState.budgetYear, App.viewState.budgetMonth);
         Utils.showToast('Orçamento definido com sucesso!', 'success');
         App.closeModal();
     },
