@@ -3,6 +3,30 @@ import { Utils } from './utils.js';
 import { App } from './app.js';
 
 export const PlaneamentoController = {
+    submitReceitaFutura: (e) => {
+        e.preventDefault();
+        const form = e.target;
+        Database.add('receitasFuturas', { id: Date.now(), desc: form.querySelector('[name="desc"]').value.trim(), valor: parseFloat(form.querySelector('[name="valor"]').value), data: form.querySelector('[name="data"]').value, status: 'prevista' });
+        Utils.showToast('Receita futura adicionada!', 'success');
+        App.scheduleRender();
+    },
+
+    submitAssinatura: (e) => {
+        e.preventDefault();
+        const form = e.target;
+        Database.add('assinaturas', { id: Date.now(), nome: form.querySelector('[name="nome"]').value.trim(), valor: parseFloat(form.querySelector('[name="valor"]').value), periodicidade: form.querySelector('[name="periodicidade"]').value, ativa: true });
+        Utils.showToast('Assinatura adicionada!', 'success');
+        App.scheduleRender();
+    },
+
+    submitInvestimento: (e) => {
+        e.preventDefault();
+        const form = e.target;
+        Database.add('investimentos', { id: Date.now(), nome: form.querySelector('[name="nome"]').value.trim(), valorAtual: parseFloat(form.querySelector('[name="valorAtual"]').value) });
+        Utils.showToast('Investimento adicionado!', 'success');
+        App.scheduleRender();
+    },
+
     submitAgendamento: (e) => {
         e.preventDefault();
         const tipo = document.getElementById('agendamento-tipo').value;

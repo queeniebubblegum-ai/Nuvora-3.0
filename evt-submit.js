@@ -21,7 +21,10 @@ export const SubmitEvents = {
                 'contato': (evt) => Controllers.submitContato(evt),
                 'usuario': (evt) => Controllers.submitUsuario(evt),
                 'simulador': (evt) => { evt.preventDefault(); Controllers.simularCompraRapida(); },
-                'chatAnora': (evt) => Controllers.submitChatAnora(evt)
+                'chatAnora': (evt) => Controllers.submitChatAnora(evt),
+                'receitaFutura': (evt) => Controllers.submitReceitaFutura(evt),
+                'assinatura': (evt) => Controllers.submitAssinatura(evt),
+                'investimento': (evt) => Controllers.submitInvestimento(evt)
             };
 
             if (submitMap[action]) {

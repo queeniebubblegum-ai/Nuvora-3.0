@@ -296,6 +296,11 @@ export const PageRenderers = {
                 <div class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><p class="text-xs text-text-secondary font-bold uppercase">Contas pendentes</p><p class="text-2xl font-bold text-danger font-mono mt-2">${money(totalContas)}</p></div>
                 <div class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><p class="text-xs text-text-secondary font-bold uppercase">Assinaturas ativas</p><p class="text-2xl font-bold text-brand-medium font-mono mt-2">${money(totalAssinaturas)}</p></div>
             </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+                <details class="bg-surface border border-border rounded-[16px] shadow-soft group"><summary class="cursor-pointer list-none p-4 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-arrow-trend-up text-success mr-2"></i>Receita futura</span><i class="fa-solid fa-plus text-success group-open:rotate-45 transition-transform"></i></summary><form data-submit="receitaFutura" class="px-4 pb-4 space-y-2"><input name="desc" required placeholder="Descrição" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><input name="valor" required type="number" min="0.01" step="0.01" placeholder="Valor" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><input name="data" required type="date" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><button class="w-full bg-success text-white p-2 rounded-lg text-sm font-bold">Adicionar</button></form></details>
+                <details class="bg-surface border border-border rounded-[16px] shadow-soft group"><summary class="cursor-pointer list-none p-4 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-repeat text-brand-medium mr-2"></i>Assinatura</span><i class="fa-solid fa-plus text-brand-medium group-open:rotate-45 transition-transform"></i></summary><form data-submit="assinatura" class="px-4 pb-4 space-y-2"><input name="nome" required placeholder="Nome do serviço" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><input name="valor" required type="number" min="0.01" step="0.01" placeholder="Valor" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><select name="periodicidade" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><option>mensal</option><option>anual</option></select><button class="w-full bg-brand-medium text-white p-2 rounded-lg text-sm font-bold">Adicionar</button></form></details>
+                <details class="bg-surface border border-border rounded-[16px] shadow-soft group"><summary class="cursor-pointer list-none p-4 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-chart-line text-success mr-2"></i>Investimento</span><i class="fa-solid fa-plus text-success group-open:rotate-45 transition-transform"></i></summary><form data-submit="investimento" class="px-4 pb-4 space-y-2"><input name="nome" required placeholder="Ativo ou instituição" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><input name="valorAtual" required type="number" min="0" step="0.01" placeholder="Valor atual" class="w-full p-2 bg-bg border border-border rounded-lg text-sm text-text-primary"><button class="w-full bg-success text-white p-2 rounded-lg text-sm font-bold">Adicionar</button></form></details>
+            </div>
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <section class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><h3 class="font-bold text-text-primary mb-2"><i class="fa-solid fa-arrow-trend-up text-success mr-2"></i>Receitas futuras</h3>${list(receitas,'Nenhuma receita futura cadastrada.',i=>`<div class="flex justify-between border-b border-border py-3"><span class="text-sm text-text-primary">${Utils.escapeHTML(i.desc || 'Receita prevista')}<small class="block text-xs text-text-secondary">${Utils.escapeHTML(i.data || '')}</small></span><strong class="text-success font-mono">${money(i.valor)}</strong></div>`)}</section>
                 <section class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><h3 class="font-bold text-text-primary mb-2"><i class="fa-solid fa-calendar-xmark text-danger mr-2"></i>Contas a pagar/receber</h3>${list(contas,'Nenhuma conta pendente.',i=>`<div class="flex justify-between border-b border-border py-3"><span class="text-sm text-text-primary">${Utils.escapeHTML(i.desc || 'Lançamento')}<small class="block text-xs text-text-secondary">Vencimento: ${Utils.escapeHTML(i.dataVencimento || '')}</small></span><strong class="${i.tipo === 'receita' ? 'text-success' : 'text-danger'} font-mono">${money(i.valor)}</strong></div>`)}</section>
@@ -332,7 +337,7 @@ export const PageRenderers = {
                     ${actionsHtml}
                 </div>
             </div>
-            ${Components.contasDashboard(db.bancos, db.cartoes, db.comprasCartao, appState)}
+            <details class="bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-building-columns text-brand-medium mr-2"></i>Contas e cartões</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.contasDashboard(db.bancos, db.cartoes, db.comprasCartao, appState)}</div></details>
         `);
     },
 
@@ -349,7 +354,7 @@ export const PageRenderers = {
                     ${actionsHtml}
                 </div>
             </div>
-            ${Components.goalsPage(db.metas, db.transacoes)}
+            <details class="bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-bullseye text-brand-medium mr-2"></i>Metas e reservas</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.goalsPage(db.metas, db.transacoes)}</div></details>
         `);
     },
 
@@ -369,7 +374,7 @@ export const PageRenderers = {
                     ${actionsHtml}
                 </div>
             </div>
-            ${Components.budgetView(db.orcamentos, db.transacoes, appState)}
+            <details class="bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-wallet text-brand-medium mr-2"></i>Orçamento mensal</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.budgetView(db.orcamentos, db.transacoes, appState)}</div></details>
         `);
     },
 
