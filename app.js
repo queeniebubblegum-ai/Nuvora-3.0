@@ -228,8 +228,8 @@ export const App = {
             if (savedTheme) {
                 document.documentElement.classList.toggle('dark', savedTheme === 'dark');
             } else {
-                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-                document.documentElement.classList.toggle('dark', prefersDark);
+                // O padrão do Nuvora é sempre o modo claro, independentemente do sistema.
+                document.documentElement.classList.remove('dark');
             }
         };
         
