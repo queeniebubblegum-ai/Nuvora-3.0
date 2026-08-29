@@ -24,6 +24,17 @@ export const FinancialAnalytics = {
             result[category] = (result[category] || 0) + (Number(t.valor) || 0);
             return result;
         }, {}),
+    insights: (transactions, year, month) => {
+        const totals = FinancialAnalytics.totals(transactions, year, month);
+        const categories = FinancialAnalytics.categoryTotals(transactions, year, month);
+        const top = Object.entries(categories).sort((a, b) => b[1] - a[1])[0];
+        const messages = [];
+        if (totals.receitas === 0 && totals.despesas > 0) messages.push('Há despesas registradas, mas nenhuma receita no período.');
+        else if (totals.receitas > 0 && totals.despesas > totals.receitas) messages.push('As despesas superaram as receitas neste período.');
+        if (top) messages.push(`A maior categoria de despesas foi ${top[0]}, com R$ ${top[1].toFixed(2).replace('.', ',')}.`);
+        if (totals.pagamentosFatura > 0) messages.push('Pagamentos de fatura foram separados das despesas para evitar duplicidade.');
+        return messages.slice(0, 3);
+    },
     categoryComparison: (transactions, current, previous) => {
         const atual = FinancialAnalytics.categoryTotals(transactions, current.year, current.month);
         const anterior = FinancialAnalytics.categoryTotals(transactions, previous.year, previous.month);

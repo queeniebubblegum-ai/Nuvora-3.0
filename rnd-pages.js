@@ -14,6 +14,8 @@ export const PageRenderers = {
         
         const dadosAnora = MentorEngine.extrairDadosParaAnora(db, Database);
         const resultadoMentoria = MentorEngine.calculateMentorScore(dadosAnora);
+        const hojeInsight = new Date();
+        const insightsFinanceiros = FinancialAnalytics.insights(db.transacoes, hojeInsight.getFullYear(), hojeInsight.getMonth());
 
         const historicoContainer = document.getElementById('lista-historico-anora');
         if (historicoContainer && !resultadoMentoria.isOnboarding) {
@@ -37,6 +39,7 @@ export const PageRenderers = {
                         <p class="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Diretriz Executiva</p>
                         <p class="text-xs font-bold text-text-primary font-mentor italic">"${Utils.escapeHTML(resultadoMentoria.recommendation)}"</p>
                     </div>
+                    ${insightsFinanceiros.length ? `<div class="mt-3 pt-3 border-t border-border"><p class="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Insights financeiros</p>${insightsFinanceiros.slice(0, 2).map(insight => `<p class="text-xs text-text-primary leading-relaxed py-1"><i class="fa-solid fa-lightbulb text-warning mr-1"></i>${Utils.escapeHTML(insight)}</p>`).join('')}</div>` : ''}
                 </div>
             `;
         }
@@ -409,6 +412,7 @@ export const PageRenderers = {
         const variationText = value => value === null ? 'sem base anterior' : `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
         const categoriasComparadas = FinancialAnalytics.categoryComparison(db.transacoes, { year: anoAtual, month: mesAtual }, { year: anoAnterior, month: mesAnterior }).slice(0, 5);
         const comparacaoCategoriasHtml = categoriasComparadas.length ? categoriasComparadas.map(item => `<div class="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0"><span class="text-xs text-text-primary truncate">${Utils.escapeHTML(item.categoria)}</span><span class="text-xs font-bold ${item.diferenca > 0 ? 'text-danger' : item.diferenca < 0 ? 'text-success' : 'text-text-secondary'} font-mono">${item.diferenca > 0 ? '+' : ''}${Utils.formatMoney(item.diferenca)}</span></div>`).join('') : '<p class="text-xs text-text-secondary">Sem dados suficientes para comparar.</p>';
+        const insightsHtml = FinancialAnalytics.insights(db.transacoes, anoAtual, mesAtual).map(insight => `<div class="flex gap-2 items-start py-2 border-b border-border last:border-0"><i class="fa-solid fa-lightbulb text-warning mt-0.5"></i><span class="text-xs text-text-primary">${Utils.escapeHTML(insight)}</span></div>`).join('') || '<p class="text-xs text-text-secondary">Ainda não há dados suficientes para gerar insights.</p>';
         const analysisHtml = `
             <details class="bg-surface border border-border rounded-[16px] shadow-soft mb-6 group">
                 <summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-chart-line text-brand-medium mr-2"></i>Análises financeiras</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary>
@@ -418,6 +422,7 @@ export const PageRenderers = {
                         <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Despesas reais</p><p class="text-lg font-bold text-danger font-mono mt-1">${Utils.formatMoney(comparacao.atual.despesas)}</p><p class="text-[10px] text-text-secondary mt-1">${variationText(comparacao.variacaoDespesas)} vs. mês anterior</p></div>
                         <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Resultado do mês</p><p class="text-lg font-bold ${comparacao.atual.receitas - comparacao.atual.despesas >= 0 ? 'text-success' : 'text-danger'} font-mono mt-1">${Utils.formatMoney(comparacao.atual.receitas - comparacao.atual.despesas)}</p><p class="text-[10px] text-text-secondary mt-1">Faturas não duplicadas</p></div>
                     </div>
+                    <div class="mb-5"><p class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Insights</p>${insightsHtml}</div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5"><div><p class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Maiores variações por categoria</p>${comparacaoCategoriasHtml}</div><div><p class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Mapa diário de despesas</p><div class="grid grid-cols-7 sm:grid-cols-10 lg:grid-cols-12 gap-1">${heatmapHtml}</div></div></div>
                 </div>
             </details>

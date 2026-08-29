@@ -21,6 +21,10 @@ describe('Análises financeiras', () => {
         expect(heat).toHaveLength(31);
         expect(heat[5].valor).toBe(100);
     });
+    it('deve gerar insight coerente quando há despesa sem receita', () => {
+        const semReceita = tx.filter(item => item.tipo !== 'receita');
+        expect(FinancialAnalytics.insights(semReceita, 2026, 7)[0]).toContain('nenhuma receita');
+    });
     it('deve comparar categorias e ordenar pela maior diferença', () => {
         const result = FinancialAnalytics.categoryComparison(tx, { year: 2026, month: 7 }, { year: 2026, month: 6 });
         expect(result[0]).toMatchObject({ categoria: 'Lazer', atual: 200, anterior: 0, variacao: null });
