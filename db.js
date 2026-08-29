@@ -214,6 +214,12 @@ const loadData = async () => {
 
 await loadData();
 
+// Migra o caminho antigo do avatar para o asset atual.
+if (db.usuario && db.usuario.fotoUrl === 'assets/perfil.png') {
+    db.usuario.fotoUrl = 'assets/perfil.svg';
+    IDB.set('usuario', db.usuario).catch(console.error);
+}
+
 Object.defineProperty(db, 'comprasCartao', {
     get: function() {
         return this.transacoes.filter(t => t.isCartao).map(t => ({
