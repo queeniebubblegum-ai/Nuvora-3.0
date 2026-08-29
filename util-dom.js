@@ -24,8 +24,12 @@ export const UtilDOM = {
         const iconColor = isError ? 'text-white' : 'text-success';
         const icon = isError ? 'fa-circle-exclamation' : 'fa-circle-check';
         
-        toast.className = `pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-[12px] shadow-2xl font-bold text-sm transition-all transform duration-300 translate-y-[-20px] opacity-0 ${bgColor}`;
-        toast.innerHTML = `<i class="fa-solid ${icon} ${iconColor} text-lg"></i> <span>${UtilDOM.escapeHTML(msg)}</span>`;
+        toast.className = `pointer-events-auto w-full sm:w-auto max-w-full flex items-center gap-3 px-4 py-3 rounded-[12px] shadow-2xl font-semibold text-sm transition-all transform duration-300 translate-y-[20px] opacity-0 cursor-pointer ${bgColor}`;
+        toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        toast.setAttribute('title', 'Clique para fechar');
+        toast.innerHTML = `<i class="fa-solid ${icon} ${iconColor} text-lg shrink-0"></i><span class="min-w-0 break-words">${UtilDOM.escapeHTML(msg)}</span><button type="button" aria-label="Fechar aviso" class="ml-auto shrink-0 opacity-70 hover:opacity-100"><i class="fa-solid fa-xmark"></i></button>`;
+        const remove = () => { toast.classList.add('opacity-0', 'translate-y-[20px]'); setTimeout(() => toast.remove(), 300); };
+        toast.addEventListener('click', remove);
         container.appendChild(toast);
         
         requestAnimationFrame(() => {

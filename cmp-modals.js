@@ -1,6 +1,6 @@
 export const Modals = {
     getHTML: () => `
-    <div id="modal-chat-anora" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-chat-anora" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-4 border-b border-border flex justify-between items-center bg-brand-deep rounded-t-[16px] text-white shrink-0">
                 <div class="flex items-center gap-3">
@@ -31,7 +31,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-historico-anora" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-historico-anora" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-4 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Histórico de Mentoria</h3>
@@ -47,13 +47,23 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-agendamento" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-agenda-dia" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium border border-border flex flex-col max-h-[75vh] overflow-hidden">
+            <div class="p-5 border-b border-border flex justify-between items-center"><div><h3 class="text-lg font-bold text-text-primary">Agenda do dia</h3><p id="agenda-dia-data" class="text-xs text-text-secondary"></p></div><button data-action="closeModal" class="text-text-secondary"><i class="fa-solid fa-xmark"></i></button></div>
+            <div id="agenda-dia-lista" class="p-5 overflow-y-auto space-y-2"></div>
+            <div class="p-4 border-t border-border"><button id="agenda-dia-adicionar" data-action="addAgendaOnDate" class="w-full py-2.5 rounded-lg bg-brand-medium text-white text-sm font-bold"><i class="fa-solid fa-plus mr-2"></i>Adicionar previsão neste dia</button></div>
+        </div>
+    </div>
+
+    <div id="modal-agendamento" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
-                <h3 class="text-lg font-bold font-primary text-text-primary">Nova Conta Agendada</h3>
+                <h3 id="agendamento-titulo" class="text-lg font-bold font-primary text-text-primary">Nova previsão</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form data-submit="agendamento" class="space-y-3.5 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
+                <input type="hidden" id="agendamento-edit-id" value="">
+                <input type="hidden" id="agendamento-edit-col" value="agendamentos">
                 <div>
                     <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Tipo</label>
                     <select id="agendamento-tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none text-text-primary transition-all">
@@ -81,13 +91,13 @@ export const Modals = {
                 </div>
                 
                 <div class="shrink-0 mt-3">
-                    <button type="submit" class="w-full py-3 bg-brand-medium text-white font-bold rounded-[10px] shadow-soft hover:bg-brand-dark transition-all hover:-translate-y-0.5">Adicionar na Agenda</button>
+                    <button id="agendamento-submit" type="submit" class="w-full py-3 bg-brand-medium text-white font-bold rounded-[10px] shadow-soft hover:bg-brand-dark transition-all hover:-translate-y-0.5">Adicionar na Agenda</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div id="modal-editar-transacao" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-editar-transacao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-4 shrink-0">
                 <div>
@@ -134,7 +144,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-contato" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-contato" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Contato</h3>
@@ -156,7 +166,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-categoria" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-categoria" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Nova Categoria</h3>
@@ -195,7 +205,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-transacao" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-transacao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[90vh] overflow-hidden">
             
             <div class="flex justify-end items-center mb-3 shrink-0">
@@ -234,7 +244,7 @@ export const Modals = {
                         <input id="input-data-trans" type="date" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary">
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Categoria</label>
+                        <div class="flex items-center justify-between mb-1"><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider">Categoria</label><button type="button" onclick="App.openModal('modal-categoria'); event.stopPropagation()" title="Nova categoria" class="w-5 h-5 rounded-full bg-brand-medium/10 text-brand-medium text-[10px] font-bold">+</button></div>
                         <select id="input-categoria" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary"></select>
                     </div>
                 </div>
@@ -282,7 +292,7 @@ export const Modals = {
                     
                     <div id="opcionais-transacao" class="hidden mt-3 space-y-3 p-3 border border-border rounded-[10px] bg-bg">
                         <div>
-                            <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Contato</label>
+                            <div class="flex items-center justify-between mb-1"><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider">Contato</label><button type="button" onclick="App.openModal('modal-contato'); event.stopPropagation()" title="Novo contato" class="w-5 h-5 rounded-full bg-brand-medium/10 text-brand-medium text-[10px] font-bold">+</button></div>
                             <select id="input-contato" class="w-full p-2.5 bg-surface border border-border rounded-[8px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary"></select>
                         </div>
 
@@ -308,7 +318,7 @@ export const Modals = {
             </form>
         </div>
     </div>
-    <div id="modal-banco" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-banco" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Nova Conta Bancária</h3>
@@ -336,7 +346,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-cartao" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-cartao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Cartão</h3>
@@ -362,7 +372,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-despesa-cartao" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-despesa-cartao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <div>
@@ -394,13 +404,13 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-fatura-detalhes" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-fatura-detalhes" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-md rounded-[16px] shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div id="modal-fatura-content" class="flex-1 min-h-0 overflow-y-auto rounded-[16px]"></div>
         </div>
     </div>
 
-    <div id="modal-meta" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-meta" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Nova Meta</h3>
@@ -420,7 +430,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-depositar-meta" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-depositar-meta" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-xs rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-3 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Depositar</h3>
@@ -439,7 +449,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-orcamento" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-orcamento" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Limite</h3>
@@ -461,7 +471,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-simulador" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-simulador" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Simulador</h3>
@@ -500,7 +510,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-revisao-ofx" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-revisao-ofx" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-lg rounded-[16px] shadow-2xl border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-5 border-b border-border flex justify-between items-center bg-surface shrink-0">
                 <div>
@@ -541,7 +551,7 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-orcamento-inteligente" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-orcamento-inteligente" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-brand-medium"></i> Inteligente</h3>
@@ -574,7 +584,7 @@ export const Modals = {
         </div>
     </div>
     
-    <div id="modal-fechamento-mes" onclick="if(event.target === this) App.closeModal();" class="fixed inset-0 bg-brand-deep/80 hidden items-center justify-center backdrop-blur-md p-4 sm:p-6" style="z-index: 1000;">
+    <div id="modal-fechamento-mes" class="fixed inset-0 bg-brand-deep/80 hidden items-center justify-center backdrop-blur-md p-4 sm:p-6" style="z-index: 1000;">
         <div class="bg-surface w-full max-w-md rounded-[20px] shadow-2xl border border-border flex flex-col h-auto max-h-[85vh] overflow-hidden relative">
             
             <div class="h-1.5 w-full bg-border absolute top-0 left-0">

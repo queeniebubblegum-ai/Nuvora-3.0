@@ -38,16 +38,20 @@ export const PlaneamentoController = {
         const bancoIdRaw = document.getElementById('agendamento-banco')?.value;
         const bancoId = bancoIdRaw ? parseInt(bancoIdRaw) : (db.bancos.length > 0 ? db.bancos[0].id : null);
         
-        Database.add('agendamentos', {
-            id: Date.now(),
-            desc, valor, dataVencimento, categoria, tipo,
-            status: 'pendente',
-            bancoId: bancoId
-        });
-        
-        Utils.showToast('Conta agendada com sucesso!', 'success');
+        const editId = document.getElementById('agendamento-edit-id')?.value;
+        const editCol = document.getElementById('agendamento-edit-col')?.value || 'agendamentos';
+        const dados = { desc, valor, dataVencimento, categoria, tipo, status: 'pendente', bancoId };
+        if (editId) {
+            if (editCol === 'receitasFuturas') Database.updateReceitaFutura(editId, { ...dados, data: dataVencimento });
+            else Database.updateAgendamento(editId, dados);
+        } else {
+            Database.add('agendamentos', { id: Date.now(), ...dados });
+        }
+        document.getElementById('agendamento-edit-id').value = '';
+        Utils.showToast(editId ? 'Previsão atualizada!' : 'Conta agendada com sucesso!', 'success');
         App.closeModal();
-        if (App.currentPage === 'Agendamentos') App.scheduleRender();
+        // Atualiza também o Dashboard, onde a agenda é exibida.
+        App.scheduleRender();
     },
 
     submitMeta: (e) => {

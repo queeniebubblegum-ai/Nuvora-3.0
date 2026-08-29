@@ -30,7 +30,7 @@
 </head>
 <body class="bg-bg font-primary text-text-primary h-screen overflow-hidden flex flex-col transition-colors duration-300">
 
-    <div id="toast-container" class="fixed top-6 left-1/2 -translate-x-1/2 flex flex-col gap-3 pointer-events-none items-center" style="z-index: 9999; max-width: 90vw;"></div>
+    <div id="toast-container" class="flex flex-col gap-2 pointer-events-none items-stretch sm:items-end" style="position:fixed; right:20px; bottom:20px; left:auto; z-index:9999; width:min(420px,92vw);"></div>
 
     <input type="file" id="input-ofx-file" class="hidden" accept=".ofx" data-change="handleOFXUpload">
     <input type="file" id="input-csv-file" class="hidden" accept=".csv,text/csv" data-change="handleCSVUpload">

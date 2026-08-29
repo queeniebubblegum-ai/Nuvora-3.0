@@ -2,6 +2,13 @@ import { db } from './db.js';
 import { Utils } from './utils.js';
 
 export const UI = {
+    modalSnapshots: {},
+
+    captureModalState: (id) => {
+        const modal = document.getElementById(id);
+        if (!modal) return;
+        UI.modalSnapshots[id] = [...modal.querySelectorAll('input, textarea, select')].map(el => [el.id || el.name || el.type, el.value]);
+    },
     setTransactionType: (tipo) => {
         document.getElementById('input-tipo').value = tipo;
         const tabDespesa = document.getElementById('tab-despesa');
@@ -47,10 +54,20 @@ export const UI = {
         }
 
         const m = document.getElementById(id);
-        if (m) { m.classList.remove('hidden'); m.classList.add('flex'); }
+        if (m) {
+            m.classList.remove('hidden'); m.classList.add('flex');
+            UI.captureModalState(id);
+        }
     },
 
-    closeModal: (viewState) => {
+    closeModal: (viewState, userInitiated = false) => {
+        if (userInitiated) {
+            const modal = [...document.querySelectorAll('div[id^="modal-"]:not(.hidden)')][0];
+            const atual = modal ? [...modal.querySelectorAll('input, textarea, select')].map(el => [el.id || el.name || el.type, el.value]) : [];
+            const inicial = modal ? UI.modalSnapshots[modal.id] || [] : [];
+            const alterado = JSON.stringify(atual) !== JSON.stringify(inicial);
+            if (alterado && !window.confirm('Você tem dados não salvos. Deseja realmente fechar?')) return false;
+        }
         viewState.selectedTransactions = [];
         viewState.ofxPendente = null; 
         viewState.rawOfxString = null;

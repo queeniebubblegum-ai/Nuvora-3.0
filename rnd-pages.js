@@ -168,7 +168,7 @@ export const PageRenderers = {
             </div>
             
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [])}
+                ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
                 ${Components.dashboardCategories(transacoesPeriodoAtual)}
             </div>
         `);

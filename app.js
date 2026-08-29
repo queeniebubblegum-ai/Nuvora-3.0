@@ -200,6 +200,8 @@ export const App = {
         invoiceYear: new Date().getFullYear(),
         budgetMonth: new Date().getMonth(),
         budgetYear: new Date().getFullYear(),
+        agendaMonth: new Date().getMonth(),
+        agendaYear: new Date().getFullYear(),
         filters: { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' },
         reportTab: 'fluxo',
         isNotifOpen: false,
@@ -713,14 +715,66 @@ export const App = {
         const label = document.getElementById('agenda-dia-data');
         const botao = document.getElementById('agenda-dia-adicionar');
         if (label) label.innerText = dataFormatada;
-        if (lista) lista.innerHTML = items.length ? items.map(i => `<div class="flex items-center justify-between p-3 rounded-lg bg-bg border border-border"><span class="text-sm text-text-primary"><i class="fa-solid ${i.tipo === 'receita' ? 'fa-arrow-trend-up text-success' : 'fa-arrow-trend-down text-danger'} mr-2"></i>${Utils.escapeHTML(i.desc || i.nome || 'Lançamento')}</span><strong class="text-sm font-mono ${i.tipo === 'receita' ? 'text-success' : 'text-danger'}">${i.tipo === 'receita' ? '+' : '-'}${Utils.formatMoney(i.valor)}</strong></div>`).join('') : '<p class="text-sm text-text-secondary text-center py-6">Nenhuma previsão neste dia.</p>';
+        if (lista) lista.innerHTML = items.length ? items.map(i => {
+            const colecao = db.agendamentos.includes(i) ? 'agendamentos' : 'receitasFuturas';
+            const pago = i.status === 'pago' || i.status === 'recebida';
+            const baixa = !pago ? `<button type="button" data-action="markAgendaPaid" data-col="${colecao}" data-id="${i.id}" class="px-2 py-1 text-[9px] font-bold text-success border border-success/30 rounded hover:bg-success/10">Dar baixa</button>` : `<span class="text-[9px] font-bold text-success">${i.status === 'recebida' ? 'Recebida' : 'Paga'}</span>`;
+            return `<div class="flex items-center gap-2 p-3 rounded-lg bg-bg border border-border"><span class="flex-1 min-w-0 text-sm text-text-primary truncate"><i class="fa-solid ${i.tipo === 'receita' ? 'fa-arrow-trend-up text-success' : 'fa-arrow-trend-down text-danger'} mr-2"></i>${Utils.escapeHTML(i.desc || i.nome || 'Lançamento')}</span><strong class="text-sm font-mono ${i.tipo === 'receita' ? 'text-success' : 'text-danger'}">${i.tipo === 'receita' ? '+' : '-'}${Utils.formatMoney(i.valor)}</strong>${baixa}<button type="button" data-action="editAgenda" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-brand-medium hover:bg-brand-medium/10 rounded" title="Editar previsão" aria-label="Editar previsão"><i class="fa-solid fa-pen text-xs"></i></button><button type="button" data-action="delete" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-danger hover:bg-danger/10 rounded" title="Apagar previsão" aria-label="Apagar previsão"><i class="fa-solid fa-trash-can text-xs"></i></button></div>`;
+        }).join('') : '<p class="text-sm text-text-secondary text-center py-6">Nenhuma previsão neste dia.</p>';
         if (botao) botao.dataset.date = date;
         App.openModal('modal-agenda-dia');
+    },
+    markAgendaPaid: (id, col) => {
+        const item = (db[col] || []).find(i => String(i.id) === String(id));
+        if (!item || item.status === 'pago' || item.status === 'recebida') return;
+        if (!window.confirm('Confirmar que esta previsão foi realizada?')) return;
+        if (col === 'receitasFuturas') {
+            Database.updateReceitaFutura(id, { status: 'recebida' });
+            Database.add('transacoes', { id: Date.now(), desc: item.desc, valor: item.valor, tipo: 'receita', categoria: item.categoria || 'Outros', bancoId: item.bancoId || (db.bancos[0]?.id ?? null), isCartao: false, formaPagamento: 'Receita futura recebida', data: Utils.localISODate() });
+        } else {
+            App.markAgendamentoPaid(String(id));
+        }
+        App.scheduleRender();
+    },
+    editAgenda: (id, col) => {
+        const item = (db[col] || []).find(i => String(i.id) === String(id));
+        if (!item) return;
+        App.closeModal();
+        App.openModal('modal-agendamento');
+        document.getElementById('agendamento-titulo').innerText = 'Editar previsão';
+        document.getElementById('agendamento-submit').innerText = 'Salvar alterações';
+        document.getElementById('agendamento-edit-id').value = item.id;
+        document.getElementById('agendamento-edit-col').value = col;
+        document.getElementById('agendamento-tipo').value = item.tipo || 'receita';
+        document.getElementById('agendamento-desc').value = item.desc || item.nome || '';
+        document.getElementById('agendamento-valor').value = item.valor ?? '';
+        document.getElementById('agendamento-data').value = item.dataVencimento || item.data || '';
+        if (document.getElementById('agendamento-categoria')) document.getElementById('agendamento-categoria').value = item.categoria || '';
+        UI.captureModalState('modal-agendamento');
     },
     addAgendaOnDate: () => {
         const date = document.getElementById('agenda-dia-adicionar')?.dataset.date;
         App.closeModal(); App.openModal('modal-agendamento');
+        document.getElementById('agendamento-titulo').innerText = 'Nova previsão';
+        document.getElementById('agendamento-submit').innerText = 'Adicionar na Agenda';
         const campoData = document.getElementById('agendamento-data'); if (campoData) campoData.value = date || '';
+    },
+
+    resetAgendaToday: () => {
+        const hoje = new Date();
+        App.viewState.agendaMonth = hoje.getMonth();
+        App.viewState.agendaYear = hoje.getFullYear();
+        App.scheduleRender();
+    },
+
+    changeAgendaMonth: (direction) => {
+        let m = Number(App.viewState.agendaMonth) + Number(direction);
+        let y = Number(App.viewState.agendaYear);
+        if (m > 11) { m = 0; y++; }
+        if (m < 0) { m = 11; y--; }
+        App.viewState.agendaMonth = m;
+        App.viewState.agendaYear = y;
+        App.scheduleRender();
     },
 
     changeMonth: (type, direction) => {
@@ -741,7 +795,8 @@ export const App = {
 
     setTransactionType: (tipo) => UI.setTransactionType(tipo),
     openModal: (id, transType = null) => UI.openModal(id, transType),
-    closeModal: () => UI.closeModal(App.viewState),
+    captureModalState: (id) => UI.captureModalState(id),
+    closeModal: (userInitiated = false) => UI.closeModal(App.viewState, userInitiated),
     openEditModal: (id) => UI.openEditModal(id),
     toggleEditLock: () => UI.toggleEditLock(),
     openDepositModal: (id, nome) => UI.openDepositModal(id, nome),
