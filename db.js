@@ -1,3 +1,4 @@
+import { CATEGORIAS_PADRAO } from './categorias-padrao.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -17,17 +18,7 @@ const initialDB = {
     orcamentos: [],
     notificacoes: [],
     agendamentos: [], 
-    categorias: [
-        { id: 'cat_1', nome: 'Alimentação', icone: 'fa-utensils', cor: '#F97316' },
-        { id: 'cat_2', nome: 'Moradia', icone: 'fa-house', cor: '#8B5CF6' },
-        { id: 'cat_3', nome: 'Transporte', icone: 'fa-car', cor: '#3B82F6' },
-        { id: 'cat_4', nome: 'Lazer', icone: 'fa-gamepad', cor: '#EC4899' },
-        { id: 'cat_5', nome: 'Saúde', icone: 'fa-heart-pulse', cor: '#F43F5E' },
-        { id: 'cat_6', nome: 'Salário', icone: 'fa-money-bill-wave', cor: '#10B981' },
-        { id: 'cat_7', nome: 'Serviços', icone: 'fa-bolt', cor: '#06B6D4' },
-        { id: 'cat_8', nome: 'Educação', icone: 'fa-graduation-cap', cor: '#6366F1' },
-        { id: 'cat_9', nome: 'Compras', icone: 'fa-bag-shopping', cor: '#F59E0B' }
-    ],
+    categorias: CATEGORIAS_PADRAO,
     configNotificacoes: {
         contasAtivo: true, contasDias: 3,
         orcamentoAtivo: true, orcamentoPct: 80,
@@ -140,7 +131,19 @@ const loadData = async () => {
         }
     });
 
+    if (db.categorias.length === 0) {
+        db.categorias = CATEGORIAS_PADRAO.map(c => ({ ...c }));
+        await IDB.set('categorias', db.categorias);
+    }
+
     if (db.categorias.length > 0) {
+        const padraoPorNome = new Map(CATEGORIAS_PADRAO.map(c => [String(c.nome).toLowerCase(), c]));
+        db.categorias = db.categorias.map(c => {
+            const padrao = padraoPorNome.get(String(typeof c === 'string' ? c : c.nome || '').toLowerCase());
+            if (!padrao || typeof c === 'string') return typeof c === 'string' ? { ...padrao, id: 'cat_' + Date.now() + Math.random() } : c;
+            return { ...c, grupo: c.grupo || padrao.grupo, subgrupo: c.subgrupo || padrao.subgrupo, tipo: c.tipo || padrao.tipo, fixa: c.fixa ?? padrao.fixa, icone: c.icone || padrao.icone, cor: c.cor || padrao.cor };
+        });
+        await IDB.set('categorias', db.categorias);
         const categoryDefaults = {
             'Alimentação': { icone: 'fa-utensils', cor: '#F97316' },
             'Moradia': { icone: 'fa-house', cor: '#8B5CF6' },
@@ -471,9 +474,23 @@ export const CategoryRepo = {
         }
         return false;
     },
+    rename: (id, novoNome) => {
+        const categoria = db.categorias.find(c => String(c.id) === String(id));
+        const nome = String(novoNome || '').trim();
+        if (!categoria || !nome || db.categorias.some(c => c !== categoria && String(c.nome).toLowerCase() === nome.toLowerCase())) return false;
+        const antigo = categoria.nome;
+        categoria.nome = nome;
+        db.transacoes.forEach(t => { if (t.categoria === antigo) t.categoria = nome; });
+        db.orcamentos.forEach(o => { if (o.categoria === antigo) o.categoria = nome; });
+        db.agendamentos.forEach(a => { if (a.categoria === antigo) a.categoria = nome; });
+        persist('categorias'); persist('transacoes'); persist('orcamentos'); persist('agendamentos');
+        return true;
+    },
+
     remove: (id) => { 
         const categoria = db.categorias.find(c => String(c.id) === String(id));
         if (!categoria) return false;
+        if (categoria.fixa) return false;
         const usada = db.transacoes.some(t => t.categoria === categoria.nome) ||
             db.orcamentos.some(o => o.categoria === categoria.nome) ||
             db.agendamentos.some(a => a.categoria === categoria.nome);
@@ -559,7 +576,7 @@ export const Database = {
                 if (data[col] !== undefined && !Array.isArray(data[col])) {
                     throw new Error(`Coleção inválida: ${col}`);
                 }
-                db[col] = data[col] ?? [];
+                if (data[col] !== undefined) db[col] = data[col];
             } else if (data[col] !== undefined) {
                 if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
                     throw new Error(`Registro inválido: ${col}`);
@@ -617,6 +634,7 @@ export const Database = {
     addCardExpense: TransactionsRepo.addCardExpense,
     updateConfig: NotificationRepo.updateConfig,
     updateBudget: BudgetRepo.updateLimit,
+    renameCategory: CategoryRepo.rename,
     depositGoal: GoalRepo.deposit,
     updateUser: UserRepo.update,
     markNotificationRead: NotificationRepo.markRead,

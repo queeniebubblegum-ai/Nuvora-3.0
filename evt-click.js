@@ -29,6 +29,7 @@ export const ClickEvents = {
                 'openModal': () => App.openModal(btn.getAttribute('data-modal'), btn.getAttribute('data-type')),
                 'closeModal': () => App.closeModal(true),
                 'delete': () => Controllers.delete(btn.getAttribute('data-col'), btn.getAttribute('data-id')),
+                'renameCategory': () => { const nome = prompt('Novo nome da categoria:', btn.getAttribute('data-name') || ''); if (nome !== null) { if (App.renameCategory(btn.getAttribute('data-id'), nome)) { Utils.showToast('Categoria renomeada!', 'success'); App.scheduleRender(); } else Utils.showToast('Nome inválido ou já utilizado.', 'error'); } },
                 'editAgenda': () => App.editAgenda(btn.getAttribute('data-id'), btn.getAttribute('data-col')),
                 'markAgendaPaid': () => App.markAgendaPaid(btn.getAttribute('data-id'), btn.getAttribute('data-col')),
                 'deleteExpense': () => Controllers.deleteExpense(btn.getAttribute('data-id')),

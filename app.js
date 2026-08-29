@@ -796,6 +796,7 @@ export const App = {
     setTransactionType: (tipo) => UI.setTransactionType(tipo),
     openModal: (id, transType = null) => UI.openModal(id, transType),
     captureModalState: (id) => UI.captureModalState(id),
+    renameCategory: (id, nome) => Database.renameCategory(id, nome),
     closeModal: (userInitiated = false) => UI.closeModal(App.viewState, userInitiated),
     openEditModal: (id) => UI.openEditModal(id),
     toggleEditLock: () => UI.toggleEditLock(),
@@ -875,10 +876,11 @@ export const App = {
         reader.onload = async (event) => {
             try {
                 const importedDB = JSON.parse(event.target.result);
-                const required = ['transacoes', 'bancos', 'cartoes', 'categorias'];
-                const valido = required.every(col => Array.isArray(importedDB[col]));
+                const colecoesArray = ['transacoes', 'bancos', 'cartoes', 'categorias', 'metas', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas', 'investimentos', 'contatos', 'notificacoes'];
+                const presentes = colecoesArray.filter(col => importedDB[col] !== undefined);
+                const valido = presentes.length > 0 && presentes.every(col => Array.isArray(importedDB[col]));
                 if (!valido) throw new Error('Estrutura inválida');
-                const total = required.reduce((s, col) => s + importedDB[col].length, 0);
+                const total = presentes.reduce((s, col) => s + importedDB[col].length, 0);
                 if (!window.confirm(`Este backup contém ${total} registros principais e substituirá os dados atuais. Continuar?`)) return;
                 localStorage.setItem('nuvora_backup_antes_importacao', JSON.stringify(db));
                 await Database.replaceAll(importedDB);
