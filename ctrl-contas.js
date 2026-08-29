@@ -28,7 +28,7 @@ export const ContasController = {
             saldo, 
             instituicao, 
             cor,
-            dataCriacao: new Date().toISOString().split('T')[0] // Data âncora para o saldo inicial
+            dataCriacao: Utils.localISODate() // Data âncora para o saldo inicial
         });
         
         Utils.showToast('Conta criada com sucesso!', 'success');

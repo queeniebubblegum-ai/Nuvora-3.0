@@ -92,7 +92,11 @@ export const SistemaController = {
 
     delete: (col, id) => {
         if (confirm('Tem certeza que deseja apagar este registo?')) {
-            Database.remove(col, id);
+            const removido = Database.remove(col, id);
+            if (removido === false) {
+                Utils.showToast('Não é possível apagar: este registo ainda está sendo usado.', 'error');
+                return;
+            }
             Utils.showToast('Registo apagado.', 'success');
             if (col === 'bancos' || col === 'cartoes') App.updateBankSelect();
             if (col === 'categorias') {

@@ -286,8 +286,12 @@ export const BankRepo = {
         return true; 
     },
     remove: (id) => { 
+        const hasTransactions = db.transacoes.some(t => !t.isCartao && String(t.bancoId) === String(id));
+        const hasCards = db.cartoes.some(c => String(c.bancoId) === String(id));
+        if (hasTransactions || hasCards) return false;
         db.bancos = db.bancos.filter(i => i.id.toString() !== id.toString()); 
         persist('bancos'); 
+        return true;
     },
     recalculateAll: () => {}
 };
@@ -418,7 +422,13 @@ export const TransactionsRepo = {
 
 export const CardRepo = {
     add: (item) => { db.cartoes.unshift(item); persist('cartoes'); return true; },
-    remove: (id) => { db.cartoes = db.cartoes.filter(i => i.id.toString() !== id.toString()); persist('cartoes'); }
+    remove: (id) => {
+        const hasTransactions = db.transacoes.some(t => t.isCartao && String(t.bancoId) === String(id));
+        if (hasTransactions) return false;
+        db.cartoes = db.cartoes.filter(i => i.id.toString() !== id.toString());
+        persist('cartoes');
+        return true;
+    }
 };
 
 export const GoalRepo = {
@@ -451,8 +461,15 @@ export const CategoryRepo = {
         return false;
     },
     remove: (id) => { 
+        const categoria = db.categorias.find(c => String(c.id) === String(id));
+        if (!categoria) return false;
+        const usada = db.transacoes.some(t => t.categoria === categoria.nome) ||
+            db.orcamentos.some(o => o.categoria === categoria.nome) ||
+            db.agendamentos.some(a => a.categoria === categoria.nome);
+        if (usada) return false;
         db.categorias = db.categorias.filter(c => c.id.toString() !== id.toString()); 
-        persist('categorias'); 
+        persist('categorias');
+        return true;
     }
 };
 
