@@ -275,6 +275,36 @@ export const PageRenderers = {
         `);
     },
 
+    Planejamento: (appState) => {
+        const money = value => Utils.formatMoney(Number(value) || 0);
+        const receitas = (db.receitasFuturas || []).filter(i => i.status !== 'recebida');
+        const contas = (db.agendamentos || []).filter(i => i.status !== 'pago');
+        const assinaturas = (db.assinaturas || []).filter(i => i.ativa !== false);
+        const investimentos = db.investimentos || [];
+        const totalReceitas = receitas.reduce((sum, i) => sum + (Number(i.valor) || 0), 0);
+        const totalContas = contas.filter(i => i.tipo !== 'receita').reduce((sum, i) => sum + (Number(i.valor) || 0), 0);
+        const totalAssinaturas = assinaturas.reduce((sum, i) => sum + (Number(i.valor) || 0), 0);
+        const list = (items, empty, render) => items.length ? items.slice(0, 8).map(render).join('') : `<p class="text-sm text-text-secondary py-4">${empty}</p>`;
+
+        UIRenderer.updateDOM('main-content', `
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div><h2 class="text-2xl font-bold text-text-primary mb-1">Planejamento financeiro</h2><p class="text-text-secondary text-sm">Veja o que já está comprometido e o que está previsto para chegar.</p></div>
+                <button data-action="openModal" data-modal="modal-agendamento" class="bg-brand-medium text-white px-5 py-2.5 rounded-[12px] text-sm font-bold shadow-brand-glow"><i class="fa-solid fa-plus mr-2"></i> Novo lançamento futuro</button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                <div class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><p class="text-xs text-text-secondary font-bold uppercase">Receitas previstas</p><p class="text-2xl font-bold text-success font-mono mt-2">${money(totalReceitas)}</p></div>
+                <div class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><p class="text-xs text-text-secondary font-bold uppercase">Contas pendentes</p><p class="text-2xl font-bold text-danger font-mono mt-2">${money(totalContas)}</p></div>
+                <div class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><p class="text-xs text-text-secondary font-bold uppercase">Assinaturas ativas</p><p class="text-2xl font-bold text-brand-medium font-mono mt-2">${money(totalAssinaturas)}</p></div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <section class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><h3 class="font-bold text-text-primary mb-2"><i class="fa-solid fa-arrow-trend-up text-success mr-2"></i>Receitas futuras</h3>${list(receitas,'Nenhuma receita futura cadastrada.',i=>`<div class="flex justify-between border-b border-border py-3"><span class="text-sm text-text-primary">${Utils.escapeHTML(i.desc || 'Receita prevista')}<small class="block text-xs text-text-secondary">${Utils.escapeHTML(i.data || '')}</small></span><strong class="text-success font-mono">${money(i.valor)}</strong></div>`)}</section>
+                <section class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><h3 class="font-bold text-text-primary mb-2"><i class="fa-solid fa-calendar-xmark text-danger mr-2"></i>Contas a pagar/receber</h3>${list(contas,'Nenhuma conta pendente.',i=>`<div class="flex justify-between border-b border-border py-3"><span class="text-sm text-text-primary">${Utils.escapeHTML(i.desc || 'Lançamento')}<small class="block text-xs text-text-secondary">Vencimento: ${Utils.escapeHTML(i.dataVencimento || '')}</small></span><strong class="${i.tipo === 'receita' ? 'text-success' : 'text-danger'} font-mono">${money(i.valor)}</strong></div>`)}</section>
+                <section class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><h3 class="font-bold text-text-primary mb-2"><i class="fa-solid fa-repeat text-brand-medium mr-2"></i>Assinaturas</h3>${list(assinaturas,'Nenhuma assinatura ativa.',i=>`<div class="flex justify-between border-b border-border py-3"><span class="text-sm text-text-primary">${Utils.escapeHTML(i.nome || i.desc || 'Assinatura')}<small class="block text-xs text-text-secondary">${Utils.escapeHTML(i.periodicidade || 'Mensal')}</small></span><strong class="text-brand-medium font-mono">${money(i.valor)}</strong></div>`)}</section>
+                <section class="bg-surface border border-border rounded-[16px] p-5 shadow-soft"><h3 class="font-bold text-text-primary mb-2"><i class="fa-solid fa-chart-line text-success mr-2"></i>Investimentos</h3>${list(investimentos,'Nenhum investimento cadastrado.',i=>`<div class="flex justify-between border-b border-border py-3"><span class="text-sm text-text-primary">${Utils.escapeHTML(i.nome || i.ativo || 'Investimento')}</span><strong class="text-success font-mono">${money(i.valorAtual || i.valor)}</strong></div>`)}</section>
+            </div>
+        `);
+    },
+
     Contas: (appState) => {
         const bancoPadraoId = db.bancos.length > 0 ? db.bancos[0].id : '';
         const actionsHtml = `
