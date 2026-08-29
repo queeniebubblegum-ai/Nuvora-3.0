@@ -3,6 +3,7 @@ import { db, Database } from './db.js';
 import { Components } from './components.js';
 import { MentorEngine } from './mentorEngine.js';
 import { UIRenderer } from './rnd-ui.js';
+import { FinancialAnalytics } from './analytics.js';
 
 export const PageRenderers = {
     Dashboard: (appState) => {
@@ -393,6 +394,34 @@ export const PageRenderers = {
             </button>
         `;
 
+        const hojeAnalise = new Date();
+        const mesAtual = hojeAnalise.getMonth();
+        const anoAtual = hojeAnalise.getFullYear();
+        const mesAnterior = mesAtual === 0 ? 11 : mesAtual - 1;
+        const anoAnterior = mesAtual === 0 ? anoAtual - 1 : anoAtual;
+        const comparacao = FinancialAnalytics.compareMonths(db.transacoes, { year: anoAtual, month: mesAtual }, { year: anoAnterior, month: mesAnterior });
+        const heatmap = FinancialAnalytics.heatmap(db.transacoes, anoAtual, mesAtual);
+        const maiorGasto = Math.max(...heatmap.map(d => d.valor), 0);
+        const heatmapHtml = heatmap.map(d => {
+            const intensidade = maiorGasto ? Math.max(8, Math.round((d.valor / maiorGasto) * 100)) : 8;
+            return `<div title="Dia ${d.dia}: ${Utils.formatMoney(d.valor)}" class="h-7 rounded-md border border-border" style="background-color: rgba(108,59,182,${intensidade / 100})"></div>`;
+        }).join('');
+        const variationText = value => value === null ? 'sem base anterior' : `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
+        const analysisHtml = `
+            <details class="bg-surface border border-border rounded-[16px] shadow-soft mb-6 group">
+                <summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-chart-line text-brand-medium mr-2"></i>Análises financeiras</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary>
+                <div class="px-5 pb-5">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                        <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Receitas no mês</p><p class="text-lg font-bold text-success font-mono mt-1">${Utils.formatMoney(comparacao.atual.receitas)}</p><p class="text-[10px] text-text-secondary mt-1">${variationText(comparacao.variacaoReceitas)} vs. mês anterior</p></div>
+                        <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Despesas reais</p><p class="text-lg font-bold text-danger font-mono mt-1">${Utils.formatMoney(comparacao.atual.despesas)}</p><p class="text-[10px] text-text-secondary mt-1">${variationText(comparacao.variacaoDespesas)} vs. mês anterior</p></div>
+                        <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Resultado do mês</p><p class="text-lg font-bold ${comparacao.atual.receitas - comparacao.atual.despesas >= 0 ? 'text-success' : 'text-danger'} font-mono mt-1">${Utils.formatMoney(comparacao.atual.receitas - comparacao.atual.despesas)}</p><p class="text-[10px] text-text-secondary mt-1">Faturas não duplicadas</p></div>
+                    </div>
+                    <p class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Mapa diário de despesas</p>
+                    <div class="grid grid-cols-7 sm:grid-cols-10 lg:grid-cols-12 gap-1">${heatmapHtml}</div>
+                </div>
+            </details>
+        `;
+
         UIRenderer.updateDOM('main-content', `
             <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
@@ -403,6 +432,7 @@ export const PageRenderers = {
                     ${actionsHtml}
                 </div>
             </div>
+            ${analysisHtml}
             ${Components.reportsPage(db, appState)}
         `);
     },
