@@ -435,7 +435,7 @@ export const GoalRepo = {
     add: (item) => { db.metas.unshift(item); persist('metas'); return true; },
     remove: (id) => { db.metas = db.metas.filter(i => i.id.toString() !== id.toString()); persist('metas'); },
     deposit: (id, val) => {
-        const g = db.metas.find(x => x.id === id);
+        const g = db.metas.find(x => String(x.id) === String(id));
         if(g) { g.atual += val; persist('metas'); }
     }
 };
@@ -482,7 +482,7 @@ export const NotificationRepo = {
     add: (item) => { db.notificacoes.unshift(item); persist('notificacoes'); return true; },
     remove: (id) => { db.notificacoes = db.notificacoes.filter(i => i.id.toString() !== id.toString()); persist('notificacoes'); },
     markRead: (id) => {
-        const n = db.notificacoes.find(x => x.id === id);
+        const n = db.notificacoes.find(x => String(x.id) === String(id));
         if (n) { n.lida = true; persist('notificacoes'); }
     },
     markAllRead: () => { db.notificacoes.forEach(n => n.lida = true); persist('notificacoes'); },
