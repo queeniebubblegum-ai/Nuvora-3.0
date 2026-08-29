@@ -141,7 +141,7 @@ export const OFXManager = {
                     <i class="fa-solid fa-code-merge mt-0.5 text-warning"></i>
                     <div>
                         <strong class="text-warning">Provável duplicidade com lançamento manual:</strong><br>
-                        ${item.transacaoOriginal.desc} (${item.transacaoOriginal.data.split('-').reverse().join('/')})
+                        ${Utils.escapeHTML(item.transacaoOriginal.desc)} (${item.transacaoOriginal.data.split('-').reverse().join('/')})
                     </div>
                 </div>
             ` : '';
@@ -170,9 +170,9 @@ export const OFXManager = {
                             ${icon}
                         </div>
                         <div class="flex-1 overflow-hidden">
-                            <h4 class="text-sm font-bold text-text-primary truncate" title="${item.desc}">${item.desc}</h4>
-                            <p class="text-[10px] text-text-secondary truncate mt-0.5 opacity-70" title="${item.observacao}"><i class="fa-solid fa-circle-info"></i> ${item.observacao}</p>
-                            <p class="text-[11px] text-text-secondary font-mono mt-1">${item.data.split('-').reverse().join('/')} <span class="mx-1">•</span> <span class="text-brand-medium">${item.formaPagamento}</span></p>
+                            <h4 class="text-sm font-bold text-text-primary truncate" title="${Utils.escapeHTML(item.desc)}">${Utils.escapeHTML(item.desc)}</h4>
+                            <p class="text-[10px] text-text-secondary truncate mt-0.5 opacity-70" title="${Utils.escapeHTML(item.observacao)}"><i class="fa-solid fa-circle-info"></i> ${Utils.escapeHTML(item.observacao)}</p>
+                            <p class="text-[11px] text-text-secondary font-mono mt-1">${item.data.split('-').reverse().join('/')} <span class="mx-1">•</span> <span class="text-brand-medium">${Utils.escapeHTML(item.formaPagamento)}</span></p>
                         </div>
                         <div class="text-right shrink-0 ml-2">
                             <p class="text-sm font-bold font-mono ${item.tipo === 'receita' ? 'text-success' : 'text-text-primary'}">${valorFormatado}</p>
@@ -236,7 +236,7 @@ export const OFXManager = {
                 valor: item.valor,
                 tipo: item.tipo,
                 categoria: categoriaInferida,
-                bancoId: bancoId,
+                bancoId: Number(bancoId),
                 isCartao: false,
                 formaPagamento: item.formaPagamento || 'Transferência', 
                 observacoes: item.observacao,

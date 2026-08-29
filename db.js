@@ -246,7 +246,7 @@ const persist = (col) => {
 
 const applyBalanceDelta = (t, isReverse = false) => {
     if (t.isCartao) return; 
-    const b = db.bancos.find(x => x.id === t.bancoId);
+    const b = db.bancos.find(x => String(x.id) === String(t.bancoId));
     if (b) {
         const amount = t.tipo === 'receita' ? t.valor : -t.valor;
         b.saldo += isReverse ? -amount : amount;
@@ -490,6 +490,28 @@ export const Database = {
     getTransacoesPorMes: TransactionsRepo.getByMonth,
     getComprasCartaoPorMes: TransactionsRepo.getCardExpensesByMonth,
     save: persist,
+    replaceAll: async (data) => {
+        if (!data || typeof data !== 'object') throw new Error('Backup inválido');
+
+        for (const col of collections) {
+            if (Array.isArray(initialDB[col])) {
+                if (data[col] !== undefined && !Array.isArray(data[col])) {
+                    throw new Error(`Coleção inválida: ${col}`);
+                }
+                db[col] = data[col] ?? [];
+            } else if (data[col] !== undefined) {
+                if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
+                    throw new Error(`Registro inválido: ${col}`);
+                }
+                db[col] = data[col];
+            }
+        }
+
+        await Promise.all(collections.map(col => IDB.set(col, db[col])));
+        clearCache();
+        if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+        return true;
+    },
     saveMentoriaSnapshot: MentoriaRepo.saveSnapshot,
     add: (col, item) => {
         switch(col) {

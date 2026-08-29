@@ -339,7 +339,7 @@ export const App = {
 
     markAgendamentoPaid: (id) => {
         const agendamento = db.agendamentos.find(a => a.id.toString() === id.toString());
-        if(!agendamento) return;
+        if(!agendamento || agendamento.status === 'pago') return;
 
         Database.updateAgendamento(id, { status: 'pago' });
 
@@ -784,14 +784,12 @@ export const App = {
         reader.onload = (e) => {
             try {
                 const importedDB = JSON.parse(e.target.result);
-                collections.forEach(c => {
-                    if (importedDB[c]) {
-                        db[c] = importedDB[c];
-                        localStorage.setItem('nexx_fin_v8_pro_' + c, JSON.stringify(db[c]));
-                    }
+                Database.replaceAll(importedDB).then(() => {
+                    Utils.showToast('Backup restaurado com sucesso!', 'success');
+                    setTimeout(() => window.location.reload(), 1000);
+                }).catch(() => {
+                    Utils.showToast('Erro ao importar arquivo. Estrutura inválida.', 'error');
                 });
-                Utils.showToast('Backup restaurado com sucesso!', 'success');
-                setTimeout(() => window.location.reload(), 1000);
             } catch (err) {
                 Utils.showToast('Erro ao importar arquivo. Formato inválido.', 'error');
             }
