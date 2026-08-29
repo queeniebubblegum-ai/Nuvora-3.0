@@ -34,7 +34,10 @@ const initialDB = {
         metasAtivo: true
     },
     contatos: [],
-    historicoMentoria: []
+    historicoMentoria: [],
+    receitasFuturas: [],
+    assinaturas: [],
+    investimentos: []
 };
 
 export let db = {};
@@ -159,7 +162,9 @@ const loadData = async () => {
                     id: c.id || 'cat_' + Date.now() + index,
                     nome: c.nome || 'Categoria ' + (index + 1),
                     icone: c.icone || 'fa-tag',
-                    cor: c.cor || '#9CA3AF'
+                    cor: c.cor || '#9CA3AF',
+                    paiId: c.paiId || null,
+                    tipo: c.tipo || 'despesa'
                 };
             }
             return null;
@@ -509,6 +514,39 @@ export const ScheduleRepo = {
     remove: (id) => { db.agendamentos = db.agendamentos.filter(i => i.id.toString() !== id.toString()); persist('agendamentos'); }
 };
 
+export const FutureIncomeRepo = {
+    add: (item) => { db.receitasFuturas.unshift({ ...item, status: item.status || 'prevista' }); persist('receitasFuturas'); return true; },
+    update: (id, data) => {
+        const index = db.receitasFuturas.findIndex(i => String(i.id) === String(id));
+        if (index < 0) return false;
+        db.receitasFuturas[index] = { ...db.receitasFuturas[index], ...data };
+        persist('receitasFuturas'); return true;
+    },
+    remove: (id) => { db.receitasFuturas = db.receitasFuturas.filter(i => String(i.id) !== String(id)); persist('receitasFuturas'); return true; }
+};
+
+export const SubscriptionRepo = {
+    add: (item) => { db.assinaturas.unshift({ ...item, ativa: item.ativa !== false }); persist('assinaturas'); return true; },
+    update: (id, data) => {
+        const index = db.assinaturas.findIndex(i => String(i.id) === String(id));
+        if (index < 0) return false;
+        db.assinaturas[index] = { ...db.assinaturas[index], ...data };
+        persist('assinaturas'); return true;
+    },
+    remove: (id) => { db.assinaturas = db.assinaturas.filter(i => String(i.id) !== String(id)); persist('assinaturas'); return true; }
+};
+
+export const InvestmentRepo = {
+    add: (item) => { db.investimentos.unshift(item); persist('investimentos'); return true; },
+    update: (id, data) => {
+        const index = db.investimentos.findIndex(i => String(i.id) === String(id));
+        if (index < 0) return false;
+        db.investimentos[index] = { ...db.investimentos[index], ...data };
+        persist('investimentos'); return true;
+    },
+    remove: (id) => { db.investimentos = db.investimentos.filter(i => String(i.id) !== String(id)); persist('investimentos'); return true; }
+};
+
 export const Database = {
     getTransacoesPorMes: TransactionsRepo.getByMonth,
     getComprasCartaoPorMes: TransactionsRepo.getCardExpensesByMonth,
@@ -543,6 +581,9 @@ export const Database = {
             case 'bancos': return BankRepo.add(item);
             case 'cartoes': return CardRepo.add(item);
             case 'metas': return GoalRepo.add(item);
+            case 'receitasFuturas': return FutureIncomeRepo.add(item);
+            case 'assinaturas': return SubscriptionRepo.add(item);
+            case 'investimentos': return InvestmentRepo.add(item);
             case 'orcamentos': return BudgetRepo.add(item);
             case 'notificacoes': return NotificationRepo.add(item);
             case 'contatos': return ContactRepo.add(item);
@@ -562,6 +603,9 @@ export const Database = {
             case 'notificacoes': return NotificationRepo.remove(id);
             case 'contatos': return ContactRepo.remove(id);
             case 'agendamentos': return ScheduleRepo.remove(id);
+            case 'receitasFuturas': return FutureIncomeRepo.remove(id);
+            case 'assinaturas': return SubscriptionRepo.remove(id);
+            case 'investimentos': return InvestmentRepo.remove(id);
         }
     },
     removeMultiple: (col, ids) => {
