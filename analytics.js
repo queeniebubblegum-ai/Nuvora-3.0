@@ -24,6 +24,15 @@ export const FinancialAnalytics = {
             result[category] = (result[category] || 0) + (Number(t.valor) || 0);
             return result;
         }, {}),
+    categoryComparison: (transactions, current, previous) => {
+        const atual = FinancialAnalytics.categoryTotals(transactions, current.year, current.month);
+        const anterior = FinancialAnalytics.categoryTotals(transactions, previous.year, previous.month);
+        return Array.from(new Set([...Object.keys(atual), ...Object.keys(anterior)])).map(categoria => {
+            const agora = atual[categoria] || 0;
+            const antes = anterior[categoria] || 0;
+            return { categoria, atual: agora, anterior: antes, diferenca: agora - antes, variacao: antes === 0 ? (agora === 0 ? 0 : null) : ((agora - antes) / antes) * 100 };
+        }).sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca));
+    },
     compareMonths: (transactions, current, previous) => {
         const atual = FinancialAnalytics.totals(transactions, current.year, current.month);
         const anterior = FinancialAnalytics.totals(transactions, previous.year, previous.month);

@@ -21,6 +21,10 @@ describe('Análises financeiras', () => {
         expect(heat).toHaveLength(31);
         expect(heat[5].valor).toBe(100);
     });
+    it('deve comparar categorias e ordenar pela maior diferença', () => {
+        const result = FinancialAnalytics.categoryComparison(tx, { year: 2026, month: 7 }, { year: 2026, month: 6 });
+        expect(result[0]).toMatchObject({ categoria: 'Lazer', atual: 200, anterior: 0, variacao: null });
+    });
     it('deve comparar meses sem inventar percentual quando o anterior é zero', () => {
         const result = FinancialAnalytics.compareMonths(tx, { year: 2026, month: 7 }, { year: 2026, month: 6 });
         expect(result.variacaoDespesas).toBeNull();
