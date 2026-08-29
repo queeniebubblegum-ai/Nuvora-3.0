@@ -4,7 +4,7 @@ const initialDB = {
     usuario: {
         nome: '',
         subtitulo: '',
-        fotoUrl: 'assets/perfil.png',
+        fotoUrl: 'assets/perfil.svg',
         objetivoPrincipal: '',
         rendaMensalMedia: '',
         limiteCartaoGlobal: '',

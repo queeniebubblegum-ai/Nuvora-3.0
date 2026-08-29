@@ -70,6 +70,11 @@ const LOCAL_ASSETS = [
     './ofx.js',
     
     // Assets & Imagens Base
+    './assets/logo.svg',
+    './assets/anora.svg',
+    './assets/perfil.svg',
+    './assets/icon-192.svg',
+    './assets/icon-512.svg'
 ];
 
 // Origens de CDNs externos que queremos guardar em cache
