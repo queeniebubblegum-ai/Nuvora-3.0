@@ -39,11 +39,12 @@ export const CSVImport = {
         const dateIndex = find(['data', 'date']);
         const valueIndex = find(['valor', 'value', 'amount']);
         const descIndex = find(['descricao', 'description', 'historico', 'memo']);
+        const idIndex = find(['identificador', 'id', 'identifier', 'fitid']);
         if (dateIndex === undefined || valueIndex === undefined) throw new Error('CSV precisa ter colunas Data e Valor');
         return lines.slice(1).map(line => {
             const cells = splitLine(line, delimiter);
             const signed = parseMoney(cells[valueIndex]);
-            return { data: parseDate(cells[dateIndex]), desc: cells[descIndex] || 'Lançamento importado', valor: Math.abs(signed), tipo: signed >= 0 ? 'receita' : 'despesa', importadoCSV: true };
+            return { data: parseDate(cells[dateIndex]), identificador: idIndex === undefined ? '' : (cells[idIndex] || ''), desc: cells[descIndex] || 'Lançamento importado', valor: Math.abs(signed), tipo: signed >= 0 ? 'receita' : 'despesa', importadoCSV: true };
         }).filter(item => item.data && item.valor > 0);
     }
 };

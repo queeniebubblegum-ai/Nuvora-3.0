@@ -8,6 +8,7 @@ import { EventManager } from './events.js';
 import { Renderer } from './renderer.js';
 import { UI } from './ui.js';
 import { OFXManager } from './ofx.js';
+import { CSVManager } from './csv-manager.js';
 
 // --- ENGENHARIA DE UX: Assistente de Fechamento de Mês ---
 const FechamentoManager = {
@@ -395,7 +396,7 @@ export const App = {
         const nome = perfilDiv.querySelector('span.text-sm');
         const subtitulo = perfilDiv.querySelector('span.text-\\[10px\\]');
         
-        if (img) img.src = db.usuario.fotoUrl || 'assets/perfil.png';
+        if (img) img.src = db.usuario.fotoUrl || 'assets/perfil.svg';
         if (nome) nome.innerText = db.usuario.nome || 'Maria Eduarda';
         if (subtitulo) subtitulo.innerText = db.usuario.subtitulo || 'Analista Pleno';
     },
@@ -417,6 +418,21 @@ export const App = {
             }
             App.renderQueue = null;
         });
+    },
+
+    exportTransactionsCSV: () => {
+        const escape = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+        const f = App.viewState.filters || {};
+        let transacoes = db.transacoes.filter(t => !f.desc || String(t.desc || '').toLowerCase().includes(f.desc.toLowerCase()) || String(t.codigoRef || '').toLowerCase().includes(f.desc.toLowerCase()));
+        if (f.categoria) transacoes = transacoes.filter(t => t.categoria === f.categoria);
+        if (f.mes !== '') transacoes = transacoes.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes));
+        if (f.bancoId) { const [type, id] = f.bancoId.split('_'); transacoes = transacoes.filter(t => type === 'banco' ? (!t.isCartao && t.bancoId == id) : (t.isCartao && t.bancoId == id)); }
+        const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => [t.data, t.tipo === 'despesa' ? -t.valor : t.valor, t.codigoRef || '', t.desc, t.tipo, t.categoria || ''])];
+        const csv = rows.map(row => row.map(escape).join(';')).join('\n');
+        const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob); const link = document.createElement('a');
+        link.href = url; link.download = `nuvora-lancamentos-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url);
+        Utils.showToast('Lançamentos exportados em CSV.', 'success');
     },
 
     exportToPDF: () => {
@@ -751,11 +767,14 @@ export const App = {
     },
 
     iniciarImportacaoOFX: (bancoId) => OFXManager.iniciarImportacaoOFX(bancoId, App.viewState),
+    iniciarImportacaoCSV: (bancoId) => CSVManager.iniciarImportacao(bancoId, App.viewState),
+    handleCSVUpload: (e) => CSVManager.handleUpload(e, App.viewState, App.openModal),
     handleOFXUpload: (e) => OFXManager.handleOFXUpload(e, App.viewState, App.scheduleRender, App.openModal),
     handleOfxBancoChange: (novoBancoId) => OFXManager.handleOfxBancoChange(novoBancoId, App.viewState, App.scheduleRender, App.openModal),
     processarEVerificarDuplicidades: (ofxString, bancoId) => OFXManager.processarEVerificarDuplicidades(ofxString, bancoId, App.viewState, App.scheduleRender, App.openModal),
     renderOFXReviewList: () => OFXManager.renderOFXReviewList(App.viewState),
     toggleSelecaoOFX: (idTemp) => OFXManager.toggleSelecaoOFX(idTemp, App.viewState),
+    alterarCategoriaOFX: (idTemp, categoria) => OFXManager.alterarCategoriaOFX(idTemp, categoria, App.viewState),
     salvarOFXAprovado: () => OFXManager.salvarOFXAprovado(App.viewState, App.closeModal, App.scheduleRender),
 
     handleBancoChange: (bancoId) => {

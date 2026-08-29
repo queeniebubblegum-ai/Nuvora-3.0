@@ -175,6 +175,7 @@ export const PageRenderers = {
     Transacoes: (appState) => {
         const bancoPadraoId = db.bancos.length > 0 ? db.bancos[0].id : '';
         const actionsHtml = `
+            <button data-action="exportTransactionsCSV" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-export"></i> Exportar CSV</button>
             <button data-action="iniciarImportacaoOFX" data-banco-id="${bancoPadraoId}" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-import"></i> Importar OFX</button>
             <button data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="bg-brand-medium text-white px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-brand-dark transition-all shadow-brand-glow hover:-translate-y-0.5 flex items-center gap-2"><i class="fa-solid fa-plus"></i> Novo Lançamento</button>
         `;
@@ -318,6 +319,7 @@ export const PageRenderers = {
         const bancoPadraoId = db.bancos.length > 0 ? db.bancos[0].id : '';
         const actionsHtml = `
             <button data-action="iniciarImportacaoOFX" data-banco-id="${bancoPadraoId}" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-import"></i> Importar OFX</button>
+            <button data-action="iniciarImportacaoCSV" data-banco-id="${bancoPadraoId}" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-csv"></i> Importar CSV</button>
             <button data-action="openModal" data-modal="modal-banco" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft"><i class="fa-solid fa-building-columns mr-2"></i> Nova Conta</button>
             <button data-action="openModal" data-modal="modal-cartao" class="bg-brand-medium text-white px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-brand-dark transition-all shadow-brand-glow hover:-translate-y-0.5"><i class="fa-regular fa-credit-card mr-2"></i> Novo Cartão</button>
         `;

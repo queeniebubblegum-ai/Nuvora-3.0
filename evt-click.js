@@ -34,6 +34,7 @@ export const ClickEvents = {
                 'changeMonth': () => App.changeMonth(btn.getAttribute('data-type'), parseInt(btn.getAttribute('data-dir'))),
                 'setReportTab': () => App.setReportTab(btn.getAttribute('data-payload')),
                 'exportPDF': () => App.exportToPDF(),
+                'exportTransactionsCSV': () => App.exportTransactionsCSV(),
                 'clearFilters': () => App.clearFilters(),
                 'setTransactionType': () => App.setTransactionType(btn.getAttribute('data-payload')),
                 'setTxPage': () => {
@@ -45,6 +46,7 @@ export const ClickEvents = {
                 'simularTransacaoGeral': () => Controllers.simularTransacaoGeral(),
                 'salvarOFXAprovado': () => App.salvarOFXAprovado(),
                 'iniciarImportacaoOFX': () => App.iniciarImportacaoOFX(btn.getAttribute('data-banco-id')),
+                'iniciarImportacaoCSV': () => App.iniciarImportacaoCSV(btn.getAttribute('data-banco-id')),
                 'iniciarFechamentoMes': () => App.iniciarFechamentoMes(), // <-- GATILHO ADICIONADO AQUI
                 'silenciarAnora': () => {
                     Utils.showToast('Alertas da Anora silenciados por 24 horas.', 'success');

@@ -71,8 +71,12 @@ export const OFXManager = {
         }
 
         let countNovos = 0;
-        let countDuplicadosOuIgnorados = 0;
+        let countDuplicados = 0;
+        let countRetroativos = 0;
 
+        viewState.tipoImportacao = 'OFX';
+        const tituloModal = document.getElementById('ofx-modal-title');
+        if (tituloModal) tituloModal.innerText = 'Conciliação OFX';
         viewState.ofxPendente = transacoesOFX.map(ofx => {
             const ofxDescLimpa = ofx.desc.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
             const dataOfx = new Date(ofx.data + 'T12:00:00');
@@ -98,7 +102,9 @@ export const OFXManager = {
             if (duplicata) status = 'duplicada';
             else if (isRetroativa) status = 'ignorada_saldo_inicial';
 
-            if (status !== 'nova') countDuplicadosOuIgnorados++; else countNovos++;
+            if (status === 'duplicada') countDuplicados++;
+            else if (status === 'ignorada_saldo_inicial') countRetroativos++;
+            else countNovos++;
 
             return {
                 ...ofx,
@@ -110,7 +116,9 @@ export const OFXManager = {
         });
 
         document.getElementById('ofx-count-novos').innerText = countNovos;
-        document.getElementById('ofx-count-duplicados').innerText = countDuplicadosOuIgnorados;
+        document.getElementById('ofx-count-duplicados').innerText = countDuplicados;
+        const retroativos = document.getElementById('ofx-count-retroativos');
+        if (retroativos) retroativos.innerText = countRetroativos;
 
         OFXManager.renderOFXReviewList(viewState);
         if (openModalCallback) openModalCallback('modal-revisao-ofx');
@@ -125,6 +133,7 @@ export const OFXManager = {
             return;
         }
 
+        const categorias = db.categorias || [];
         const html = viewState.ofxPendente.map(item => {
             const isDuplicada = item.status === 'duplicada';
             const isRetroativa = item.status === 'ignorada_saldo_inicial';
@@ -172,11 +181,12 @@ export const OFXManager = {
                         <div class="flex-1 overflow-hidden">
                             <h4 class="text-sm font-bold text-text-primary truncate" title="${Utils.escapeHTML(item.desc)}">${Utils.escapeHTML(item.desc)}</h4>
                             <p class="text-[10px] text-text-secondary truncate mt-0.5 opacity-70" title="${Utils.escapeHTML(item.observacao)}"><i class="fa-solid fa-circle-info"></i> ${Utils.escapeHTML(item.observacao)}</p>
-                            <p class="text-[11px] text-text-secondary font-mono mt-1">${item.data.split('-').reverse().join('/')} <span class="mx-1">•</span> <span class="text-brand-medium">${Utils.escapeHTML(item.formaPagamento)}</span></p>
+                            <p class="text-[11px] text-text-secondary font-mono mt-1">${item.data.split('-').reverse().join('/')} <span class="mx-1">•</span> <span class="text-brand-medium">${Utils.escapeHTML(item.formaPagamento)}</span>${item.identificador ? ` <span class="mx-1">•</span> <span title="Identificador original">ID: ${Utils.escapeHTML(item.identificador)}</span>` : ''}</p>
                         </div>
                         <div class="text-right shrink-0 ml-2">
                             <p class="text-sm font-bold font-mono ${item.tipo === 'receita' ? 'text-success' : 'text-text-primary'}">${valorFormatado}</p>
                             ${badgeStatus}
+                            <select class="mt-1 max-w-[120px] text-[10px] bg-surface border border-border rounded p-1 text-text-primary" onclick="event.stopPropagation()" onchange="App.alterarCategoriaOFX('${item.idTemp}', this.value)"><option value="">Categoria</option>${categorias.map(c => `<option value="${Utils.escapeHTML(c.nome)}" ${item.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('')}</select>
                         </div>
                     </div>
                     ${alertaDuplicidade}
@@ -186,6 +196,11 @@ export const OFXManager = {
         }).join('');
 
         container.innerHTML = html;
+    },
+
+    alterarCategoriaOFX: (idTemp, categoria, viewState) => {
+        const item = viewState.ofxPendente.find(i => i.idTemp === idTemp);
+        if (item) item.categoria = categoria;
     },
 
     toggleSelecaoOFX: (idTemp, viewState) => {
@@ -222,15 +237,18 @@ export const OFXManager = {
             return;
         }
 
+        const transacoesImportadas = [];
         itensParaSalvar.forEach(item => {
-            let categoriaInferida = 'Outros';
+            let categoriaInferida = item.categoria || 'Outros';
             const itemDescLimpa = item.desc.toLowerCase();
             
-            if (itemDescLimpa.includes('uber') || itemDescLimpa.includes('posto')) categoriaInferida = 'Transporte';
-            else if (itemDescLimpa.includes('mercado') || itemDescLimpa.includes('ifood')) categoriaInferida = 'Alimentação';
-            else if (itemDescLimpa.includes('salario') || itemDescLimpa.includes('rendimento')) categoriaInferida = 'Salário';
+            if (!item.categoria) {
+                if (itemDescLimpa.includes('uber') || itemDescLimpa.includes('posto')) categoriaInferida = 'Transporte';
+                else if (itemDescLimpa.includes('mercado') || itemDescLimpa.includes('ifood')) categoriaInferida = 'Alimentação';
+                else if (itemDescLimpa.includes('salario') || itemDescLimpa.includes('rendimento')) categoriaInferida = 'Salário';
+            }
 
-            Database.add('transacoes', {
+            const transacaoImportada = {
                 id: Date.now() + Math.floor(Math.random() * 1000),
                 desc: item.desc,
                 valor: item.valor,
@@ -241,10 +259,23 @@ export const OFXManager = {
                 formaPagamento: item.formaPagamento || 'Transferência', 
                 observacoes: item.observacao,
                 data: item.data,
-                codigoRef: `OFX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-                importadoOFX: true 
-            });
+                codigoRef: item.identificador || `OFX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+                importadoOFX: viewState.tipoImportacao === 'OFX',
+                importadoCSV: viewState.tipoImportacao === 'CSV'
+            };
+            Database.add('transacoes', transacaoImportada);
+            transacoesImportadas.push(transacaoImportada);
         });
+
+        const undoButton = document.createElement('button');
+        undoButton.className = 'fixed bottom-10 left-1/2 -translate-x-1/2 bg-brand-deep text-white px-5 py-3 rounded-xl shadow-2xl z-[9999] text-sm font-bold';
+        undoButton.innerHTML = `${transacoesImportadas.length} importadas · Desfazer`;
+        undoButton.onclick = () => { Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id)); undoButton.remove(); Utils.showToast('Importação desfeita.', 'success'); if (scheduleRenderCallback) scheduleRenderCallback(); };
+        document.body.appendChild(undoButton);
+        setTimeout(() => undoButton.remove(), 8000);
+        const historico = JSON.parse(localStorage.getItem('nuvora_importacoes') || '[]');
+        historico.unshift({ data: new Date().toISOString(), origem: viewState.tipoImportacao, quantidade: transacoesImportadas.length, bancoId: Number(bancoId) });
+        localStorage.setItem('nuvora_importacoes', JSON.stringify(historico.slice(0, 10)));
 
         Utils.showToast(`${itensParaSalvar.length} transações importadas com sucesso!`, 'success');
         if (closeModalCallback) closeModalCallback();

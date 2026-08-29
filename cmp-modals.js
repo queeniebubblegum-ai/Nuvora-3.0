@@ -4,7 +4,7 @@ export const Modals = {
         <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-4 border-b border-border flex justify-between items-center bg-brand-deep rounded-t-[16px] text-white shrink-0">
                 <div class="flex items-center gap-3">
-                    <img src="assets/anora.png" class="w-10 h-10 rounded-full border-2 border-white/20 object-cover">
+                    <img src="assets/anora.svg" class="w-10 h-10 rounded-full border-2 border-white/20 object-cover">
                     <div>
                         <h3 class="font-bold font-primary leading-tight">Anora</h3>
                         <p class="text-[10px] text-brand-soft flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success inline-block"></span> Online</p>
@@ -15,7 +15,7 @@ export const Modals = {
             
             <div class="flex-1 min-h-0 overflow-y-auto p-5 bg-bg space-y-4" id="chat-anora-messages">
                 <div class="flex gap-3 max-w-[85%]">
-                    <img src="assets/anora.png" class="w-8 h-8 rounded-full shadow-sm shrink-0 object-cover border border-white/10">
+                    <img src="assets/anora.svg" class="w-8 h-8 rounded-full shadow-sm shrink-0 object-cover border border-white/10">
                     <div class="bg-surface border border-border p-3.5 rounded-[16px] rounded-tl-none shadow-sm text-sm text-text-primary leading-relaxed">
                         Olá! Estou analisando seus dados em tempo real. O que você gostaria de saber sobre suas finanças hoje?
                     </div>
@@ -504,7 +504,7 @@ export const Modals = {
         <div class="bg-surface w-full max-w-lg rounded-[16px] shadow-2xl border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-5 border-b border-border flex justify-between items-center bg-surface shrink-0">
                 <div>
-                    <h3 class="text-lg font-bold font-primary text-text-primary">Conciliação OFX</h3>
+                    <h3 id="ofx-modal-title" class="text-lg font-bold font-primary text-text-primary">Conciliação OFX</h3>
                     <p id="ofx-header-datas" class="text-[11px] text-text-secondary mt-0.5 font-mono">Período: --/-- a --/--</p>
                 </div>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -514,6 +514,7 @@ export const Modals = {
                 <div class="flex gap-2">
                     <span class="text-[10px] font-bold px-2 py-1 bg-success/20 text-success rounded text-center"><i class="fa-solid fa-plus"></i> <span id="ofx-count-novos">0</span></span>
                     <span class="text-[10px] font-bold px-2 py-1 bg-warning/20 text-warning rounded text-center"><i class="fa-solid fa-triangle-exclamation"></i> <span id="ofx-count-duplicados">0</span></span>
+                    <span class="text-[10px] font-bold px-2 py-1 bg-blue-500/20 text-blue-500 rounded text-center"><i class="fa-solid fa-clock-rotate-left"></i> <span id="ofx-count-retroativos">0</span></span>
                 </div>
                 <select id="ofx-banco-alvo-id" data-change="handleOfxBancoChange" class="bg-surface border border-border text-[10px] text-text-primary p-1.5 rounded-[6px] outline-none max-w-[150px] truncate"></select>
             </div>

@@ -70,6 +70,7 @@ export const ChangeEvents = {
                     else App.setDashboardPeriod('este_mes');
                 },
                 'handleOFXUpload': () => App.handleOFXUpload(e),
+                'handleCSVUpload': () => App.handleCSVUpload(e),
                 'changeTxPerPage': () => App.setTxPerPage(target.value),
                 'handleOfxBancoChange': () => App.handleOfxBancoChange(target.value)
             };

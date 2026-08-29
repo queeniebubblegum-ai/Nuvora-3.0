@@ -68,6 +68,8 @@ const LOCAL_ASSETS = [
     
     // Importação
     './ofx.js',
+    './csv-import.js',
+    './csv-manager.js',
     
     // Assets & Imagens Base
     './assets/logo.svg',
