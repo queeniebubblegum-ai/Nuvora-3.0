@@ -67,7 +67,7 @@ export const UI = {
         
         document.querySelectorAll('form').forEach(form => form.reset());
         
-        const hoje = new Date().toISOString().split('T')[0];
+        const hoje = Utils.localISODate();
         ['input-data-trans', 'dc-data', 'simulador-data', 'agendamento-data', 'edit-data'].forEach(id => {
             const el = document.getElementById(id);
             if(el) el.value = hoje;

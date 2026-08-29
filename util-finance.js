@@ -1,3 +1,4 @@
+import { UtilDate } from './util-date.js';
 export const UtilFinance = {
     formatMoney: (v) => {
         if (isNaN(v)) return 'R$ 0,00';
@@ -73,7 +74,7 @@ export const UtilFinance = {
             if (nameMatch && nameMatch[1]) descBanco += nameMatch[1].trim();
             if (memoMatch && memoMatch[1]) descBanco += (descBanco ? ' - ' : '') + memoMatch[1].trim();
 
-            const parsedDate = parseDate(dateMatch ? dateMatch[1] : null) || new Date().toISOString().split('T')[0];
+            const parsedDate = parseDate(dateMatch ? dateMatch[1] : null) || UtilDate.localISODate();
             const rawAmount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
 
             const cleanedData = cleanDescriptionAndMethod(descBanco);

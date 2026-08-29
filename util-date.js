@@ -1,4 +1,10 @@
 export const UtilDate = {
+    localISODate: () => {
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        return new Date(now - offset).toISOString().split('T')[0];
+    },
+
     formatToBR: (isoString) => {
         if (!isoString) return '--/--/----';
         const [y, m, d] = isoString.split('-');

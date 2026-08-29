@@ -80,7 +80,7 @@ export const OFXManager = {
             const isRetroativa = dataCriacaoBanco && dataOfx <= dataCriacaoBanco;
 
             const duplicata = bancoId ? transacoesExistentes.find(t => {
-                if (Math.abs(t.valor) !== Math.abs(ofx.valor)) return false;
+                if (Math.abs(Math.abs(t.valor) - Math.abs(ofx.valor)) > 0.01) return false;
                 
                 const dataT = new Date(t.data + 'T12:00:00');
                 const diffDias = Math.abs((dataOfx - dataT) / (1000 * 60 * 60 * 24));

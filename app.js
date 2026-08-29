@@ -163,7 +163,7 @@ const FechamentoManager = {
                     bancoId: db.bancos.length > 0 ? db.bancos[0].id : null,
                     isCartao: false,
                     formaPagamento: 'Transferência',
-                    data: new Date().toISOString().split('T')[0],
+                    data: Utils.localISODate(),
                     parcelaAtual: 1, totalParcelas: 1, recorrente: false
                 });
             }
@@ -253,7 +253,7 @@ export const App = {
             App.scheduleRender(); 
             Notifications.updateBadge(); 
         });
-        const hoje = new Date().toISOString().split('T')[0];
+        const hoje = Utils.localISODate();
         
         ['input-data-trans', 'dc-data', 'simulador-data'].forEach(id => {
             const el = document.getElementById(id);
@@ -359,7 +359,7 @@ export const App = {
             bancoId: agendamento.bancoId || (db.bancos.length > 0 ? db.bancos[0].id : null),
             isCartao: false,
             formaPagamento: 'Automático (Agendamento)',
-            data: new Date().toISOString().split('T')[0]
+            data: Utils.localISODate()
         });
 
         Utils.showToast('Conta marcada como paga!', 'success');
@@ -442,7 +442,7 @@ export const App = {
     },
 
     checkAutoBackup: () => {
-        const hojeStr = new Date().toISOString().split('T')[0];
+        const hojeStr = Utils.localISODate();
         const lastBackup = localStorage.getItem('nuvora_last_backup');
         if (lastBackup !== hojeStr && db.transacoes.length > 0) {
             Utils.showToast('Gerando backup automático diário...', 'success');
@@ -772,9 +772,9 @@ export const App = {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
         const dlAnchorElem = document.createElement('a');
         dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `nuvora_backup_${new Date().toISOString().split('T')[0]}.json`);
+        dlAnchorElem.setAttribute("download", `nuvora_backup_${Utils.localISODate()}.json`);
         dlAnchorElem.click();
-        if(isAuto) localStorage.setItem('nuvora_last_backup', new Date().toISOString().split('T')[0]);
+        if(isAuto) localStorage.setItem('nuvora_last_backup', Utils.localISODate());
     },
 
     importBackup: (e) => {

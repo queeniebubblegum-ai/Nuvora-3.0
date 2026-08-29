@@ -56,7 +56,7 @@ export const PlaneamentoController = {
             categoria: 'Investimentos',
             bancoId: bancoId,
             isCartao: false,
-            data: new Date().toISOString().split('T')[0]
+            data: Utils.localISODate()
         });
         
         Utils.showToast(`Guardou ${Utils.formatMoney(valor)}!`, 'success');

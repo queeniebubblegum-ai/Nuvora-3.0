@@ -1,3 +1,4 @@
+import { UtilDate } from './util-date.js';
 import { db, Database } from './db.js';
 
 export const NotifEngine = {
@@ -11,7 +12,7 @@ export const NotifEngine = {
     },
 
     addNotification: (tipo, titulo, mensagem, icone, cor) => {
-        const hojeStr = new Date().toISOString().split('T')[0];
+        const hojeStr = UtilDate.localISODate();
         
         // Evita criar a mesma notificação repetidamente no mesmo dia
         const jaExiste = db.notificacoes.find(n => 
