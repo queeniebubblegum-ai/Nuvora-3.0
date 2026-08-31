@@ -1,6 +1,7 @@
 import { Utils } from './utils.js';
 import { Database, db } from './db.js';
 import { CoreComponents } from './cmp-core.js';
+import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, invoiceReconciliationKey } from './reconciliation.js';
 
 export const PageComponents = {
     contatosPage: (contatos) => {
@@ -13,7 +14,7 @@ export const PageComponents = {
                         <p class="text-xs text-text-secondary font-mono mt-0.5 tracking-wider">${Utils.escapeHTML(c.documento || 'Documento não informado')}</p>
                     </div>
                 </div>
-                <button data-action="delete" data-col="contatos" data-id="${c.id}" class="text-border hover:text-danger w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg transition-colors"><i class="fa-solid fa-trash-can"></i></button>
+                <button data-action="delete" data-col="contatos" data-id="${c.id}" class="text-border hover:text-danger w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg transition-colors"><i class="fa-solid fa-pen"></i></button><button data-action="delete" data-col="categorias" data-id="${id}" class="text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors w-10 h-10 flex items-center justify-center rounded-xl border border-transparent hover:border-danger/20"><i class="fa-solid fa-trash-can"></i></button>
             </div>
         `).join('');
 
@@ -33,7 +34,7 @@ export const PageComponents = {
 
     categoriesPage: (db, state) => {
         const hoje = new Date();
-        const trMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth()).filter(t => t.tipo === 'despesa');
+        const trMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth()).filter(t => t.tipo === 'despesa' && !t.transferenciaInterna);
         const gastosPorCat = {};
         let totalDespesas = 0;
 
@@ -45,7 +46,7 @@ export const PageComponents = {
 
         const mesAnt = hoje.getMonth() === 0 ? 11 : hoje.getMonth() - 1;
         const anoAnt = hoje.getMonth() === 0 ? hoje.getFullYear() - 1 : hoje.getFullYear();
-        const trMesAnt = Database.getTransacoesPorMes(anoAnt, mesAnt).filter(t => t.tipo === 'despesa');
+        const trMesAnt = Database.getTransacoesPorMes(anoAnt, mesAnt).filter(t => t.tipo === 'despesa' && !t.transferenciaInterna);
         const gastosMesAnt = {};
         trMesAnt.forEach(t => { 
             if(!gastosMesAnt[t.categoria]) gastosMesAnt[t.categoria] = 0; 
@@ -88,24 +89,32 @@ export const PageComponents = {
             </div>`;
         }).join('') : '<p class="text-sm text-text-secondary text-center py-6 border border-dashed border-border rounded-[12px] bg-bg mt-4">Nenhuma despesa registrada neste mês.</p>';
 
-        const catList = db.categorias.map(c => {
-            const isString = typeof c === 'string';
-            const nome = isString ? c : (c.nome || 'Categoria Desconhecida');
-            const icone = isString ? 'fa-tag' : (c.icone || 'fa-tag');
-            const cor = isString ? '#9CA3AF' : (c.cor || '#9CA3AF');
-            const id = isString ? c : c.id;
-            
-            return `
-            <div data-key="cat_config_${id}" class="flex items-center justify-between p-4 border border-border bg-bg hover:bg-surface rounded-[16px] transition-colors group shadow-sm mb-3 last:mb-0">
-                <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-sm shrink-0 text-lg border border-border" style="background-color: ${cor}">
-                        <i class="fa-solid ${icone}"></i>
-                    </div>
-                    <p class="font-bold text-text-primary text-[15px] truncate max-w-[200px]">${Utils.escapeHTML(nome)}</p>
-                </div>
-                <button data-action="delete" data-col="categorias" data-id="${id}" class="text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors w-10 h-10 flex items-center justify-center rounded-xl border border-transparent hover:border-danger/20"><i class="fa-solid fa-trash-can"></i></button>
-            </div>
-            `;
+        const grupos = {};
+        db.categorias.forEach(c => {
+            const item = typeof c === 'string' ? { nome: c, grupo: 'Sem grupo', subgrupo: c, fixa: false, icone: 'fa-tag', cor: '#9CA3AF' } : c;
+            const grupo = item.grupo || 'Sem grupo';
+            if (!grupos[grupo]) grupos[grupo] = [];
+            grupos[grupo].push(item);
+        });
+        const catList = Object.entries(grupos).map(([grupo, itens]) => {
+            const base = itens[0];
+            const subitens = itens.filter(c => String(c.subgrupo || c.nome) !== String(grupo));
+            const linhas = subitens.map(c => `
+                <div class="flex items-center gap-2 py-2 px-2 border-t border-border/60 group/sub">
+                    <i class="fa-solid ${Utils.escapeHTML(c.icone || 'fa-tag')} text-xs" style="color:${c.cor || '#9CA3AF'}"></i>
+                    <span class="flex-1 min-w-0 text-xs text-text-primary truncate">${Utils.escapeHTML(c.subgrupo || c.nome)}</span>
+                    <button data-action="renameCategory" data-id="${c.id}" data-name="${Utils.escapeHTML(c.nome)}" class="opacity-0 group-hover/sub:opacity-100 text-text-secondary hover:text-brand-medium w-7 h-7 rounded" title="Renomear"><i class="fa-solid fa-pen text-[10px]"></i></button>
+                    ${c.fixa ? '' : `<button data-action="delete" data-col="categorias" data-id="${c.id}" class="opacity-0 group-hover/sub:opacity-100 text-text-secondary hover:text-danger w-7 h-7 rounded" title="Excluir"><i class="fa-solid fa-trash-can text-[10px]"></i></button>`}
+                </div>`).join('');
+            return `<details class="bg-bg border border-border rounded-xl mb-2 overflow-hidden group" open>
+                <summary class="list-none cursor-pointer flex items-center gap-3 px-3 py-3 hover:bg-surface">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style="background-color:${base.cor || '#8B5CF6'}"><i class="fa-solid ${Utils.escapeHTML(base.icone || 'fa-tag')}"></i></div>
+                    <span class="flex-1 font-bold text-sm text-text-primary">${Utils.escapeHTML(grupo)}</span>
+                    <span class="text-[10px] text-text-secondary">${subitens.length} subgrupo${subitens.length === 1 ? '' : 's'}</span>
+                    <i class="fa-solid fa-chevron-down text-xs text-text-secondary group-open:rotate-180"></i>
+                </summary>
+                <div class="px-3 pb-2">${linhas}</div>
+            </details>`;
         }).join('');
 
         return `
@@ -164,9 +173,9 @@ export const PageComponents = {
     },
 
     transactionSummary: (transacoes = []) => {
-        const receitas = transacoes.filter(t => t.tipo === 'receita').reduce((s,t) => s + (Number(t.valor)||0), 0);
-        const despesas = transacoes.filter(t => t.tipo === 'despesa').reduce((s,t) => s + (Number(t.valor)||0), 0);
-        const cats = {}; transacoes.filter(t => t.tipo === 'despesa').forEach(t => cats[t.categoria] = (cats[t.categoria] || 0) + (Number(t.valor)||0));
+        const receitas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((s,t) => s + (Number(t.valor)||0), 0);
+        const despesas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((s,t) => s + (Number(t.valor)||0), 0);
+        const cats = {}; transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => cats[t.categoria] = (cats[t.categoria] || 0) + (Number(t.valor)||0));
         const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3);
         const card=(label,value,cor)=>`<div class="bg-surface border border-border rounded-[10px] px-3 py-2 min-w-0"><span class="block text-[9px] uppercase font-bold text-text-secondary truncate">${label}</span><strong class="block text-sm font-mono ${cor} mt-0.5 truncate">${value}</strong></div>`;
         return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">${card('Receitas',Utils.formatMoney(receitas),'text-success')}${card('Despesas',Utils.formatMoney(despesas),'text-danger')}${card('Saldo',Utils.formatMoney(receitas-despesas),receitas-despesas>=0?'text-success':'text-danger')}${card('Transações',transacoes.length,'text-text-primary')}<div class="col-span-2 sm:col-span-4 flex items-center gap-2 px-2 py-1.5 overflow-x-auto whitespace-nowrap"><span class="text-[9px] uppercase font-bold text-text-secondary">Categorias:</span>${topCats.length ? topCats.map(([cat,val])=>`<span class="text-[10px] text-text-primary"><strong>${Utils.escapeHTML(cat)}</strong> ${Utils.formatMoney(val)}</span>`).join('<span class="text-border">•</span>') : '<span class="text-[10px] text-text-secondary">Sem despesas</span>'}</div></div>`;
@@ -202,7 +211,7 @@ export const PageComponents = {
             </div>
             <div class="space-y-0">
                 ${list.map(t => {
-                    const isRec = t.tipo === 'receita';
+                    const isRec = t.transferenciaInterna ? (t.transferenciaEntrada === true || (t.transferenciaInterna && String(t.bancoId) === String(t.contaDestinoId))) : t.tipo === 'receita';
                     const signal = isRec ? '+' : '-'; const color = isRec ? 'text-success' : 'text-danger';
                     
                     let dataFormatada = 'Hoje';
@@ -313,13 +322,11 @@ export const PageComponents = {
     },
 
     invoiceDetailsView: (card, despesas, state) => {
-        const monthExpenses = despesas.filter(d => { 
-            if (d.cartaoId !== card.id) return false; 
-            const dataParcela = new Date(d.data + 'T12:00:00'); 
-            return dataParcela.getMonth() === state.invoiceMonth && dataParcela.getFullYear() === state.invoiceYear; 
-        });
-        
-        const totalFatura = monthExpenses.reduce((a,b) => a + b.valor, 0);
+        const monthExpenses = listInvoiceTransactions(despesas, card, state.invoiceYear, state.invoiceMonth);
+        const reconciliation = calculateReconciliation(monthExpenses, db.conciliacoesFaturas?.find(r => r.chave === invoiceReconciliationKey(card.id, state.invoiceYear, state.invoiceMonth))?.valorFaturaReal);
+        const totalFatura = reconciliation.totalRecorded;
+        const periodo = getInvoicePeriod(card, state.invoiceYear, state.invoiceMonth);
+        const statusClasses = { 'em aberto': 'bg-slate-100 text-slate-700', 'aguardando conferência': 'bg-amber-100 text-amber-700', 'diferença encontrada': 'bg-rose-100 text-rose-700', 'conciliada': 'bg-emerald-100 text-emerald-700' };
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]; 
         const mesAtualNome = meses[state.invoiceMonth];
         
@@ -332,7 +339,7 @@ export const PageComponents = {
             const pMonth = nextDate.getMonth();
             const pYear = nextDate.getFullYear();
             const pTotal = despesas.filter(d => {
-                if(d.cartaoId !== card.id) return false;
+                if(String(d.bancoId) !== String(card.id) || d.transferenciaInterna) return false;
                 const dp = new Date(d.data + 'T12:00:00');
                 return dp.getMonth() === pMonth && dp.getFullYear() === pYear;
             }).reduce((a,b)=>a+b.valor, 0);
@@ -371,7 +378,14 @@ export const PageComponents = {
             <div class="bg-bg rounded-[16px] p-6 mb-8 border border-border">
                 <p class="text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Fatura de ${mesAtualNome.toLowerCase()}</p>
                 <h2 class="text-4xl font-black text-text-primary tracking-tight font-mono">${Utils.formatMoney(totalFatura)}</h2>
-                <p class="text-xs text-text-secondary mt-3">Vencimento: <span class="font-bold text-text-primary font-mono">${vencimentoStr}</span></p>
+                <p class="text-xs text-text-secondary mt-3">Período: <span class="font-bold text-text-primary font-mono">${periodo.start.toLocaleDateString('pt-BR')} a ${periodo.end.toLocaleDateString('pt-BR')}</span></p>
+                <p class="text-xs text-text-secondary mt-1">Vencimento: <span class="font-bold text-text-primary font-mono">${vencimentoStr}</span></p>
+                <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div><p class="text-[10px] uppercase font-bold text-text-secondary">Total registrado</p><p class="font-mono font-bold text-text-primary">${Utils.formatMoney(reconciliation.totalRecorded)}</p></div>
+                    <div><label for="valor-fatura-real" class="text-[10px] uppercase font-bold text-text-secondary">Valor real da fatura</label><input id="valor-fatura-real" type="number" step="0.01" min="0" value="${reconciliation.realInvoiceAmount ?? ''}" placeholder="R$ 0,00" class="mt-1 w-full p-2 bg-surface border border-border rounded-lg font-mono text-sm"></div>
+                    <div><p class="text-[10px] uppercase font-bold text-text-secondary">Diferença</p><p class="font-mono font-bold ${reconciliation.difference === null ? 'text-text-secondary' : reconciliation.difference === 0 ? 'text-success' : 'text-danger'}">${reconciliation.difference === null ? '—' : Utils.formatMoney(reconciliation.difference)}</p></div>
+                </div>
+                <div class="mt-4 flex items-center justify-between gap-3"><span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${statusClasses[reconciliation.status]}">${reconciliation.status}</span><button data-action="saveInvoiceReconciliation" class="px-3 py-2 rounded-lg bg-brand-deep text-white text-xs font-bold">Salvar conferência</button></div>
             </div>
 
             <div class="space-y-1 mb-10">
@@ -562,8 +576,8 @@ export const PageComponents = {
         const tresMesesAtras = new Date(); 
         tresMesesAtras.setMonth(hoje.getMonth() - 3);
         const transacoesRecentes = transacoes.filter(t => t.id >= tresMesesAtras.getTime()); 
-        const receitas = transacoesRecentes.filter(t => t.tipo === 'receita').reduce((a,b) => a+b.valor, 0); 
-        const despesas = transacoesRecentes.filter(t => t.tipo === 'despesa').reduce((a,b) => a+b.valor, 0);
+        const receitas = transacoesRecentes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b) => a+b.valor, 0); 
+        const despesas = transacoesRecentes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b) => a+b.valor, 0);
         const mediaPoupanca = (receitas - despesas) / 3; 
         const capacidadeFormatada = mediaPoupanca > 0 ? Utils.formatMoney(mediaPoupanca) : "R$ 0,00";
 
@@ -595,7 +609,7 @@ export const PageComponents = {
         let totalGastoMes = 0;
         
         const transacoesMes = Database.getTransacoesPorMes(anoSelecionado, mesSelecionado);
-        transacoesMes.filter(t => t.tipo === 'despesa').forEach(t => { 
+        transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => { 
             if(!gastosPorCat[t.categoria]) gastosPorCat[t.categoria] = 0; 
             gastosPorCat[t.categoria] += t.valor; 
             totalGastoMes += t.valor; 

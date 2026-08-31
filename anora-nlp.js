@@ -129,13 +129,13 @@ export const AnoraNLP = {
 
         // 4. Intenção: Gastos Totais do Mês
         if (msgLimpa.match(/(gastei|gastos|despesa|despesas|saiu)/)) {
-            const despesas = transacoesMes.filter(t => t.tipo === 'despesa').reduce((acc, t) => acc + t.valor, 0);
+            const despesas = transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((acc, t) => acc + t.valor, 0);
             return `Até agora, as suas despesas neste mês somam **${Utils.formatMoney(despesas)}**.`;
         }
 
         // 5. Intenção: Receitas do Mês
         if (msgLimpa.match(/(ganhei|recebi|receita|receitas|renda|entrou|salario)/)) {
-            const receitas = transacoesMes.filter(t => t.tipo === 'receita').reduce((acc, t) => acc + t.valor, 0);
+            const receitas = transacoesMes.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((acc, t) => acc + t.valor, 0);
             return `A sua receita acumulada deste mês é de **${Utils.formatMoney(receitas)}**.`;
         }
 

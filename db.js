@@ -1,4 +1,5 @@
 import { CATEGORIAS_PADRAO } from './categorias-padrao.js';
+import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions } from './reconciliation.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -13,7 +14,9 @@ const initialDB = {
     },
     transacoes: [],
     bancos: [], 
-    cartoes: [], 
+    cartoes: [],
+    // Conferência é independente de agendamentos/status de pagamento.
+    conciliacoesFaturas: [],
     metas: [],
     orcamentos: [],
     notificacoes: [],
@@ -167,7 +170,9 @@ const loadData = async () => {
                     icone: c.icone || 'fa-tag',
                     cor: c.cor || '#9CA3AF',
                     paiId: c.paiId || null,
-                    tipo: c.tipo || 'despesa'
+                    grupo: c.grupo || null,
+                    subgrupo: c.subgrupo || c.nome || null,
+                    tipo: c.grupo === 'Renda' ? 'receita' : (c.tipo || 'despesa')
                 };
             }
             return null;
@@ -262,7 +267,8 @@ const applyBalanceDelta = (t, isReverse = false) => {
     if (t.isCartao) return; 
     const b = db.bancos.find(x => String(x.id) === String(t.bancoId));
     if (b) {
-        const amount = t.tipo === 'receita' ? t.valor : -t.valor;
+        // Internal transfers have a debit and credit leg; never classify them as expense/income.
+        const amount = t.transferenciaInterna ? (t.transferenciaEntrada ? t.valor : -t.valor) : (t.tipo === 'receita' && !t.transferenciaInterna ? t.valor : -t.valor);
         b.saldo += isReverse ? -amount : amount;
         persist('bancos');
     }
@@ -442,6 +448,27 @@ export const CardRepo = {
         db.cartoes = db.cartoes.filter(i => i.id.toString() !== id.toString());
         persist('cartoes');
         return true;
+    }
+};
+
+export const ReconciliationRepo = {
+    get: (cardId, year, month) => (db.conciliacoesFaturas || []).find(r => r.chave === invoiceReconciliationKey(cardId, year, month)) || null,
+    saveAmount: (cardId, year, month, realInvoiceAmount) => {
+        if (!Array.isArray(db.conciliacoesFaturas)) db.conciliacoesFaturas = [];
+        const chave = invoiceReconciliationKey(cardId, year, month);
+        const numeric = realInvoiceAmount === '' || realInvoiceAmount === null ? null : Number(realInvoiceAmount);
+        const index = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
+        const current = index >= 0 ? db.conciliacoesFaturas[index] : { chave, cardId, ano: year, mes: month };
+        const value = { ...current, valorFaturaReal: Number.isFinite(numeric) ? numeric : null, statusConciliacao: Number.isFinite(numeric) ? 'aguardando conferência' : 'em aberto', atualizadoEm: new Date().toISOString() };
+        if (index >= 0) db.conciliacoesFaturas[index] = value;
+        else db.conciliacoesFaturas.unshift(value);
+        persist('conciliacoesFaturas');
+        return value;
+    },
+    calculate: (transactions, card, year, month) => {
+        const items = listInvoiceTransactions(transactions, card, year, month);
+        const record = ReconciliationRepo.get(card.id, year, month);
+        return { ...calculateReconciliation(items, record?.valorFaturaReal), transacoes: items };
     }
 };
 
@@ -640,8 +667,8 @@ export const Database = {
     markNotificationRead: NotificationRepo.markRead,
     markAllNotificationsRead: NotificationRepo.markAllRead,
     getTotals: () => ({
-        receitas: db.transacoes.filter(t => t.tipo === 'receita').reduce((a, b) => a + (b.valor || 0), 0),
-        despesas: db.transacoes.filter(t => t.tipo === 'despesa').reduce((a, b) => a + (b.valor || 0), 0),
+        receitas: db.transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + (b.valor || 0), 0),
+        despesas: db.transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + (b.valor || 0), 0),
         saldo: db.bancos.reduce((a, b) => a + (b.saldo || 0), 0)
     })
 };

@@ -1,6 +1,7 @@
 import { Utils } from './utils.js';
 import { db } from './db.js';
 import { Components } from './components.js';
+import { listInvoiceTransactions, calculateReconciliation } from './reconciliation.js';
 
 export const UIRenderer = {
     updateDOM: (elementId, newHTML) => {
@@ -11,19 +12,41 @@ export const UIRenderer = {
 
     renderInvoiceModal: (appState) => {
         if (appState.activeCardId) {
-            const card = db.cartoes.find(c => c.id === appState.activeCardId);
-            const newHTML = Components.invoiceDetailsView(card, db.comprasCartao, appState);
-            UIRenderer.updateDOM('modal-fatura-content', newHTML);
+            const card = db.cartoes.find(c => String(c.id) === String(appState.activeCardId));
+            const content = document.getElementById('modal-fatura-content');
+            if (!card) {
+                if (content) content.innerHTML = '<div class="p-8 text-center text-text-secondary">Cartão não encontrado. Feche esta janela e tente novamente.</div>';
+                return;
+            }
+            const newHTML = Components.invoiceDetailsView(card, db.transacoes, appState);
+            // Conteúdo de modal não deve passar pelo morph incremental: em abertura rápida,
+            // ele podia deixar apenas uma linha/blur enquanto o nó era reconciliado.
+            if (content) content.innerHTML = newHTML;
         }
     },
 
     updateCategorySelects: () => {
         if (!db.categorias || db.categorias.length === 0) return;
+        const type = document.getElementById('input-tipo')?.value || 'despesa';
+        const available = db.categorias.filter(c => !c.tipo || c.tipo === type);
+        const groups = [...new Set(available.map(c => c.grupo || c.nome))].sort();
+        const groupSelect = document.getElementById('input-categoria-grupo');
+        const subSelect = document.getElementById('input-categoria-subgrupo');
+        const canonical = document.getElementById('input-categoria');
+        if (groupSelect && subSelect && canonical) {
+            const current = canonical.value;
+            const selected = available.find(c => c.nome === current);
+            groupSelect.innerHTML = '<option value="">Grupo principal</option>' + groups.map(g => `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}</option>`).join('');
+            groupSelect.value = selected?.grupo || '';
+            const subgroup = available.filter(c => (c.grupo || c.nome) === groupSelect.value);
+            subSelect.innerHTML = '<option value="">Subgrupo (opcional)</option>' + subgroup.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}</option>`).join('');
+            subSelect.value = selected?.nome || '';
+            canonical.innerHTML = available.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.nome)}</option>`).join('');
+            canonical.value = selected?.nome || '';
+        }
 
-        // Cria a string HTML das opções apenas uma vez
-        const optionsHtml = db.categorias.map(c => 
-            `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.nome)}</option>`
-        ).join('');
+        // Other forms continue to receive the complete flat catalog.
+        const optionsHtml = db.categorias.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.nome)}</option>`).join('');
 
         // Array com os IDs dos selects que precisam receber as categorias
         const ids = ['input-categoria', 'dc-categoria', 'orcamento-categoria', 'edit-categoria', 'agendamento-categoria'];
@@ -41,6 +64,22 @@ export const UIRenderer = {
                 }
             } 
         });
+
+        // O formulário de compra no cartão usa o mesmo catálogo hierárquico.
+        const dcGroup = document.getElementById('dc-categoria-grupo');
+        const dcSubgroup = document.getElementById('dc-categoria-subgrupo');
+        const dcCategory = document.getElementById('dc-categoria');
+        if (dcGroup && dcSubgroup && dcCategory) {
+            const cardAvailable = db.categorias.filter(c => !c.tipo || c.tipo === 'despesa');
+            const cardGroups = [...new Set(cardAvailable.map(c => c.grupo || c.nome))].sort();
+            const current = dcCategory.value;
+            const selected = cardAvailable.find(c => c.nome === current);
+            dcGroup.innerHTML = '<option value="">Grupo principal</option>' + cardGroups.map(g => `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}</option>`).join('');
+            dcGroup.value = selected?.grupo || '';
+            const subgroup = cardAvailable.filter(c => (c.grupo || c.nome) === dcGroup.value);
+            dcSubgroup.innerHTML = '<option value="">Subgrupo (opcional)</option>' + subgroup.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}</option>`).join('');
+            dcSubgroup.value = selected?.nome || '';
+        }
     },
 
     updateContatoSelect: () => {
@@ -61,6 +100,11 @@ export const UIRenderer = {
         if (selectBancoTrans) {
             selectBancoTrans.innerHTML = '<option value="" disabled selected>Selecione a conta</option>' + bankOptions;
         }
+
+        ['transfer-origem', 'transfer-destino'].forEach(id => { const el = document.getElementById(id); if (el) el.innerHTML = '<option value="">Selecione a conta</option>' + bankOptions; });
+
+        const transferDate = document.getElementById('transfer-data');
+        if (transferDate && !transferDate.value) transferDate.value = Utils.localISODate();
 
         const selectBancoCartao = document.getElementById('cartao-bancoId');
         if (selectBancoCartao) {

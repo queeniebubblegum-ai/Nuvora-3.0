@@ -8,7 +8,7 @@ export const ChartCategorias = {
         const cats = {}; const hoje = new Date();
         const transacoesMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth());
         
-        transacoesMes.filter(t => t.tipo === 'despesa').forEach(t => {
+        transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => {
             if(!cats[t.categoria]) cats[t.categoria] = 0;
             cats[t.categoria] += t.valor;
         });

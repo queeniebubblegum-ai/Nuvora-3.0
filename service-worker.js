@@ -1,4 +1,4 @@
-const APP_CACHE_NAME = 'nuvora-app-shell-v3';
+const APP_CACHE_NAME = 'nuvora-app-shell-v5';
 const CDN_CACHE_NAME = 'nuvora-cdn-cache-v1';
 
 // Ficheiros locais essenciais da sua aplicação (Mapeamento Completo e Atualizado)
@@ -124,24 +124,18 @@ self.addEventListener('fetch', (event) => {
     const isLocal = LOCAL_ASSETS.some(asset => url.pathname.endsWith(asset.replace('./', ''))) || url.origin === location.origin;
     const isCDN = CDN_ORIGINS.some(origin => url.origin.startsWith(origin));
 
-    // ESTRATÉGIA 1: Stale-While-Revalidate (Para ficheiros locais HTML/JS/CSS)
+    // ESTRATÉGIA 1: Network-First para HTML/JS/CSS. SWR servia o shell antigo
+    // durante a primeira navegação após uma instalação, exigindo F5 para receber
+    // o modal corrigido. O cache continua sendo fallback offline.
     if (isLocal && event.request.method === 'GET') {
         event.respondWith(
-            caches.match(event.request).then((cachedResponse) => {
-                const fetchPromise = fetch(event.request).then((networkResponse) => {
-                    if (networkResponse && networkResponse.status === 200) {
-                        const responseToCache = networkResponse.clone();
-                        caches.open(APP_CACHE_NAME).then((cache) => {
-                            cache.put(event.request, responseToCache);
-                        });
-                    }
-                    return networkResponse;
-                }).catch((error) => {
-                    console.warn('[Service Worker] Falha na rede para ficheiro local, servindo apenas cache:', event.request.url);
-                });
-
-                return cachedResponse || fetchPromise;
-            })
+            fetch(event.request).then((networkResponse) => {
+                if (networkResponse && networkResponse.status === 200) {
+                    const responseToCache = networkResponse.clone();
+                    caches.open(APP_CACHE_NAME).then(cache => cache.put(event.request, responseToCache));
+                }
+                return networkResponse;
+            }).catch(() => caches.match(event.request).then(cached => cached || Response.error()))
         );
         return;
     }
@@ -167,6 +161,7 @@ self.addEventListener('fetch', (event) => {
                     return networkResponse;
                 }).catch(() => {
                     console.warn('[Service Worker] Falha de rede ao buscar CDN:', event.request.url);
+                    return Response.error();
                 });
             })
         );

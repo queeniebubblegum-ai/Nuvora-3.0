@@ -40,8 +40,8 @@ export const ReportComponents = {
         const hoje = new Date();
         const trMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth());
         
-        const entradas = trMes.filter(t => t.tipo === 'receita').reduce((a,b)=>a+b.valor,0);
-        const saidas = trMes.filter(t => t.tipo === 'despesa').reduce((a,b)=>a+b.valor,0);
+        const entradas = trMes.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
+        const saidas = trMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
         const liquido = entradas - saidas;
 
         const diasMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
@@ -50,8 +50,8 @@ export const ReportComponents = {
         
         for(let i=1; i<=diasMes; i++){
             const tDia = trMes.filter(t => new Date(t.data || t.id).getDate() === i);
-            const rec = tDia.filter(t => t.tipo === 'receita').reduce((a,b)=>a+b.valor,0);
-            const des = tDia.filter(t => t.tipo === 'despesa').reduce((a,b)=>a+b.valor,0);
+            const rec = tDia.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
+            const des = tDia.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
             acum += (rec - des);
             
             if(rec > 0 || des > 0) {
@@ -108,8 +108,8 @@ export const ReportComponents = {
         for (let i = period - 1; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const tr = Database.getTransacoesPorMes(d.getFullYear(), d.getMonth());
-            const rec = tr.filter(t => t.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
-            const des = tr.filter(t => t.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
+            const rec = tr.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0);
+            const des = tr.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0);
             totalRec += rec; totalDes += des;
             
             const saldo = rec - des;

@@ -8,6 +8,7 @@ export const SubmitEvents = {
 
             const submitMap = {
                 'transacao': (evt) => Controllers.submitTransacao(evt),
+                'transferencia': (evt) => Controllers.submitTransferencia(evt),
                 'agendamento': (evt) => Controllers.submitAgendamento(evt),
                 'despesaCartao': (evt) => Controllers.submitDespesaCartao(evt),
                 'editarTransacao': (evt) => Controllers.submitEditTransaction(evt),

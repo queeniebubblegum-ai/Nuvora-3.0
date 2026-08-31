@@ -13,6 +13,10 @@ describe('Análises financeiras', () => {
     it('não deve contar pagamento de fatura como nova despesa', () => {
         expect(FinancialAnalytics.totals(tx, 2026, 7)).toMatchObject({ receitas: 3000, despesas: 300, pagamentosFatura: 200 });
     });
+    it('deve ignorar transferências internas nas receitas e despesas', () => {
+        expect(FinancialAnalytics.totals(tx, 2026, 7)).toMatchObject({ receitas: 3000, despesas: 300 });
+        expect(FinancialAnalytics.categoryTotals(tx, 2026, 7)).not.toHaveProperty('Transferência');
+    });
     it('deve consolidar gastos por categoria', () => {
         expect(FinancialAnalytics.categoryTotals(tx, 2026, 7)).toEqual({ Alimentação: 100, Lazer: 200 });
     });

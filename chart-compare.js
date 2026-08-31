@@ -16,8 +16,8 @@ export const ChartCompare = {
             
             const tr = Database.getTransacoesPorMes(d.getFullYear(), d.getMonth());
             
-            incomes.push(tr.filter(t => t.tipo === 'receita').reduce((a, b) => a + b.valor, 0));
-            expenses.push(tr.filter(t => t.tipo === 'despesa').reduce((a, b) => a + b.valor, 0));
+            incomes.push(tr.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0));
+            expenses.push(tr.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0));
         }
         
         if (instances.reportsCompare) instances.reportsCompare.destroy();

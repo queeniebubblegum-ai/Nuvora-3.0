@@ -243,7 +243,10 @@ export const CoreComponents = {
             
             items.forEach(t => {
                 const isSelected = appState.selectedTransactions && appState.selectedTransactions.includes(t.id);
-                const isRec = t.tipo === 'receita';
+                const isTransfer = !!t.transferenciaInterna || t.tipo === 'transferencia';
+                // Na lista, a perna de destino é uma entrada e a de origem é uma saída.
+                // Os totais continuam ignorando ambas por serem transferência interna.
+                const isRec = isTransfer ? !!t.transferenciaEntrada : t.tipo === 'receita';
                 const valColor = isRec ? 'text-success' : 'text-danger';
                 const sign = isRec ? '+' : '-';
                 

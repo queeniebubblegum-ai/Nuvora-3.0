@@ -111,6 +111,25 @@ const showUndoToast = (msg) => {
 };
 
 export const TransacoesController = {
+    submitTransferencia: (e) => {
+        e.preventDefault();
+        const form = e.target;
+        const valueOf = (inlineId, fallbackId) => document.getElementById(inlineId)?.value || document.getElementById(fallbackId)?.value || '';
+        const origemId = parseInt(valueOf('inline-transfer-origem', 'transfer-origem'), 10);
+        const destinoId = parseInt(valueOf('inline-transfer-destino', 'transfer-destino'), 10);
+        const valor = Math.abs(parseFloat(valueOf('inline-transfer-valor', 'transfer-valor')));
+        const data = valueOf('inline-transfer-data', 'transfer-data');
+        const desc = valueOf('inline-transfer-desc', 'transfer-desc').trim() || 'Transferência entre contas';
+        if (!origemId || !destinoId || origemId === destinoId) { Utils.showToast('Selecione contas de origem e destino diferentes.', 'error'); return; }
+        if (!valor || valor <= 0 || !data) { Utils.showToast('Informe valor e data válidos.', 'error'); return; }
+        const transferenciaId = `TR-${Date.now()}`;
+        // Two ledger entries keep each account balance correct; the explicit type is excluded from income/expense analytics.
+        Database.add('transacoes', { id: Date.now(), desc, valor, tipo: 'despesa', transferenciaInterna: true, transferenciaId, bancoId: origemId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna' });
+        Database.add('transacoes', { id: Date.now() + 1, desc, valor, tipo: 'receita', transferenciaInterna: true, transferenciaId, bancoId: destinoId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna', transferenciaEntrada: true });
+        Utils.showToast('Transferência registrada sem alterar receitas e despesas.', 'success');
+        App.closeModal();
+    },
+
     submitTransacao: (e) => {
         e.preventDefault();
         const form = e.target;
@@ -239,7 +258,11 @@ export const TransacoesController = {
         toggleLoadingState(form, true, "Registrando...");
 
         setTimeout(() => {
-            const parcelas = Math.abs(parseInt(document.getElementById('dc-parcelas').value)) || 1;
+            const parcelaSelect = document.getElementById('dc-parcelas');
+            const parcelasCustom = document.getElementById('dc-parcelas-custom');
+            const parcelas = parcelaSelect?.value === 'custom'
+                ? Math.min(120, Math.max(1, Math.abs(parseInt(parcelasCustom?.value, 10)) || 1))
+                : Math.min(120, Math.max(1, Math.abs(parseInt(parcelaSelect?.value, 10)) || 1));
             const jurosStr = document.getElementById('dc-juros').value;
             const juros = jurosStr ? Math.abs(parseFloat(jurosStr)) : 0;
             const categoria = document.getElementById('dc-categoria').value;
@@ -322,7 +345,11 @@ export const TransacoesController = {
         if(!valorBaseRaw || !parcelasRaw) { Utils.showToast('Preencha valor e parcelas para simular.', 'error'); return; }
         
         const valorBase = Math.abs(parseFloat(valorBaseRaw));
-        const parcelas = Math.abs(parseInt(parcelasRaw)) || 1;
+        const parcelaSelect = document.getElementById('dc-parcelas');
+        const parcelaCustom = document.getElementById('dc-parcelas-custom');
+        const parcelas = parcelaSelect?.value === 'custom'
+            ? Math.min(120, Math.max(1, Math.abs(parseInt(parcelaCustom?.value, 10)) || 1))
+            : Math.min(120, Math.max(1, Math.abs(parseInt(parcelasRaw, 10)) || 1));
         const jurosStr = document.getElementById('dc-juros').value;
         const juros = jurosStr ? Math.abs(parseFloat(jurosStr)) : 0;
         

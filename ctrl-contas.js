@@ -80,11 +80,13 @@ export const ContasController = {
 
     submitCategoria: (e) => {
         e.preventDefault();
-        const nome = document.getElementById('nova-categoria-nome').value;
+        const nome = document.getElementById('nova-categoria-nome').value.trim();
+        const grupo = document.getElementById('nova-categoria-grupo').value.trim();
+        const tipo = document.getElementById('nova-categoria-tipo')?.value || 'despesa';
         const icone = document.getElementById('nova-categoria-icone').value;
         const cor = document.getElementById('nova-categoria-cor').value || '#3B82F6';
         
-        if (Database.add('categorias', { id: 'cat_' + Date.now(), nome, icone, cor })) {
+        if (Database.add('categorias', { id: 'cat_' + Date.now(), nome, grupo, subgrupo: nome, tipo, icone, cor, fixa: false })) {
             Utils.showToast('Categoria adicionada!', 'success');
             App.updateCategorySelects();
             App.closeModal();

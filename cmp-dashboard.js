@@ -182,7 +182,7 @@ export const DashboardComponents = {
 
     dashboardCategories: (transacoesPeriodoAtual) => {
         const cats = {};
-        transacoesPeriodoAtual.filter(t => t.tipo === 'despesa').forEach(t => { 
+        transacoesPeriodoAtual.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => { 
             cats[t.categoria] = (cats[t.categoria] || 0) + t.valor; 
         });
         
@@ -255,7 +255,7 @@ export const DashboardComponents = {
             listHtml += `<div class="mt-6 first:mt-0" data-key="group_${data}"><h4 class="text-[10px] font-bold text-text-secondary tracking-wider mb-3 uppercase">${Utils.escapeHTML(data)}</h4>`;
             
             items.forEach(t => {
-                const isRec = t.tipo === 'receita';
+                const isRec = t.transferenciaInterna ? (t.transferenciaEntrada === true || (t.transferenciaInterna && String(t.bancoId) === String(t.contaDestinoId))) : t.tipo === 'receita';
                 const signal = isRec ? '+' : '-';
                 const valColor = isRec ? 'text-success' : 'text-danger'; 
                 const txId = t.codigoRef || `TX-${t.id.toString(36).substring(0,6).toUpperCase()}`;

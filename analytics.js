@@ -12,7 +12,7 @@ export const FinancialAnalytics = {
     totals: (transactions, year, month) => {
         const items = FinancialAnalytics.monthTransactions(transactions, year, month).filter(t => !isInternalTransfer(t));
         return {
-            receitas: items.filter(t => t.tipo === 'receita').reduce((sum, t) => sum + (Number(t.valor) || 0), 0),
+            receitas: items.filter(t => !t.transferenciaInterna && t.tipo === 'receita').reduce((sum, t) => sum + (Number(t.valor) || 0), 0),
             despesas: items.filter(t => t.tipo === 'despesa' && !isCardInvoicePayment(t)).reduce((sum, t) => sum + (Number(t.valor) || 0), 0),
             pagamentosFatura: items.filter(isCardInvoicePayment).reduce((sum, t) => sum + (Number(t.valor) || 0), 0)
         };

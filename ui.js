@@ -9,8 +9,35 @@ export const UI = {
         if (!modal) return;
         UI.modalSnapshots[id] = [...modal.querySelectorAll('input, textarea, select')].map(el => [el.id || el.name || el.type, el.value]);
     },
+    switchToTransferMode: () => {
+        document.querySelector('[data-submit="transacao"]')?.classList.add('hidden');
+        document.getElementById('inline-transferencia')?.classList.remove('hidden');
+        const transferOptions = (document.getElementById('transfer-origem')?.innerHTML || '<option value="">Selecione a conta</option>').replace(/\sselected(=\"selected\")?/gi, '');
+        ['inline-transfer-origem','inline-transfer-destino'].forEach(id => { const el=document.getElementById(id); if(el) { el.innerHTML=transferOptions; el.value=''; } });
+        const d=document.getElementById('inline-transfer-data'); if(d && !d.value) d.value=Utils.localISODate();
+    },
     setTransactionType: (tipo) => {
+        const transForm = document.querySelector('[data-submit="transacao"]');
+        const inline = document.getElementById('inline-transferencia');
+        const tabTransfer = document.getElementById('tab-transferencia');
+        if (tipo === 'transferencia') {
+            transForm?.classList.add('hidden'); inline?.classList.remove('hidden');
+            const inactiveTab = 'flex-1 text-center py-2 text-text-secondary font-medium text-sm transition-all flex justify-center items-center gap-2 cursor-pointer';
+            const activeTransferTab = 'flex-1 text-center py-2 bg-surface rounded-[10px] shadow-sm text-brand-medium font-bold text-sm border border-border transition-all flex justify-center items-center gap-2 cursor-pointer';
+            const tabDespesa = document.getElementById('tab-despesa');
+            const tabReceita = document.getElementById('tab-receita');
+            if (tabDespesa) tabDespesa.className = inactiveTab;
+            if (tabReceita) tabReceita.className = inactiveTab;
+            if (tabTransfer) tabTransfer.className = activeTransferTab;
+            const transferOptions = (document.getElementById('transfer-origem')?.innerHTML || '<option value="">Selecione a conta</option>').replace(/\sselected(=\"selected\")?/gi, '');
+            ['inline-transfer-origem','inline-transfer-destino'].forEach(id => { const el=document.getElementById(id); if(el) { el.innerHTML = transferOptions; el.value = ''; } });
+            const d=document.getElementById('inline-transfer-data'); if(d && !d.value) d.value=Utils.localISODate();
+            return;
+        }
+        transForm?.classList.remove('hidden'); inline?.classList.add('hidden');
+        tabTransfer?.classList.remove('bg-surface','shadow-sm','font-bold');
         document.getElementById('input-tipo').value = tipo;
+        if (window.App && typeof window.App.updateCategorySelects === 'function') window.App.updateCategorySelects();
         const tabDespesa = document.getElementById('tab-despesa');
         const tabReceita = document.getElementById('tab-receita');
         const btnSubmit = document.getElementById('btn-submit-transacao');
@@ -60,7 +87,27 @@ export const UI = {
         }
     },
 
-    closeModal: (viewState, userInitiated = false) => {
+    closeModal: (viewState, userInitiated = false, modalId = null) => {
+        // Fechar apenas a camada solicitada mantém a fatura sob o modal de edição.
+        // O fechamento global continua disponível para navegação/reset da aplicação.
+        if (modalId) {
+            const modal = document.getElementById(modalId);
+            if (!modal || modal.classList.contains('hidden')) return true;
+            if (userInitiated) {
+                const atual = [...modal.querySelectorAll('input, textarea, select')].map(el => [el.id || el.name || el.type, el.value]);
+                const inicial = UI.modalSnapshots[modal.id] || [];
+                if (JSON.stringify(atual) !== JSON.stringify(inicial) && !window.confirm('Você tem dados não salvos. Deseja realmente fechar?')) return false;
+            }
+            modal.classList.add('hidden');
+            modal.classList.remove('flex', 'animate-fade-in-up');
+            // Só a camada encerrada é resetada; não destrói o estado da fatura subjacente.
+            modal.querySelectorAll('form').forEach(form => form.reset());
+            if (modalId === 'modal-fatura-detalhes') {
+                viewState.selectedTransactions = [];
+                viewState.activeCardId = null;
+            }
+            return true;
+        }
         if (userInitiated) {
             const modal = [...document.querySelectorAll('div[id^="modal-"]:not(.hidden)')][0];
             const atual = modal ? [...modal.querySelectorAll('input, textarea, select')].map(el => [el.id || el.name || el.type, el.value]) : [];
@@ -85,7 +132,7 @@ export const UI = {
         document.querySelectorAll('form').forEach(form => form.reset());
         
         const hoje = Utils.localISODate();
-        ['input-data-trans', 'dc-data', 'simulador-data', 'agendamento-data', 'edit-data'].forEach(id => {
+        ['input-data-trans', 'dc-data', 'simulador-data', 'agendamento-data', 'edit-data', 'transfer-data'].forEach(id => {
             const el = document.getElementById(id);
             if(el) el.value = hoje;
         });

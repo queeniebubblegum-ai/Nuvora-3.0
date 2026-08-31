@@ -1,5 +1,5 @@
 import { Utils } from './utils.js';
-import { Database, db, collections } from './db.js';
+import { Database, db, collections, ReconciliationRepo } from './db.js';
 import { Notifications } from './notifications.js';
 import { ChartManager } from './charts.js';
 import { createReactiveState } from './store.js';
@@ -9,6 +9,7 @@ import { Renderer } from './renderer.js';
 import { UI } from './ui.js';
 import { OFXManager } from './ofx.js';
 import { CSVManager } from './csv-manager.js';
+import { Classification } from './classification.js';
 
 // --- ENGENHARIA DE UX: Assistente de Fechamento de Mês ---
 const FechamentoManager = {
@@ -247,7 +248,7 @@ export const App = {
         };
 
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./service-worker.js').catch(err => {
+            navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' }).catch(err => {
                 console.warn('Aviso no registro do Service Worker:', err);
             });
         }
@@ -429,7 +430,7 @@ export const App = {
         if (f.categoria) transacoes = transacoes.filter(t => t.categoria === f.categoria);
         if (f.mes !== '') transacoes = transacoes.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes));
         if (f.bancoId) { const [type, id] = f.bancoId.split('_'); transacoes = transacoes.filter(t => type === 'banco' ? (!t.isCartao && t.bancoId == id) : (t.isCartao && t.bancoId == id)); }
-        const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => [t.data, t.tipo === 'despesa' ? -t.valor : t.valor, t.codigoRef || '', t.desc, t.tipo, t.categoria || ''])];
+        const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => [t.data, t.tipo === 'despesa' && !t.transferenciaInterna ? -t.valor : t.valor, t.codigoRef || '', t.desc, t.tipo, t.categoria || ''])];
         const csv = rows.map(row => row.map(escape).join(';')).join('\n');
         const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob); const link = document.createElement('a');
@@ -511,7 +512,7 @@ export const App = {
 
             const hoje = new Date();
             const despesasCategoria = db.transacoes.filter(t => 
-                t.tipo === 'despesa' && 
+                t.tipo === 'despesa' && !t.transferenciaInterna && 
                 t.categoria === categoriaNome && 
                 new Date(t.data || t.id).getFullYear() === hoje.getFullYear() && 
                 new Date(t.data || t.id).getMonth() === hoje.getMonth()
@@ -564,6 +565,34 @@ export const App = {
                 const valSemEspacos = valNormSpaces.replace(/\s+/g, "");
                 
                 const tokens = valNormSpaces.split(/\s+/).filter(t => t.length >= 3); 
+
+                const sugestao = Classification.suggest(rawVal, db.categorias);
+                if (sugestao) {
+                    const tipo = document.getElementById('input-tipo');
+                    if (tipo && sugestao.tipo !== 'transferencia') tipo.value = sugestao.tipo;
+                    if (sugestao.category) {
+                        catSelect.value = sugestao.category.nome;
+                        catSelect.setAttribute('data-suggested', 'true');
+                        // Re-hidratar os selects não pode apagar a sugestão recém-aplicada.
+                        App.updateCategorySelects();
+                        catSelect.value = sugestao.category.nome;
+                        const prefix = target.id === 'dc-desc' ? 'dc-' : 'input-';
+                        const grupoCard = document.getElementById(`${prefix}categoria-grupo`);
+                        const subgrupoCard = document.getElementById(`${prefix}categoria-subgrupo`);
+                        if (grupoCard) grupoCard.value = sugestao.category.grupo || '';
+                        if (subgrupoCard) subgrupoCard.value = sugestao.category.nome;
+                        const grupo = document.getElementById('input-categoria-grupo');
+                        const subgrupo = document.getElementById('input-categoria-subgrupo');
+                        if (grupo) { grupo.value = sugestao.category.grupo || ''; grupo.dispatchEvent(new Event('change', { bubbles: true })); }
+                        if (subgrupo) subgrupo.value = sugestao.category.nome;
+                    }
+                    if (smartBadge) {
+                        const cat = sugestao.category ? ` · ${Utils.escapeHTML(sugestao.category.grupo || '')} · ${Utils.escapeHTML(sugestao.category.subgrupo || sugestao.category.nome)}` : '';
+                        smartBadge.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles text-brand-medium shrink-0"></i><span class="flex-1"><strong>Sugestão:</strong> ${Utils.escapeHTML(sugestao.tipo)}${cat} <small>(confira antes de salvar)</small></span><button type="button" data-action="acceptClassification" class="text-success text-[10px] font-bold whitespace-nowrap">Está certo</button><button type="button" data-action="editClassification" class="text-brand-medium text-[10px] font-bold whitespace-nowrap">Editar</button>`;
+                        smartBadge.classList.remove('hidden'); smartBadge.classList.add('flex');
+                    }
+                    return;
+                }
                 
                 let matchFound = false;
                 
@@ -719,7 +748,7 @@ export const App = {
             const colecao = db.agendamentos.includes(i) ? 'agendamentos' : 'receitasFuturas';
             const pago = i.status === 'pago' || i.status === 'recebida';
             const baixa = !pago ? `<button type="button" data-action="markAgendaPaid" data-col="${colecao}" data-id="${i.id}" class="px-2 py-1 text-[9px] font-bold text-success border border-success/30 rounded hover:bg-success/10">Dar baixa</button>` : `<span class="text-[9px] font-bold text-success">${i.status === 'recebida' ? 'Recebida' : 'Paga'}</span>`;
-            return `<div class="flex items-center gap-2 p-3 rounded-lg bg-bg border border-border"><span class="flex-1 min-w-0 text-sm text-text-primary truncate"><i class="fa-solid ${i.tipo === 'receita' ? 'fa-arrow-trend-up text-success' : 'fa-arrow-trend-down text-danger'} mr-2"></i>${Utils.escapeHTML(i.desc || i.nome || 'Lançamento')}</span><strong class="text-sm font-mono ${i.tipo === 'receita' ? 'text-success' : 'text-danger'}">${i.tipo === 'receita' ? '+' : '-'}${Utils.formatMoney(i.valor)}</strong>${baixa}<button type="button" data-action="editAgenda" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-brand-medium hover:bg-brand-medium/10 rounded" title="Editar previsão" aria-label="Editar previsão"><i class="fa-solid fa-pen text-xs"></i></button><button type="button" data-action="delete" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-danger hover:bg-danger/10 rounded" title="Apagar previsão" aria-label="Apagar previsão"><i class="fa-solid fa-trash-can text-xs"></i></button></div>`;
+            return `<div class="flex items-center gap-2 p-3 rounded-lg bg-bg border border-border"><span class="flex-1 min-w-0 text-sm text-text-primary truncate"><i class="fa-solid ${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? 'fa-arrow-trend-up text-success' : 'fa-arrow-trend-down text-danger'} mr-2"></i>${Utils.escapeHTML(i.desc || i.nome || 'Lançamento')}</span><strong class="text-sm font-mono ${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? 'text-success' : 'text-danger'}">${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? '+' : '-'}${Utils.formatMoney(i.valor)}</strong>${baixa}<button type="button" data-action="editAgenda" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-brand-medium hover:bg-brand-medium/10 rounded" title="Editar previsão" aria-label="Editar previsão"><i class="fa-solid fa-pen text-xs"></i></button><button type="button" data-action="delete" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-danger hover:bg-danger/10 rounded" title="Apagar previsão" aria-label="Apagar previsão"><i class="fa-solid fa-trash-can text-xs"></i></button></div>`;
         }).join('') : '<p class="text-sm text-text-secondary text-center py-6">Nenhuma previsão neste dia.</p>';
         if (botao) botao.dataset.date = date;
         App.openModal('modal-agenda-dia');
@@ -787,7 +816,7 @@ export const App = {
 
         if (type === 'invoice') { 
             App.viewState.invoiceMonth = m; App.viewState.invoiceYear = y; 
-            if(document.getElementById('modal-fatura-detalhes').classList.contains('flex')) Renderer.renderInvoiceModal(App.viewState);
+            if(document.getElementById('modal-fatura-detalhes')?.classList.contains('flex')) Renderer.renderInvoiceModal(App.viewState);
         } else { 
             App.viewState.budgetMonth = m; App.viewState.budgetYear = y; 
         }
@@ -795,9 +824,21 @@ export const App = {
 
     setTransactionType: (tipo) => UI.setTransactionType(tipo),
     openModal: (id, transType = null) => UI.openModal(id, transType),
+    switchToTransferMode: () => UI.switchToTransferMode(),
     captureModalState: (id) => UI.captureModalState(id),
     renameCategory: (id, nome) => Database.renameCategory(id, nome),
-    closeModal: (userInitiated = false) => UI.closeModal(App.viewState, userInitiated),
+    acceptClassification: () => {
+        const badge = document.getElementById('smart-category-badge');
+        if (badge) { badge.innerHTML = '<i class="fa-solid fa-circle-check text-success"></i><span>Classificação confirmada.</span>'; setTimeout(() => badge.classList.add('hidden'), 1800); }
+    },
+    editClassification: () => {
+        const select = document.getElementById('input-categoria');
+        if (select) { select.removeAttribute('data-suggested'); select.setAttribute('data-manual-override', 'true'); select.focus(); }
+        const badge = document.getElementById('smart-category-badge');
+        if (badge) { badge.innerHTML = '<i class="fa-solid fa-pen text-brand-medium"></i><span>Edite o tipo ou a categoria antes de salvar.</span>'; }
+    },
+
+    closeModal: (userInitiated = false, modalId = null) => UI.closeModal(App.viewState, userInitiated, modalId),
     openEditModal: (id) => UI.openEditModal(id),
     toggleEditLock: () => UI.toggleEditLock(),
     openDepositModal: (id, nome) => UI.openDepositModal(id, nome),
@@ -816,12 +857,20 @@ export const App = {
         App.viewState.invoiceYear = hoje.getFullYear();
         
         try {
-            Renderer.renderInvoiceModal(App.viewState);
+            const card = db.cartoes.find(c => String(c.id) === String(cardId));
+            if (!card) throw new Error('Cartão não encontrado');
             const modalFatura = document.getElementById('modal-fatura-detalhes');
-            if (modalFatura) {
-                modalFatura.classList.remove('hidden');
-                modalFatura.classList.add('flex', 'animate-fade-in-up');
-            }
+            const content = document.getElementById('modal-fatura-content');
+            if (!modalFatura || !content) throw new Error('Tela de faturas indisponível');
+            // Abre a camada antes de renderizar para evitar o estado intermediário de blur/linha.
+            // A camada é aberta e marcada como visível antes de qualquer renderização.
+            // Isso torna a operação determinística mesmo quando o estado reativo agenda
+            // uma renderização do dashboard no mesmo frame.
+            modalFatura.setAttribute('aria-hidden', 'false');
+            modalFatura.classList.remove('hidden');
+            modalFatura.classList.add('flex', 'animate-fade-in-up');
+            content.innerHTML = '<div class="p-8 text-center text-text-secondary">Carregando fatura...</div>';
+            Renderer.renderInvoiceModal(App.viewState);
         } catch (error) {
             console.error("Falha ao abrir detalhes da fatura:", error);
             Utils.showToast('Não foi possível carregar os detalhes desta fatura no momento.', 'error');
@@ -829,10 +878,20 @@ export const App = {
         }
     },
 
+    saveInvoiceReconciliation: () => {
+        const cardId = App.viewState.activeCardId;
+        const value = document.getElementById('valor-fatura-real')?.value ?? '';
+        if (!cardId) return;
+        ReconciliationRepo.saveAmount(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, value);
+        Utils.showToast('Conferência da fatura salva.', 'success');
+        App.renderInvoiceModal();
+    },
+
     closeInvoiceDetails: () => {
         App.viewState.selectedTransactions = [];
         const modalFatura = document.getElementById('modal-fatura-detalhes');
         if (modalFatura) {
+            modalFatura.setAttribute('aria-hidden', 'true');
             modalFatura.classList.add('hidden');
             modalFatura.classList.remove('flex', 'animate-fade-in-up');
         }

@@ -18,8 +18,8 @@ export const ChartFluxo = {
                 const dt = new Date(t.data || t.id);
                 return dt.getDate() === i;
             });
-            const rec = trDia.filter(t => t.tipo === 'receita').reduce((a,b)=>a+b.valor,0);
-            const des = trDia.filter(t => t.tipo === 'despesa').reduce((a,b)=>a+b.valor,0);
+            const rec = trDia.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
+            const des = trDia.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
             acumulado += (rec - des);
             saldos.push(acumulado);
         }

@@ -115,15 +115,15 @@ export const PageRenderers = {
         }).reduce((acc, curr) => acc + (curr.valor || 0), 0);
         
         const atual = {
-            receitas: transacoesPeriodoAtual.filter(t=>t.tipo==='receita').reduce((a,b)=>a+(b.valor||0),0),
-            despesas: transacoesPeriodoAtual.filter(t=>t.tipo==='despesa').reduce((a,b)=>a+(b.valor||0),0),
+            receitas: transacoesPeriodoAtual.filter(t=>t.tipo==='receita' && !t.transferenciaInterna).reduce((a,b)=>a+(b.valor||0),0),
+            despesas: transacoesPeriodoAtual.filter(t=>t.tipo==='despesa' && !t.transferenciaInterna).reduce((a,b)=>a+(b.valor||0),0),
             saldo: Database.getTotals().saldo,
             contasPendentes: contasPendentesMes
         };
         
         const anterior = {
-            receitas: transacoesAnteriores.filter(t=>t.tipo==='receita').reduce((a,b)=>a+(b.valor||0),0),
-            despesas: transacoesAnteriores.filter(t=>t.tipo==='despesa').reduce((a,b)=>a+(b.valor||0),0)
+            receitas: transacoesAnteriores.filter(t=>t.tipo==='receita' && !t.transferenciaInterna).reduce((a,b)=>a+(b.valor||0),0),
+            despesas: transacoesAnteriores.filter(t=>t.tipo==='despesa' && !t.transferenciaInterna).reduce((a,b)=>a+(b.valor||0),0)
         };
 
         const isSpecificDate = appState.dashboardPeriod.match(/^\d{4}-\d{2}-\d{2}$/);

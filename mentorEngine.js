@@ -133,7 +133,7 @@ export const MentorEngine = {
         const dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1);
 
         const despesasRecentes = db.transacoes.filter(t =>
-            t.tipo === 'despesa' &&
+            !t.transferenciaInterna && t.tipo === 'despesa' &&
             !t.recorrente && 
             new Date(t.data || t.id) >= dataLimite
         );
@@ -183,6 +183,7 @@ export const MentorEngine = {
         let pastIncome = 0; let pastExpenses = 0; let expensesByCategory = {};
 
         db.transacoes.forEach(t => {
+            if (t.transferenciaInterna) return;
             const dataTransacao = new Date((t.data || t.id) + 'T12:00:00');
             const mesTrans = dataTransacao.getMonth(); const anoTrans = dataTransacao.getFullYear();
 

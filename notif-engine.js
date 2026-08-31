@@ -79,7 +79,7 @@ export const NotifEngine = {
         const mes = hoje.getMonth();
         const limitePct = db.configNotificacoes.orcamentoPct || 80;
 
-        const transacoesMes = Database.getTransacoesPorMes(ano, mes).filter(t => t.tipo === 'despesa');
+        const transacoesMes = Database.getTransacoesPorMes(ano, mes).filter(t => t.tipo === 'despesa' && !t.transferenciaInterna);
         const gastosPorCat = {};
         transacoesMes.forEach(t => {
             gastosPorCat[t.categoria] = (gastosPorCat[t.categoria] || 0) + t.valor;
