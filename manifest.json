@@ -1,6 +1,6 @@
 {
-  "name": "Nuvora",
-  "short_name": "Nuvora",
+  "name": "Avenera",
+  "short_name": "Avenera",
   "description": "Controle financeiro pessoal inteligente e offline-first.",
   "start_url": "./index.html",
   "scope": "./",

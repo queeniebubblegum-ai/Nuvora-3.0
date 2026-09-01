@@ -229,7 +229,7 @@ export const App = {
             if (savedTheme) {
                 document.documentElement.classList.toggle('dark', savedTheme === 'dark');
             } else {
-                // O padrão do Nuvora é sempre o modo claro, independentemente do sistema.
+                // O padrão do Avenera é sempre o modo claro, independentemente do sistema.
                 document.documentElement.classList.remove('dark');
             }
         };
@@ -434,7 +434,7 @@ export const App = {
         const csv = rows.map(row => row.map(escape).join(';')).join('\n');
         const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob); const link = document.createElement('a');
-        link.href = url; link.download = `nuvora-lancamentos-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url);
+        link.href = url; link.download = `avenera-lancamentos-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); URL.revokeObjectURL(url);
         Utils.showToast('Lançamentos exportados em CSV.', 'success');
     },
 
@@ -561,6 +561,18 @@ export const App = {
 
             if (catSelect) {
                 const rawVal = target.value;
+                // A description edit starts a new automatic-classification pass. Keep an
+                // explicit manual choice, but never leave an old automatic suggestion
+                // selected when the new description no longer matches it.
+                if (catSelect.getAttribute('data-suggested') === 'true') {
+                    catSelect.removeAttribute('data-suggested');
+                    const prefix = target.id === 'dc-desc' ? 'dc-' : 'input-';
+                    const group = document.getElementById(`${prefix}categoria-grupo`);
+                    const subgroup = document.getElementById(`${prefix}categoria-subgrupo`);
+                    if (group) group.value = '';
+                    if (subgroup) subgroup.value = '';
+                    catSelect.value = '';
+                }
                 const valNormSpaces = normalizeTextKeepSpaces(rawVal);
                 const valSemEspacos = valNormSpaces.replace(/\s+/g, "");
                 
@@ -576,15 +588,22 @@ export const App = {
                         // Re-hidratar os selects não pode apagar a sugestão recém-aplicada.
                         App.updateCategorySelects();
                         catSelect.value = sugestao.category.nome;
+                        catSelect.setAttribute('data-suggested', 'true');
                         const prefix = target.id === 'dc-desc' ? 'dc-' : 'input-';
                         const grupoCard = document.getElementById(`${prefix}categoria-grupo`);
                         const subgrupoCard = document.getElementById(`${prefix}categoria-subgrupo`);
-                        if (grupoCard) grupoCard.value = sugestao.category.grupo || '';
-                        if (subgrupoCard) subgrupoCard.value = sugestao.category.nome;
-                        const grupo = document.getElementById('input-categoria-grupo');
-                        const subgrupo = document.getElementById('input-categoria-subgrupo');
-                        if (grupo) { grupo.value = sugestao.category.grupo || ''; grupo.dispatchEvent(new Event('change', { bubbles: true })); }
-                        if (subgrupo) subgrupo.value = sugestao.category.nome;
+                        if (grupoCard) {
+                            grupoCard.value = sugestao.category.grupo || '';
+                            grupoCard.dataset.classifierUpdating = 'true';
+                            grupoCard.dispatchEvent(new Event('change', { bubbles: true }));
+                            delete grupoCard.dataset.classifierUpdating;
+                        }
+                        if (subgrupoCard) {
+                            subgrupoCard.value = sugestao.category.nome;
+                            subgrupoCard.dataset.classifierUpdating = 'true';
+                            subgrupoCard.dispatchEvent(new Event('change', { bubbles: true }));
+                            delete subgrupoCard.dataset.classifierUpdating;
+                        }
                     }
                     if (smartBadge) {
                         const cat = sugestao.category ? ` · ${Utils.escapeHTML(sugestao.category.grupo || '')} · ${Utils.escapeHTML(sugestao.category.subgrupo || sugestao.category.nome)}` : '';
@@ -623,9 +642,27 @@ export const App = {
                     }
 
                     if (isMatch) {
-                        const originalCat = db.categorias.find(c => c.nome.toLowerCase() === category.toLowerCase());
+                        // Legacy rules use the former flat category labels. Prefer an
+                        // exact label, but resolve the current hierarchical catalog by
+                        // group as a compatibility fallback.
+                        const originalCat = db.categorias.find(c => String(c.nome || '').toLowerCase() === category.toLowerCase())
+                            || db.categorias.find(c => String(c.grupo || '').toLowerCase() === category.toLowerCase());
                         if (originalCat) {
                             catSelect.value = originalCat.nome;
+                            catSelect.setAttribute('data-suggested', 'true');
+                            const prefix = target.id === 'dc-desc' ? 'dc-' : 'input-';
+                            const groupSelect = document.getElementById(`${prefix}categoria-grupo`);
+                            const subgroupSelect = document.getElementById(`${prefix}categoria-subgrupo`);
+                            if (groupSelect && subgroupSelect) {
+                                groupSelect.value = originalCat.grupo || '';
+                                groupSelect.dataset.classifierUpdating = 'true';
+                                groupSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                delete groupSelect.dataset.classifierUpdating;
+                                subgroupSelect.value = originalCat.nome;
+                                subgroupSelect.dataset.classifierUpdating = 'true';
+                                subgroupSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                delete subgroupSelect.dataset.classifierUpdating;
+                            }
                             catSelect.dispatchEvent(new Event('change'));
                             
                             if (smartBadge) {
@@ -674,6 +711,13 @@ export const App = {
         });
 
         document.body.addEventListener('change', (e) => {
+            // Some browsers/forms emit only `change` for text edits (not `input`).
+            // Reuse the debounced path so changing a description always starts a
+            // fresh automatic-classification pass.
+            if (['input-desc', 'dc-desc', 'agendamento-desc'].includes(e.target.id)) {
+                processarEntradaAnora(e.target);
+                return;
+            }
             const isCatSelect = ['input-categoria', 'dc-categoria', 'agendamento-categoria'].includes(e.target.id);
             if (isCatSelect && e.isTrusted) { 
                 e.target.setAttribute('data-manual-override', 'true');
@@ -846,12 +890,22 @@ export const App = {
     checkCartaoVisibility: (formaPgto) => UI.checkCartaoVisibility(formaPgto),
 
     openInvoiceDetails: (cardId) => {
-        if (!cardId || isNaN(cardId)) {
+        // DOM data attributes are strings; card IDs may be numeric or generated
+        // strings. Do not parse/truth-test them as numbers at the UI boundary.
+        if (cardId === null || cardId === undefined || String(cardId).trim() === '') {
             Utils.showToast('Erro: Identificador do cartão não encontrado ou inválido.', 'error');
             return;
         }
 
-        App.viewState.activeCardId = cardId;
+        const card = db.cartoes.find(c => String(c.id) === String(cardId));
+        if (!card) {
+            Utils.showToast('Erro: Identificador do cartão não encontrado ou inválido.', 'error');
+            return;
+        }
+        // Invoice selection is scoped to the currently opened invoice; do not
+        // accidentally carry dashboard selections into a destructive action.
+        App.viewState.selectedTransactions = [];
+        App.viewState.activeCardId = card.id;
         const hoje = new Date();
         App.viewState.invoiceMonth = hoje.getMonth();
         App.viewState.invoiceYear = hoje.getFullYear();
@@ -866,16 +920,90 @@ export const App = {
             // A camada é aberta e marcada como visível antes de qualquer renderização.
             // Isso torna a operação determinística mesmo quando o estado reativo agenda
             // uma renderização do dashboard no mesmo frame.
-            modalFatura.setAttribute('aria-hidden', 'false');
+            // A ordem é importante: o painel fica interativo antes da hidratação e
+            // nunca passa por um frame com aria-hidden=true + inert.
             modalFatura.classList.remove('hidden');
             modalFatura.classList.add('flex', 'animate-fade-in-up');
-            content.innerHTML = '<div class="p-8 text-center text-text-secondary">Carregando fatura...</div>';
-            Renderer.renderInvoiceModal(App.viewState);
+            modalFatura.removeAttribute('inert');
+            modalFatura.setAttribute('aria-hidden', 'false');
+            content.innerHTML = '<div class="p-8 text-center text-text-secondary" role="status">Carregando fatura...</div>';
+            try {
+                Renderer.renderInvoiceModal(App.viewState);
+            } catch (renderError) {
+                // Dados legados ou uma exceção de renderização não podem deixar um
+                // backdrop sem conteúdo (o sintoma visual era uma linha/blur).
+                console.error('Falha ao renderizar detalhes da fatura:', renderError);
+                content.innerHTML = '<div class="p-8 text-center text-text-secondary"><p>Não foi possível exibir esta fatura.</p><button type="button" data-action="closeInvoiceDetails" class="mt-4 px-3 py-2 rounded-lg bg-brand-deep text-white text-xs font-bold">Fechar</button></div>';
+            }
         } catch (error) {
             console.error("Falha ao abrir detalhes da fatura:", error);
             Utils.showToast('Não foi possível carregar os detalhes desta fatura no momento.', 'error');
             App.viewState.activeCardId = null;
         }
+    },
+
+    switchInvoiceTab: (tab = 'resumo') => {
+        const allowed = ['resumo', 'compras', 'ajustes'];
+        if (!allowed.includes(tab)) tab = 'resumo';
+        const modal = document.getElementById('modal-fatura-detalhes');
+        if (!modal) return;
+        modal.querySelectorAll('[role="tab"]').forEach(button => {
+            const active = button.getAttribute('data-tab') === tab;
+            button.setAttribute('aria-selected', String(active));
+            button.setAttribute('tabindex', active ? '0' : '-1');
+            button.classList.toggle('text-brand-medium', active);
+            button.classList.toggle('border-brand-medium', active);
+            button.classList.toggle('text-text-secondary', !active);
+            button.classList.toggle('border-transparent', !active);
+        });
+        modal.querySelectorAll('[role="tabpanel"]').forEach(panel => {
+            const active = panel.id === `invoice-panel-${tab}`;
+            panel.classList.toggle('hidden', !active);
+            panel.setAttribute('aria-hidden', String(!active));
+        });
+        modal.querySelector(`[data-tab="${tab}"]`)?.focus({ preventScroll: true });
+    },
+    focusInvoiceAdjustments: () => {
+        App.switchInvoiceTab('ajustes');
+        document.querySelector('#invoice-adjustment-type')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        document.querySelector('#invoice-adjustment-description')?.focus();
+    },
+
+    openInvoiceClassification: () => {
+        const selected = (App.viewState.selectedTransactions || []).map(String).filter(Boolean);
+        const modal = document.getElementById('modal-classificar-fatura');
+        const groupSelect = document.getElementById('invoice-classification-group');
+        const subgroupSelect = document.getElementById('invoice-classification-subgroup');
+        if (!modal || !groupSelect || !subgroupSelect || !selected.length) return;
+        const categories = (db.categorias || []).filter(c => c && (!c.tipo || c.tipo === 'despesa'));
+        const groups = [...new Set(categories.map(c => c.grupo || c.nome).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
+        groupSelect.innerHTML = '<option value="" disabled selected>Selecione um grupo</option>' + groups.map(g => `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}</option>`).join('');
+        subgroupSelect.innerHTML = '<option value="" disabled selected>Selecione uma categoria</option>';
+        const count = document.getElementById('invoice-classification-count');
+        if (count) count.textContent = `${selected.length} transação${selected.length === 1 ? '' : 's'} selecionada${selected.length === 1 ? '' : 's'}`;
+        modal.classList.remove('hidden'); modal.classList.add('flex'); modal.removeAttribute('inert'); modal.setAttribute('aria-hidden', 'false');
+    },
+
+    closeInvoiceClassification: () => {
+        const modal = document.getElementById('modal-classificar-fatura');
+        if (!modal) return;
+        if (modal.contains(document.activeElement)) document.activeElement.blur();
+        modal.classList.add('hidden'); modal.classList.remove('flex'); modal.setAttribute('inert', ''); modal.setAttribute('aria-hidden', 'true');
+    },
+
+    applyInvoiceClassification: () => {
+        const group = document.getElementById('invoice-classification-group')?.value;
+        const categoria = document.getElementById('invoice-classification-subgroup')?.value;
+        const selected = (App.viewState.selectedTransactions || []).map(String).filter(Boolean);
+        if (!group || !categoria || !selected.length) {
+            Utils.showToast('Selecione um grupo e uma categoria.', 'error');
+            return;
+        }
+        const changed = Database.updateTransactionCategories(selected, categoria);
+        App.viewState.selectedTransactions = [];
+        App.closeInvoiceClassification();
+        App.renderInvoiceModal();
+        Utils.showToast(`${changed} transação${changed === 1 ? '' : 's'} classificada${changed === 1 ? '' : 's'} com sucesso.`, 'success');
     },
 
     saveInvoiceReconciliation: () => {
@@ -887,11 +1015,73 @@ export const App = {
         App.renderInvoiceModal();
     },
 
+    saveInvoiceAdjustment: (id = null) => {
+        const cardId = App.viewState.activeCardId;
+        const amount = Number(document.getElementById('invoice-adjustment-amount')?.value);
+        const description = document.getElementById('invoice-adjustment-description')?.value?.trim();
+        if (!cardId || !Number.isFinite(amount) || amount <= 0 || !description) { Utils.showToast('Informe descrição e um valor válido para o ajuste.', 'error'); return; }
+        // Preserve the invoice amount typed in the same modal when adding an adjustment.
+        const invoiceValue = document.getElementById('valor-fatura-real')?.value ?? '';
+        if (invoiceValue !== '') ReconciliationRepo.saveAmount(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, invoiceValue);
+        const old = id ? ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth).find(a => String(a.id) === String(id)) : null;
+        ReconciliationRepo.saveAdjustment(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, { id, type: document.getElementById('invoice-adjustment-type')?.value || 'manual', effect: document.getElementById('invoice-adjustment-effect')?.value || 'charge', description, amount, createdAt: old?.createdAt });
+        Utils.showToast(id ? 'Ajuste atualizado.' : 'Ajuste adicionado.', 'success'); App.renderInvoiceModal();
+    },
+    editInvoiceAdjustment: (id) => {
+        const cardId = App.viewState.activeCardId; const a = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth).find(x => String(x.id) === String(id));
+        if (!a) return; const type = prompt('Tipo (interest, fine, fees, iof, missing_purchase, unrecognized_purchase, refund ou manual):', a.type || 'manual'); if (type === null) return;
+        const description = prompt('Descrição:', a.description || ''); if (description === null) return; const amount = prompt('Valor:', String(a.amount)); if (amount === null) return;
+        const effect = prompt('Efeito (charge ou credit):', a.effect || (a.sign === -1 ? 'credit' : 'charge')); if (effect === null) return;
+        const n = Number(amount); if (!description.trim() || !Number.isFinite(n) || n <= 0 || !['charge','credit'].includes(effect)) { Utils.showToast('Dados de ajuste inválidos.', 'error'); return; }
+        ReconciliationRepo.saveAdjustment(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, { ...a, type: type.trim() || 'manual', description: description.trim(), amount: n, effect }); App.renderInvoiceModal();
+    },
+    deleteInvoiceAdjustment: (id) => { if (!confirm('Excluir este ajuste explicativo?')) return; ReconciliationRepo.deleteAdjustment(App.viewState.activeCardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, id); App.renderInvoiceModal(); Utils.showToast('Ajuste excluído.', 'success'); },
+    openInvoiceAdjustmentsReview: () => {
+        const cardId = App.viewState.activeCardId;
+        if (!cardId) return;
+        const pending = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth)
+            .filter(a => !(a.lancamentoCriado && a.transactionId) && a.type !== 'unrecognized_purchase');
+        if (!pending.length) { Utils.showToast('Não há ajustes elegíveis pendentes.', 'info'); return; }
+        Renderer.renderInvoiceAdjustmentsReview(pending);
+    },
+    closeInvoiceAdjustmentsReview: () => App.renderInvoiceModal(),
+    confirmInvoiceAdjustmentsBulk: () => {
+        const cardId = App.viewState.activeCardId;
+        if (!cardId) return;
+        const pending = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth)
+            .filter(a => !(a.lancamentoCriado && a.transactionId) && a.type !== 'unrecognized_purchase');
+        if (!pending.length) { App.renderInvoiceModal(); return; }
+        let created = 0; let alreadyExists = 0; let failed = 0;
+        pending.forEach(a => {
+            const result = ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, a.id);
+            if (!result.ok) failed++; else if (result.alreadyExists) alreadyExists++; else created++;
+        });
+        App.renderInvoiceModal();
+        App.scheduleRender();
+        if (failed) Utils.showToast(`${created} criado(s), ${failed} não puderam ser criados.`, 'error');
+        else Utils.showToast(`${created + alreadyExists} ajuste(s) processado(s); ${created} novo(s), sem duplicidades.`, 'success');
+    },
+    createInvoiceAdjustmentTransaction: (id) => {
+        const cardId = App.viewState.activeCardId;
+        const adjustment = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth).find(a => String(a.id) === String(id));
+        if (!adjustment || (adjustment.lancamentoCriado && adjustment.transactionId)) return;
+        const isCredit = adjustment.effect === 'credit' || adjustment.sign === -1;
+        const kind = isCredit ? 'receita/crédito' : 'despesa';
+        if (!confirm(`Criar ${kind} de ${Utils.formatMoney(adjustment.amount)} para “${adjustment.description || 'Ajuste de fatura'}”? Esta ação altera o histórico e não pode ser desfeita automaticamente.`)) return;
+        const result = ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, id);
+        if (!result.ok) { Utils.showToast('Não foi possível criar o lançamento.', 'error'); return; }
+        App.renderInvoiceModal();
+        App.scheduleRender();
+        Utils.showToast(result.alreadyExists ? 'Lançamento já criado; nada duplicado.' : 'Lançamento criado no histórico.', 'success');
+    },
+
     closeInvoiceDetails: () => {
         App.viewState.selectedTransactions = [];
         const modalFatura = document.getElementById('modal-fatura-detalhes');
         if (modalFatura) {
+            if (modalFatura.contains(document.activeElement)) document.activeElement.blur();
             modalFatura.setAttribute('aria-hidden', 'true');
+            modalFatura.setAttribute('inert', '');
             modalFatura.classList.add('hidden');
             modalFatura.classList.remove('flex', 'animate-fade-in-up');
         }
@@ -923,7 +1113,7 @@ export const App = {
         const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
         const dlAnchorElem = document.createElement('a');
         dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `nuvora_backup_${Utils.localISODate()}.json`);
+        dlAnchorElem.setAttribute("download", `avenera_backup_${Utils.localISODate()}.json`);
         dlAnchorElem.click();
         if(isAuto) localStorage.setItem('nuvora_last_backup', Utils.localISODate());
     },
@@ -941,7 +1131,7 @@ export const App = {
                 if (!valido) throw new Error('Estrutura inválida');
                 const total = presentes.reduce((s, col) => s + importedDB[col].length, 0);
                 if (!window.confirm(`Este backup contém ${total} registros principais e substituirá os dados atuais. Continuar?`)) return;
-                localStorage.setItem('nuvora_backup_antes_importacao', JSON.stringify(db));
+                localStorage.setItem('avenera_backup_antes_importacao', JSON.stringify(db));
                 await Database.replaceAll(importedDB);
                 Utils.showToast('Backup restaurado com sucesso!', 'success');
                 setTimeout(() => window.location.reload(), 1000);

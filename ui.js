@@ -82,6 +82,8 @@ export const UI = {
 
         const m = document.getElementById(id);
         if (m) {
+            m.removeAttribute('inert');
+            m.setAttribute('aria-hidden', 'false');
             m.classList.remove('hidden'); m.classList.add('flex');
             UI.captureModalState(id);
         }
@@ -98,6 +100,9 @@ export const UI = {
                 const inicial = UI.modalSnapshots[modal.id] || [];
                 if (JSON.stringify(atual) !== JSON.stringify(inicial) && !window.confirm('Você tem dados não salvos. Deseja realmente fechar?')) return false;
             }
+            if (modal.contains(document.activeElement)) document.activeElement.blur();
+            modal.setAttribute('aria-hidden', 'true');
+            modal.setAttribute('inert', '');
             modal.classList.add('hidden');
             modal.classList.remove('flex', 'animate-fade-in-up');
             // Só a camada encerrada é resetada; não destrói o estado da fatura subjacente.
@@ -120,6 +125,8 @@ export const UI = {
         viewState.rawOfxString = null;
         
         document.querySelectorAll('div[id^="modal-"]').forEach(m => {
+            if (m.contains(document.activeElement)) document.activeElement.blur();
+            m.setAttribute('aria-hidden', 'true'); m.setAttribute('inert', '');
             m.classList.add('hidden'); m.classList.remove('flex');
         });
         
@@ -219,6 +226,16 @@ export const UI = {
     openCardExpenseModal: (id, nome) => {
         document.getElementById('dc-cartao-id').value = id;
         document.getElementById('modal-card-name-display').innerText = nome;
+        // The modal is reused: a prior suggestion/manual choice must not leak into
+        // the next purchase.
+        ['dc-categoria', 'dc-categoria-grupo', 'dc-categoria-subgrupo'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.removeAttribute('data-manual-override');
+                el.removeAttribute('data-suggested');
+                if (id !== 'dc-categoria') el.value = '';
+            }
+        });
         const simContainer = document.getElementById('dc-simulacao-resultado');
         if(simContainer) { simContainer.innerHTML = ''; simContainer.classList.add('hidden'); }
         UI.openModal('modal-despesa-cartao');

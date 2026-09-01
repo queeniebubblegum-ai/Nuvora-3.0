@@ -149,7 +149,7 @@ export const MentorSemantics = {
             return {
                 classification: "Passo 1 de 3",
                 insights: [
-                    "Bem-vindo(a) ao Nuvora! Eu sou a Anora, sua mentora financeira.",
+                    "Bem-vindo(a) ao Avenera! Eu sou a Anora, sua mentora financeira.",
                     "Não importa se você nunca cuidou do seu dinheiro antes. Vamos dar um passo de cada vez.",
                     "Para começarmos, precisamos de uma base para organizar as suas coisas."
                 ],

@@ -18,10 +18,20 @@ export const UIRenderer = {
                 if (content) content.innerHTML = '<div class="p-8 text-center text-text-secondary">Cartão não encontrado. Feche esta janela e tente novamente.</div>';
                 return;
             }
-            const newHTML = Components.invoiceDetailsView(card, db.transacoes, appState);
-            // Conteúdo de modal não deve passar pelo morph incremental: em abertura rápida,
-            // ele podia deixar apenas uma linha/blur enquanto o nó era reconciliado.
-            if (content) content.innerHTML = newHTML;
+            try {
+                const newHTML = Components.invoiceDetailsView(card, db.transacoes, appState);
+                // Conteúdo de modal não deve passar pelo morph incremental: em abertura rápida,
+                // ele podia deixar apenas uma linha/blur enquanto o nó era reconciliado.
+                if (content) {
+                    content.removeAttribute('inert');
+                    content.setAttribute('aria-hidden', 'false');
+                    content.classList.remove('hidden');
+                    content.innerHTML = newHTML;
+                }
+            } catch (error) {
+                console.error('Falha ao renderizar detalhes da fatura:', error);
+                if (content) content.innerHTML = '<div class="p-8 text-center text-text-secondary"><p>Não foi possível exibir esta fatura.</p><button type="button" data-action="closeInvoiceDetails" class="mt-4 px-3 py-2 rounded-lg bg-brand-deep text-white text-xs font-bold">Fechar</button></div>';
+            }
         }
     },
 

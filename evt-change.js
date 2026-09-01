@@ -86,10 +86,20 @@ export const ChangeEvents = {
                     const options = db.categorias.filter(c => (!c.tipo || c.tipo === 'despesa') && (c.grupo || c.nome) === target.value);
                     sub.innerHTML = '<option value="">Subgrupo (opcional)</option>' + options.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}</option>`).join('');
                     canonical.value = options[0]?.nome || '';
+                    if (!target.dataset.classifierUpdating && canonical) {
+                        canonical.setAttribute('data-manual-override', 'true');
+                        canonical.removeAttribute('data-suggested');
+                    }
                 },
                 'handleCardCategorySubgroup': () => {
                     const canonical = document.getElementById('dc-categoria');
-                    if (canonical) canonical.value = target.value;
+                    if (canonical) {
+                        canonical.value = target.value;
+                        if (!target.dataset.classifierUpdating) {
+                            canonical.setAttribute('data-manual-override', 'true');
+                            canonical.removeAttribute('data-suggested');
+                        }
+                    }
                 },
                 'toggleRecorrente': () => {
                     const divMeses = document.getElementById('div-meses-recorrente');
@@ -97,15 +107,30 @@ export const ChangeEvents = {
                     else divMeses.classList.add('hidden');
                 },
                 'toggleSelectTx': () => {
-                    const id = target.value;
-                    if (target.checked) App.viewState.selectedTransactions = [...App.viewState.selectedTransactions, id];
-                    else App.viewState.selectedTransactions = App.viewState.selectedTransactions.filter(x => x !== id);
+                    const id = String(target.value);
+                    const selected = (App.viewState.selectedTransactions || []).map(String);
+                    if (target.checked) App.viewState.selectedTransactions = Array.from(new Set([...selected, id]));
+                    else App.viewState.selectedTransactions = selected.filter(x => x !== id);
+                    const invoiceModal = document.getElementById('modal-fatura-detalhes');
+                    if (invoiceModal?.classList.contains('flex')) App.renderInvoiceModal();
+                    else App.scheduleRender();
+                },
+                'invoiceClassificationGroup': () => {
+                    const subgroup = document.getElementById('invoice-classification-subgroup');
+                    if (!subgroup) return;
+                    const group = target.value;
+                    const categories = (db.categorias || []).filter(c => (c.grupo || c.nome) === group && (!c.tipo || c.tipo === 'despesa'));
+                    subgroup.innerHTML = categories.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}</option>`).join('');
                 },
                 'toggleSelectAllTx': () => {
                     const checkboxes = document.querySelectorAll('input[data-change="toggleSelectTx"]');
-                    const ids = Array.from(checkboxes).map(cb => cb.value);
-                    if (target.checked) App.viewState.selectedTransactions = Array.from(new Set([...App.viewState.selectedTransactions, ...ids]));
-                    else App.viewState.selectedTransactions = App.viewState.selectedTransactions.filter(id => !ids.includes(id));
+                    const ids = Array.from(checkboxes).map(cb => String(cb.value));
+                    const selected = (App.viewState.selectedTransactions || []).map(String);
+                    if (target.checked) App.viewState.selectedTransactions = Array.from(new Set([...selected, ...ids]));
+                    else App.viewState.selectedTransactions = selected.filter(id => !ids.includes(id));
+                    const invoiceModal = document.getElementById('modal-fatura-detalhes');
+                    if (invoiceModal?.classList.contains('flex')) App.renderInvoiceModal();
+                    else App.scheduleRender();
                 },
                 'processarFotoPerfil': () => Controllers.processarFotoPerfil(e),
                 'changeAnoraRigor': () => Utils.showToast(`Modo da Anora alterado para: ${target.value}.`, 'success'),

@@ -330,11 +330,30 @@ export const TransacoesController = {
     },
     
     deleteSelectedTransactions: () => {
-        if(App.viewState.selectedTransactions.length === 0) return;
-        
-        const itemsToDelete = db.transacoes.filter(t => App.viewState.selectedTransactions.includes(t.id));
+        const selectedIds = new Set((App.viewState.selectedTransactions || []).map(id => String(id)));
+        if (selectedIds.size === 0) return;
+
+        // Selection values come from HTML and are strings, while imported/local
+        // records can have numeric IDs. Always compare canonically.
+        let itemsToDelete = db.transacoes.filter(t => selectedIds.has(String(t.id)));
+        if (!itemsToDelete.length) {
+            App.viewState.selectedTransactions = [];
+            return;
+        }
+
+        // Never leave a transfer with only one ledger leg. A selected card
+        // installment remains an ordinary card transaction; deleting it does not
+        // alter the card payment or invoice reconciliation records.
+        const transferIds = new Set(itemsToDelete.map(t => t.transferenciaId).filter(Boolean).map(String));
+        if (transferIds.size) {
+            itemsToDelete = db.transacoes.filter(t => selectedIds.has(String(t.id)) || (t.transferenciaId && transferIds.has(String(t.transferenciaId))));
+        }
         const count = itemsToDelete.length;
-        
+        const confirmed = typeof window === 'undefined' || typeof window.confirm !== 'function'
+            ? true
+            : window.confirm(`Apagar ${count} transação${count === 1 ? '' : 'ões'}? Esta ação pode ser desfeita por alguns segundos.`);
+        if (!confirmed) return;
+
         App.viewState.selectedTransactions = [];
         executeSoftDelete(itemsToDelete, `${count} transações apagadas.`);
     },

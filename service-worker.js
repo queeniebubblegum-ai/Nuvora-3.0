@@ -1,5 +1,7 @@
-const APP_CACHE_NAME = 'nuvora-app-shell-v5';
-const CDN_CACHE_NAME = 'nuvora-cdn-cache-v1';
+// Increment when shell behavior/markup changes so an already-installed SW
+// cannot keep the pre-fix modal shell around.
+const APP_CACHE_NAME = 'avenera-app-shell-v2';
+const CDN_CACHE_NAME = 'avenera-cdn-cache-v1';
 
 // Ficheiros locais essenciais da sua aplicação (Mapeamento Completo e Atualizado)
 const LOCAL_ASSETS = [

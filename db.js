@@ -1,5 +1,5 @@
 import { CATEGORIAS_PADRAO } from './categorias-padrao.js';
-import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions } from './reconciliation.js';
+import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment } from './reconciliation.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -416,6 +416,20 @@ export const TransactionsRepo = {
         }
         return false;
     },
+
+    // Category-only bulk updates are persisted once and never touch balances/totals.
+    updateCategories: (idsArray, categoria) => {
+        const ids = new Set((idsArray || []).map(id => String(id)));
+        if (!ids.size || !categoria) return 0;
+        let changed = 0;
+        db.transacoes = db.transacoes.map(t => {
+            if (!ids.has(String(t.id))) return t;
+            changed += 1;
+            return { ...t, categoria };
+        });
+        if (changed) persist('transacoes');
+        return changed;
+    },
     
     delete: (id) => {
         const strId = id.toString();
@@ -453,6 +467,63 @@ export const CardRepo = {
 
 export const ReconciliationRepo = {
     get: (cardId, year, month) => (db.conciliacoesFaturas || []).find(r => r.chave === invoiceReconciliationKey(cardId, year, month)) || null,
+    listAdjustments: (cardId, year, month) => ReconciliationRepo.get(cardId, year, month)?.ajustes || [],
+    saveAdjustment: (cardId, year, month, input) => {
+        if (!Array.isArray(db.conciliacoesFaturas)) db.conciliacoesFaturas = [];
+        const chave = invoiceReconciliationKey(cardId, year, month);
+        const index = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
+        const current = index >= 0 ? db.conciliacoesFaturas[index] : { chave, cardId, ano: year, mes: month };
+        const ajustes = Array.isArray(current.ajustes) ? [...current.ajustes] : [];
+        const normalized = normalizeAdjustment({ ...input, id: input.id || `aj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, createdAt: input.createdAt || new Date().toISOString() });
+        const adjustmentIndex = ajustes.findIndex(a => String(a.id) === String(normalized.id));
+        if (adjustmentIndex >= 0) ajustes[adjustmentIndex] = { ...ajustes[adjustmentIndex], ...normalized };
+        else ajustes.push(normalized);
+        const value = { ...current, ajustes, atualizadoEm: new Date().toISOString() };
+        if (index >= 0) db.conciliacoesFaturas[index] = value; else db.conciliacoesFaturas.unshift(value);
+        persist('conciliacoesFaturas'); return normalized;
+    },
+    /** Post an explicit invoice adjustment as one idempotent history transaction. */
+    createAdjustmentTransaction: (cardId, year, month, adjustmentId) => {
+        const chave = invoiceReconciliationKey(cardId, year, month);
+        const record = ReconciliationRepo.get(cardId, year, month);
+        const ajustes = record?.ajustes || [];
+        const index = ajustes.findIndex(a => String(a.id) === String(adjustmentId));
+        if (index < 0) return { ok: false, reason: 'adjustment-not-found' };
+        const adjustment = normalizeAdjustment(ajustes[index]);
+        if (adjustment.transactionId) {
+            const linked = db.transacoes.find(t => String(t.id) === String(adjustment.transactionId));
+            if (linked) return { ok: true, transaction: linked, alreadyExists: true };
+        }
+        const linked = db.transacoes.find(t => String(t.reconciliationAdjustmentId) === String(adjustment.id) && String(t.invoiceReconciliationKey) === chave);
+        if (linked) {
+            ajustes[index] = { ...ajustes[index], transactionId: String(linked.id), postedAt: ajustes[index].postedAt || new Date().toISOString(), lancamentoCriado: true };
+            persist('conciliacoesFaturas');
+            return { ok: true, transaction: linked, alreadyExists: true };
+        }
+        const card = db.cartoes.find(c => String(c.id) === String(cardId));
+        const dueDay = Number(card?.vencimento || card?.diaVencimento || 0);
+        const dueDate = dueDay > 0 ? new Date(Number(year), Number(month), dueDay, 12) : null;
+        const periodEnd = new Date(Number(year), Number(month), Math.max(1, Math.min(31, Number(card?.fechamento || card?.diaFechamento || 31))), 12);
+        const date = (dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : periodEnd).toISOString().split('T')[0];
+        const isCredit = adjustment.effect === 'credit';
+        const categoryNames = adjustment.type === 'interest' ? ['Juros', 'Encargos financeiros'] : adjustment.type === 'fine' ? ['Multas', 'Multa'] : adjustment.type === 'fees' ? ['Taxas', 'Tarifas'] : adjustment.type === 'iof' ? ['IOF', 'Impostos'] : ['Outras despesas', 'Outros'];
+        const category = categoryNames.find(name => (db.categorias || []).some(c => String(c?.nome || c) === name)) || categoryNames[categoryNames.length - 1];
+        let txId = `tx-conciliacao-${encodeURIComponent(chave)}-${encodeURIComponent(String(adjustment.id))}`;
+        if (db.transacoes.some(t => String(t.id) === txId)) txId = `${txId}-${Date.now()}`;
+        const transaction = { id: String(txId), desc: adjustment.description || 'Ajuste de fatura', valor: adjustment.amount, tipo: isCredit ? 'receita' : 'despesa', categoria: isCredit ? 'Reembolso / estorno' : category, bancoId: card?.bancoId ?? null, isCartao: false, formaPagamento: 'Ajuste de fatura', data: date, parcelaAtual: 1, totalParcelas: 1, recorrente: false, invoiceReconciliationKey: chave, reconciliationAdjustmentId: String(adjustment.id), origem: 'conciliacao_fatura' };
+        TransactionsRepo.add(transaction);
+        ajustes[index] = { ...ajustes[index], transactionId: String(transaction.id), postedAt: new Date().toISOString(), lancamentoCriado: true };
+        const updated = { ...record, ajustes, atualizadoEm: new Date().toISOString() };
+        const recordIndex = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
+        db.conciliacoesFaturas[recordIndex] = updated;
+        persist('conciliacoesFaturas');
+        return { ok: true, transaction, alreadyExists: false };
+    },
+    deleteAdjustment: (cardId, year, month, id) => {
+        const record = ReconciliationRepo.get(cardId, year, month); if (!record) return false;
+        record.ajustes = (record.ajustes || []).filter(a => String(a.id) !== String(id));
+        record.atualizadoEm = new Date().toISOString(); persist('conciliacoesFaturas'); return true;
+    },
     saveAmount: (cardId, year, month, realInvoiceAmount) => {
         if (!Array.isArray(db.conciliacoesFaturas)) db.conciliacoesFaturas = [];
         const chave = invoiceReconciliationKey(cardId, year, month);
@@ -468,7 +539,7 @@ export const ReconciliationRepo = {
     calculate: (transactions, card, year, month) => {
         const items = listInvoiceTransactions(transactions, card, year, month);
         const record = ReconciliationRepo.get(card.id, year, month);
-        return { ...calculateReconciliation(items, record?.valorFaturaReal), transacoes: items };
+        return { ...calculateReconciliation(items, record?.valorFaturaReal, record?.ajustes), transacoes: items, ajustes: record?.ajustes || [] };
     }
 };
 
@@ -656,6 +727,7 @@ export const Database = {
         if (col === 'transacoes') TransactionsRepo.deleteMultiple(ids);
     },
     updateTransaction: TransactionsRepo.update,
+    updateTransactionCategories: TransactionsRepo.updateCategories,
     updateAgendamento: ScheduleRepo.update,
     updateReceitaFutura: FutureIncomeRepo.update,
     addCardExpense: TransactionsRepo.addCardExpense,

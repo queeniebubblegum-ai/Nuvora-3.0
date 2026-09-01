@@ -1,18 +1,18 @@
-# Nuvora 3.0 — consolidated invoice-modal audit
+# Avenera 3.0 — consolidated invoice-modal audit
 
 ## Root cause
 
-The installed code had cumulative Fase 1/2 changes, but modal ownership was still global: the delegated `closeModal` action called `App.closeModal(true)` without identifying its source. `UI.closeModal` then hid and reset every modal and cleared `activeCardId`. When invoice details opened an edit modal, closing edit could therefore destroy the invoice state as well. In addition, the service worker used stale-while-revalidate for the local shell, so a freshly installed deployment could keep serving old JS/CSS/HTML until a reload.
+The current source already contains the source-aware close and network-first changes from the prior modal fix. The remaining deployed symptom was cache identity: `service-worker.js` still used the old `avenera-app-shell-v1` cache name, so an existing registration could retain the pre-fix shell (including the transient backdrop/line behavior) while the source comments and files appeared fixed. The modal also had no visible recovery if invoice data/rendering threw after the backdrop opened. The fix bumps the shell cache and makes rendering failure visible while preserving the modal's close action.
 
 The consolidated fix keeps the existing delegated actions and reconciliation/category behavior, but makes close source-aware for nested modal flows. Global close remains unchanged for route changes and resets. Local shell caching is network-first with offline cache fallback and a bumped cache name.
 
 ## Installation list
 
-Copy these files over the matching files in the Nuvora deployment:
+Copy these files over the matching files in the Avenera deployment:
 
 - `app.js`
-- `ui.js`
-- `evt-click.js`
+- `rnd-ui.js`
+- `cmp-modals.js`
 - `service-worker.js`
 - `invoice-modal.test.js` (targeted regression contract test)
 

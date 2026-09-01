@@ -182,8 +182,8 @@ export const PageComponents = {
     },
 
     transactionList: (list, state) => {
-        const selected = state?.selectedTransactions || [];
-        const allVisibleSelected = list.length > 0 && list.every(t => selected.includes(t.id.toString()));
+        const selected = (state?.selectedTransactions || []).map(String);
+        const allVisibleSelected = list.length > 0 && list.every(t => selected.includes(String(t.id)));
 
         if (!list.length) {
             return `
@@ -323,14 +323,19 @@ export const PageComponents = {
 
     invoiceDetailsView: (card, despesas, state) => {
         const monthExpenses = listInvoiceTransactions(despesas, card, state.invoiceYear, state.invoiceMonth);
-        const reconciliation = calculateReconciliation(monthExpenses, db.conciliacoesFaturas?.find(r => r.chave === invoiceReconciliationKey(card.id, state.invoiceYear, state.invoiceMonth))?.valorFaturaReal);
-        const totalFatura = reconciliation.totalRecorded;
+        const invoiceRecord = db.conciliacoesFaturas?.find(r => r.chave === invoiceReconciliationKey(card.id, state.invoiceYear, state.invoiceMonth));
+        const adjustments = invoiceRecord?.ajustes || [];
+        const pendingAdjustments = adjustments.filter(a => !(a.lancamentoCriado && a.transactionId));
+        const bulkEligibleAdjustments = pendingAdjustments.filter(a => a.type !== 'unrecognized_purchase');
+        const reconciliation = calculateReconciliation(monthExpenses, invoiceRecord?.valorFaturaReal, adjustments);
+        const totalFatura = reconciliation.explainedTotal;
         const periodo = getInvoicePeriod(card, state.invoiceYear, state.invoiceMonth);
         const statusClasses = { 'em aberto': 'bg-slate-100 text-slate-700', 'aguardando conferência': 'bg-amber-100 text-amber-700', 'diferença encontrada': 'bg-rose-100 text-rose-700', 'conciliada': 'bg-emerald-100 text-emerald-700' };
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]; 
         const mesAtualNome = meses[state.invoiceMonth];
         
-        const vencimentoStr = `${card.vencimento.toString().padStart(2, '0')}/${(state.invoiceMonth + 1).toString().padStart(2, '0')}/${state.invoiceYear}`;
+        const vencimento = Number(card.vencimento || card.diaVencimento || 1);
+        const vencimentoStr = `${String(vencimento).padStart(2, '0')}/${(state.invoiceMonth + 1).toString().padStart(2, '0')}/${state.invoiceYear}`;
 
         const provisaoMeses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
         let provisaoHtml = '';
@@ -353,8 +358,8 @@ export const PageComponents = {
             }
         }
 
-        const selected = state?.selectedTransactions || [];
-        const allVisibleSelected = monthExpenses.length > 0 && monthExpenses.every(t => selected.includes(t.id.toString()));
+        const selected = (state?.selectedTransactions || []).map(String);
+        const allVisibleSelected = monthExpenses.length > 0 && monthExpenses.every(t => selected.includes(String(t.id)));
 
         return `
         <div class="p-6 border-b border-border flex justify-between items-start sticky top-0 bg-surface/95 backdrop-blur-sm z-10 rounded-t-[16px]">
@@ -367,9 +372,18 @@ export const PageComponents = {
             </div>
             <button data-action="closeInvoiceDetails" class="text-text-secondary hover:text-text-primary transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-bg"><i class="fa-solid fa-xmark"></i></button>
         </div>
+
+        <div class="px-4 sm:px-6 border-b border-border bg-surface shrink-0" role="tablist" aria-label="Detalhes da fatura">
+            <div class="flex gap-1" data-invoice-tabs>
+                <button type="button" role="tab" id="invoice-tab-resumo" aria-controls="invoice-panel-resumo" aria-selected="true" tabindex="0" data-action="switchInvoiceTab" data-tab="resumo" class="invoice-tab px-3 py-3 text-xs font-bold text-brand-medium border-b-2 border-brand-medium">Resumo</button>
+                <button type="button" role="tab" id="invoice-tab-compras" aria-controls="invoice-panel-compras" aria-selected="false" tabindex="-1" data-action="switchInvoiceTab" data-tab="compras" class="invoice-tab px-3 py-3 text-xs font-bold text-text-secondary border-b-2 border-transparent">Compras</button>
+                <button type="button" role="tab" id="invoice-tab-ajustes" aria-controls="invoice-panel-ajustes" aria-selected="false" tabindex="-1" data-action="switchInvoiceTab" data-tab="ajustes" class="invoice-tab px-3 py-3 text-xs font-bold text-text-secondary border-b-2 border-transparent">Ajustes</button>
+            </div>
+        </div>
         
-        <div class="p-8">
-            <div class="flex items-center justify-center gap-8 mb-8">
+        <div class="invoice-panel flex-1 min-h-0 overflow-y-auto" id="invoice-panel-resumo" role="tabpanel" aria-labelledby="invoice-tab-resumo" tabindex="0">
+        <div class="p-5 sm:p-8">
+            <div class="flex items-center justify-center gap-8 mb-6">
                 <button data-action="changeMonth" data-type="invoice" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg flex items-center justify-center text-text-secondary transition-colors border border-transparent hover:border-border"><i class="fa-solid fa-chevron-left text-sm"></i></button>
                 <span class="text-lg font-bold text-text-primary w-48 text-center capitalize font-primary">${mesAtualNome} ${state.invoiceYear}</span>
                 <button data-action="changeMonth" data-type="invoice" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg flex items-center justify-center text-text-secondary transition-colors border border-transparent hover:border-border"><i class="fa-solid fa-chevron-right text-sm"></i></button>
@@ -381,14 +395,21 @@ export const PageComponents = {
                 <p class="text-xs text-text-secondary mt-3">Período: <span class="font-bold text-text-primary font-mono">${periodo.start.toLocaleDateString('pt-BR')} a ${periodo.end.toLocaleDateString('pt-BR')}</span></p>
                 <p class="text-xs text-text-secondary mt-1">Vencimento: <span class="font-bold text-text-primary font-mono">${vencimentoStr}</span></p>
                 <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div><p class="text-[10px] uppercase font-bold text-text-secondary">Total registrado</p><p class="font-mono font-bold text-text-primary">${Utils.formatMoney(reconciliation.totalRecorded)}</p></div>
+                    <div><p class="text-[10px] uppercase font-bold text-text-secondary">Compras registradas</p><p class="font-mono font-bold text-text-primary">${Utils.formatMoney(reconciliation.totalRecorded)}</p></div>
+                    <div><p class="text-[10px] uppercase font-bold text-text-secondary">Total explicado</p><p class="font-mono font-bold text-text-primary">${Utils.formatMoney(reconciliation.explainedTotal)}</p></div>
                     <div><label for="valor-fatura-real" class="text-[10px] uppercase font-bold text-text-secondary">Valor real da fatura</label><input id="valor-fatura-real" type="number" step="0.01" min="0" value="${reconciliation.realInvoiceAmount ?? ''}" placeholder="R$ 0,00" class="mt-1 w-full p-2 bg-surface border border-border rounded-lg font-mono text-sm"></div>
-                    <div><p class="text-[10px] uppercase font-bold text-text-secondary">Diferença</p><p class="font-mono font-bold ${reconciliation.difference === null ? 'text-text-secondary' : reconciliation.difference === 0 ? 'text-success' : 'text-danger'}">${reconciliation.difference === null ? '—' : Utils.formatMoney(reconciliation.difference)}</p></div>
                 </div>
-                <div class="mt-4 flex items-center justify-between gap-3"><span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${statusClasses[reconciliation.status]}">${reconciliation.status}</span><button data-action="saveInvoiceReconciliation" class="px-3 py-2 rounded-lg bg-brand-deep text-white text-xs font-bold">Salvar conferência</button></div>
+                <div id="invoice-adjustments-slot" class="mt-4 flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2 text-xs">
+                    <span class="text-text-secondary">Ajustes explicativos: <strong class="text-text-primary">${adjustments.length}</strong></span>
+                    <button type="button" data-action="switchInvoiceTab" data-tab="ajustes" class="text-brand-medium font-bold hover:text-brand-dark">Gerenciar ajustes <span aria-hidden="true">→</span></button>
+                </div>
+                <div class="mt-4 flex items-center justify-between gap-3"><span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${statusClasses[reconciliation.status]}">${reconciliation.status}</span><span class="text-xs ${reconciliation.difference !== null && Math.abs(reconciliation.difference) > 0.01 ? 'text-danger' : 'text-success'}">Diferença: ${reconciliation.difference === null ? '—' : Utils.formatMoney(reconciliation.difference)}</span><button data-action="saveInvoiceReconciliation" class="px-3 py-2 rounded-lg bg-brand-deep text-white text-xs font-bold">Salvar conferência</button></div>
             </div>
-
-            <div class="space-y-1 mb-10">
+        </div>
+        </div>
+        <div class="invoice-panel hidden flex-1 min-h-0 overflow-y-auto" id="invoice-panel-compras" role="tabpanel" aria-labelledby="invoice-tab-compras" aria-hidden="true" tabindex="0">
+        <div class="p-5 sm:p-8">
+            <div class="space-y-1">
                 ${monthExpenses.length === 0 ? '<p class="text-center text-text-secondary text-sm py-8 border border-border bg-surface rounded-[16px]">Nenhuma compra registrada nesta fatura.</p>' : 
                   `
                   <div class="flex justify-between items-center mb-2 px-2">
@@ -397,8 +418,8 @@ export const PageComponents = {
                           <span class="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Selecionar Tudo</span>
                       </div>
                       ${selected.length > 0 ? `
-                      <button data-action="deleteSelectedTx" class="text-[10px] text-danger border border-border px-3 py-1.5 rounded font-bold hover:bg-bg transition-colors flex items-center gap-1">
-                          <i class="fa-solid fa-trash-can"></i> Apagar (${selected.length})
+                      <button data-action="openInvoiceClassification" class="text-[10px] text-brand-medium border border-brand-medium/30 px-3 py-1.5 rounded font-bold hover:bg-brand-medium/10 transition-colors flex items-center gap-1">
+                          <i class="fa-solid fa-tags"></i> Classificar selecionados (${selected.length})
                       </button>
                       ` : ''}
                   </div>
@@ -442,7 +463,29 @@ export const PageComponents = {
             </div>
             ` : ''}
         </div>
+        </div>
+        <div class="invoice-panel hidden flex-1 min-h-0 overflow-y-auto" id="invoice-panel-ajustes" role="tabpanel" aria-labelledby="invoice-tab-ajustes" aria-hidden="true" tabindex="0">
+            <div class="p-5 sm:p-8" id="invoice-adjustments-host">
+                <p class="text-xs text-text-secondary mb-3">Gerencie encargos, créditos e lançamentos pendentes desta fatura.</p>
+<div id="invoice-adjustments-section" class="mt-4 rounded-lg border border-border bg-surface p-3"><div class="flex items-center justify-between gap-2 mb-2"><p class="text-[10px] uppercase font-bold text-text-secondary">Ajustes explicativos</p><span class="font-mono text-xs font-bold ${reconciliation.totalAdjustments < 0 ? 'text-success' : 'text-text-primary'}">${reconciliation.totalAdjustments >= 0 ? '+' : ''}${Utils.formatMoney(reconciliation.totalAdjustments)}</span></div>
+                    ${bulkEligibleAdjustments.length ? `<button data-action="openInvoiceAdjustmentsReview" class="w-full mb-2 px-3 py-2 rounded-lg bg-brand-medium text-white text-xs font-bold text-left hover:bg-brand-dark transition-colors"><i class="fa-solid fa-list-check mr-1"></i> Criar lançamentos pendentes (${bulkEligibleAdjustments.length})</button>` : ''}
+                    ${pendingAdjustments.some(a => a.type === 'unrecognized_purchase') ? '<p class="mb-2 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2"><strong>Atenção:</strong> compra não reconhecida não entra no lote. Confirme-a individualmente somente após verificar o caso.</p>' : ''}
+                    ${adjustments.length ? adjustments.map(a => { const credit = a.effect === 'credit' || a.sign === -1; const posted = Boolean(a.lancamentoCriado && a.transactionId); return `<div class="flex items-center justify-between gap-2 py-2 border-t border-border text-xs"><span><strong>${Utils.escapeHTML(a.description || a.type || 'Ajuste')}</strong><small class="block text-text-secondary">${Utils.escapeHTML(a.type || 'manual')} · ${credit ? 'crédito' : 'encargo'}${posted ? ' · lançamento criado' : ''}</small></span><span class="font-mono ${credit ? 'text-success' : ''}">${credit ? '-' : '+'}${Utils.formatMoney(a.amount)} <button data-action="editInvoiceAdjustment" data-id="${Utils.escapeHTML(String(a.id))}" class="ml-2 text-brand-medium" title="Editar">✎</button><button data-action="deleteInvoiceAdjustment" data-id="${Utils.escapeHTML(String(a.id))}" class="ml-1 text-danger" title="Excluir">×</button>${posted ? '<span class="ml-2 text-success font-bold" aria-label="Lançamento criado">Lançamento criado</span>' : `<button data-action="createInvoiceAdjustmentTransaction" data-id="${Utils.escapeHTML(String(a.id))}" class="ml-2 px-2 py-1 rounded bg-brand-medium text-white text-[10px] font-bold">Criar lançamento</button>`}</span></div>`; }).join('') : '<p class="text-xs text-text-secondary py-2">Nenhum ajuste informado.</p>'}
+                    <div class="mt-3 flex flex-wrap gap-2 items-end"><select id="invoice-adjustment-type" class="p-2 bg-bg border border-border rounded text-xs"><option value="interest">Juros</option><option value="fine">Multa</option><option value="fees">Taxas/tarifas</option><option value="iof">IOF</option><option value="missing_purchase">Compra ausente</option><option value="unrecognized_purchase">Compra não reconhecida</option><option value="refund">Reembolso/estorno</option><option value="manual">Ajuste manual</option></select><select id="invoice-adjustment-effect" class="p-2 bg-bg border border-border rounded text-xs"><option value="charge">Encargo / acréscimo</option><option value="credit">Crédito / abatimento</option></select><input id="invoice-adjustment-description" class="flex-1 min-w-[130px] p-2 bg-bg border border-border rounded text-xs" placeholder="Descrição"/><input id="invoice-adjustment-amount" type="number" min="0" step="0.01" class="w-24 p-2 bg-bg border border-border rounded text-xs font-mono" placeholder="Valor"/><button data-action="saveInvoiceAdjustment" class="px-3 py-2 rounded bg-brand-medium text-white text-xs font-bold">Adicionar</button></div>
+                </div>
+            </div>
+        </div>
         `;
+    },
+
+    invoiceAdjustmentsReview: (adjustments) => {
+        const typeLabels = { interest: 'Juros', fine: 'Multa', fees: 'Taxas/tarifas', iof: 'IOF', missing_purchase: 'Compra ausente', refund: 'Reembolso/estorno', manual: 'Ajuste manual' };
+        return `<div class="p-6">
+            <div class="flex items-start justify-between gap-3 mb-4"><div><p class="text-[10px] uppercase font-bold text-text-secondary tracking-wider">Revisão em lote</p><h3 class="text-lg font-bold text-text-primary font-primary">Lançamentos pendentes</h3><p class="text-xs text-text-secondary mt-1">Confira cada item antes de confirmar. Nada será lançado automaticamente.</p></div><button data-action="closeInvoiceAdjustmentsReview" class="w-8 h-8 text-text-secondary hover:text-text-primary" aria-label="Voltar"><i class="fa-solid fa-xmark"></i></button></div>
+            <div class="space-y-2 max-h-[48vh] overflow-y-auto pr-1">${adjustments.map(a => { const credit = a.effect === 'credit' || a.sign === -1; return `<div class="rounded-lg border border-border bg-bg p-3 text-xs"><div class="flex justify-between gap-3"><strong class="text-text-primary">${Utils.escapeHTML(typeLabels[a.type] || a.type || 'Ajuste')}</strong><strong class="font-mono ${credit ? 'text-success' : 'text-danger'}">${credit ? '-' : '+'}${Utils.formatMoney(a.amount)}</strong></div><p class="text-text-primary mt-1">${Utils.escapeHTML(a.description || 'Ajuste de fatura')}</p><p class="text-text-secondary mt-1">Efeito: ${credit ? 'crédito/abatimento' : 'encargo/acréscimo'}</p></div>`; }).join('')}</div>
+            <p class="mt-4 text-[10px] text-text-secondary">A confirmação cria um lançamento por ajuste, vinculado à conciliação. Itens já criados serão ignorados sem duplicar.</p>
+            <div class="flex gap-2 mt-4 pt-4 border-t border-border"><button data-action="closeInvoiceAdjustmentsReview" class="flex-1 py-2.5 bg-bg border border-border text-text-secondary text-xs font-bold rounded-lg">Cancelar</button><button data-action="confirmInvoiceAdjustmentsBulk" class="flex-1 py-2.5 bg-brand-medium text-white text-xs font-bold rounded-lg">Confirmar ${adjustments.length} lançamento${adjustments.length === 1 ? '' : 's'}</button></div>
+        </div>`;
     },
 
     agendamentosPage: (db, state) => {

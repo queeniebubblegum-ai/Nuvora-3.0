@@ -442,9 +442,23 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-fatura-detalhes" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1001;">
-        <div class="bg-surface w-full max-w-md rounded-[16px] shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
-            <div id="modal-fatura-content" class="flex-1 min-h-0 overflow-y-auto rounded-[16px]"></div>
+    <div id="modal-fatura-detalhes" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1001;">
+        <div class="bg-surface w-full max-w-2xl rounded-[16px] shadow-medium border border-border flex flex-col h-[90vh] max-h-[760px] overflow-hidden">
+            <div id="modal-fatura-content" class="flex-1 min-h-0 overflow-hidden rounded-[16px]"></div>
+        </div>
+    </div>
+
+    <div id="modal-classificar-fatura" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1003;">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border">
+            <div class="flex justify-between items-center mb-4">
+                <div><h3 class="text-lg font-bold font-primary text-text-primary">Classificar transações</h3><p id="invoice-classification-count" class="text-xs text-text-secondary mt-1"></p></div>
+                <button type="button" data-action="closeInvoiceClassification" class="text-text-secondary hover:text-text-primary w-8 h-8"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="space-y-3">
+                <div><label for="invoice-classification-group" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Grupo</label><select id="invoice-classification-group" data-change="invoiceClassificationGroup" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></select></div>
+                <div><label for="invoice-classification-subgroup" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Subgrupo / categoria</label><select id="invoice-classification-subgroup" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></select></div>
+            </div>
+            <div class="flex gap-2 pt-4 mt-4 border-t border-border"><button type="button" data-action="closeInvoiceClassification" class="flex-1 py-2.5 bg-bg border border-border text-text-secondary text-sm font-bold rounded-[10px]">Cancelar</button><button type="button" data-action="applyInvoiceClassification" class="flex-1 py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px]">Aplicar</button></div>
         </div>
     </div>
 
