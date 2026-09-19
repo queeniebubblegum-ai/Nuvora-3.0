@@ -5,6 +5,30 @@ import { MentorEngine } from './mentorEngine.js';
 import { UIRenderer } from './rnd-ui.js';
 import { FinancialAnalytics } from './analytics.js';
 
+// Shared page header renderer. Actions are described as data rather than raw
+// HTML so labels and attribute values remain escaped at the boundary.
+export const renderPageHeader = ({ eyebrow = '', title = '', subtitle = '', actions = [], className = '', stylePrefix = '' } = {}) => {
+    const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+    const safeClassName = escape(className);
+    const safePrefix = escape(stylePrefix);
+    const prefixed = suffix => safePrefix ? ` ${safePrefix}-${suffix}` : '';
+    const allowedAttribute = name => /^(?:data-[a-z0-9-]+|aria-[a-z0-9-]+|title|id)$/.test(name);
+    const attributes = attrs => Object.entries(attrs || {})
+        .filter(([name, value]) => allowedAttribute(name) && value !== null && value !== undefined)
+        .map(([name, value]) => ` ${name}="${escape(value)}"`)
+        .join('');
+    const actionHtml = (Array.isArray(actions) ? actions : []).map(action => {
+        const variant = action?.variant === 'primary' ? 'primary' : 'secondary';
+        const label = escape(action?.label);
+        const icon = escape(action?.icon);
+        const dataAction = action?.action ? ` data-action="${escape(action.action)}"` : '';
+        const actionLabel = action?.ariaLabel || action?.label || '';
+        return `<button type="button"${dataAction}${attributes(action?.attributes)} aria-label="${escape(actionLabel)}" class="nv-page-header__action is-${variant}${prefixed(`${variant}-action`)}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`;
+    }).join('');
+
+    return `<header class="nv-page-header${safeClassName ? ` ${safeClassName}` : ''}"><div class="nv-page-header__copy"><p class="nv-page-header__eyebrow${prefixed('eyebrow')}">${escape(eyebrow)}</p><h1>${escape(title)}</h1><p class="nv-page-header__subtitle${prefixed('page-subtitle')}">${escape(subtitle)}</p></div><div class="nv-page-header__actions${prefixed('page-actions')}">${actionHtml}</div></header>`;
+};
+
 export const PageRenderers = {
     Dashboard: (appState) => {
         const hora = new Date().getHours();
@@ -49,12 +73,13 @@ export const PageRenderers = {
         if(saldoAtualGlobal > 0) insightMsg = 'O seu saldo global está positivo.';
         else if (saldoAtualGlobal < 0) insightMsg = 'Atenção estratégica: O fluxo atual encontra-se negativo.';
 
-        // UX ENG FIX: Restaurados os botões de Receita e Despesa. O "Fechar Mês" foi reduzido a um botão utilitário secundário.
+        // Keep one clear entry point for all transaction types. The existing speed
+        // dial owns Receita, Transferência and Despesa, so the dashboard header
+        // must not duplicate those actions or bypass their shared flow.
         const actionsHtml = `
-            <button data-action="iniciarFechamentoMes" class="bg-surface border border-border text-brand-medium px-4 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-colors shadow-soft hover:-translate-y-0.5 flex items-center gap-2"><i class="fa-solid fa-flag-checkered"></i> <span class="hidden sm:inline">Fechar Mês</span></button>
-            <button data-action="openModal" data-modal="modal-simulador" class="bg-surface border border-border text-text-primary px-4 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-colors shadow-soft hover:-translate-y-0.5 flex items-center gap-2"><i class="fa-solid fa-calculator"></i> <span class="hidden sm:inline">Simular</span></button>
-            <button data-action="openModal" data-modal="modal-transacao" data-type="receita" class="bg-success text-white px-4 py-2.5 rounded-[12px] text-sm font-bold hover:bg-success/90 transition-all shadow-success-glow hover:-translate-y-0.5 flex items-center gap-2"><i class="fa-solid fa-plus"></i> Receita</button>
-            <button data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="bg-danger text-white px-4 py-2.5 rounded-[12px] text-sm font-bold hover:bg-danger/90 transition-all shadow-danger-glow hover:-translate-y-0.5 flex items-center gap-2"><i class="fa-solid fa-minus"></i> Despesa</button>
+            <button type="button" onclick="toggleSpeedDial()" aria-controls="speed-dial-menu" aria-expanded="false" class="nv-dashboard-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i> Novo lançamento</button>
+            <button type="button" data-action="iniciarFechamentoMes" class="nv-dashboard-secondary-action"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span class="hidden sm:inline">Fechar mês</span></button>
+            <button type="button" data-action="openModal" data-modal="modal-simulador" class="nv-dashboard-secondary-action"><i class="fa-solid fa-calculator" aria-hidden="true"></i> <span class="hidden sm:inline">Simular</span></button>
         `;
         
         let dateStart, dateEnd;
@@ -155,29 +180,30 @@ export const PageRenderers = {
                 </div>
             </header>
 
+            ${filterHtml}
             ${resultadoMentoria.isOnboarding ? Components.insightsSection(resultadoMentoria) : ''}
 
-            <section class="nv-dashboard-financial mb-10" aria-label="Resumo financeiro e saúde financeira">
-                <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
+            <section class="nv-dashboard-financial mb-10" aria-label="Resumo financeiro do período">
+                <div class="flex items-center justify-between gap-4 mb-5">
                     <div>
                         <p class="nv-dashboard-eyebrow">Saúde financeira</p>
                         <h3 class="font-bold text-text-primary text-xl tracking-tight flex items-center gap-2 font-primary">
-                            <i class="fa-solid fa-wallet text-success"></i> Resumo financeiro
+                            <i class="fa-solid fa-wallet text-success" aria-hidden="true"></i> Resumo financeiro
                         </h3>
                     </div>
-                    ${filterHtml}
                 </div>
                 ${Components.dashboardCards(atual, anterior)}
-                ${Components.dashboardAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
             </section>
 
+            ${Components.dashboardAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
             ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria)}
-            ${resultadoMentoria.isOnboarding ? '' : Components.dashboardPillars(resultadoMentoria.pillars)}
-            
+
             <div class="nv-dashboard-supporting grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                 ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
                 ${Components.dashboardCategories(transacoesPeriodoAtual)}
             </div>
+
+            ${resultadoMentoria.isOnboarding ? '' : Components.dashboardPillars(resultadoMentoria.pillars)}
         </div>
         `);
     },
@@ -226,7 +252,19 @@ export const PageRenderers = {
         const paginationHtml = totalItems > 0 ? `<footer class="nv-tx-pagination"><label>Exibir <select data-change="changeTxPerPage" aria-label="Quantidade por página"><option value="10" ${perPage === 10 ? 'selected' : ''}>10</option><option value="20" ${perPage === 20 ? 'selected' : ''}>20</option><option value="50" ${perPage === 50 ? 'selected' : ''}>50</option><option value="100" ${perPage === 100 ? 'selected' : ''}>100</option></select> por página</label><nav aria-label="Paginação de transações"><button type="button" data-action="setTxPage" data-payload="${currentPage - 1}" aria-label="Página anterior" ${currentPage === 1 ? 'disabled' : ''} class="nv-tx-page-button"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>${pageButtons}<button type="button" data-action="setTxPage" data-payload="${currentPage + 1}" aria-label="Próxima página" ${currentPage === totalPages ? 'disabled' : ''} class="nv-tx-page-button"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></nav></footer>` : '';
 
         UIRenderer.updateDOM('main-content', `<div class="nv-transactions-page">
-            <header class="nv-tx-page-header"><div><p class="nv-tx-eyebrow">Movimentações financeiras</p><h1>Transações</h1><p class="nv-tx-page-subtitle">Acompanhe, filtre e organize cada entrada, saída e transferência.</p></div><div class="nv-tx-page-actions"><button type="button" data-action="exportTransactionsCSV" class="nv-tx-secondary-action"><i class="fa-solid fa-file-export" aria-hidden="true"></i><span>Exportar</span></button><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${Utils.escapeHTML(String(bancoPadraoId))}" class="nv-tx-secondary-action"><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Importar OFX</span></button><button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-tx-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Nova transação</span></button></div></header>
+            ${renderPageHeader({
+                eyebrow: 'Movimentações financeiras',
+                title: 'Transações',
+                subtitle: 'Acompanhe, filtre e organize cada entrada, saída e transferência.',
+                className: 'nv-tx-page-header',
+                stylePrefix: 'nv-tx',
+                actions: [
+                    { action: 'exportTransactionsCSV', label: 'Exportar', icon: 'fa-file-export', variant: 'secondary' },
+                    { action: 'iniciarImportacaoOFX', label: 'Importar OFX', icon: 'fa-file-import', variant: 'secondary', attributes: { 'data-banco-id': bancoPadraoId } },
+                    { action: 'iniciarImportacaoCSV', label: 'Importar CSV', icon: 'fa-file-csv', variant: 'secondary', attributes: { 'data-banco-id': bancoPadraoId } },
+                    { action: 'openModal', label: 'Nova transação', icon: 'fa-plus', variant: 'primary', attributes: { 'data-modal': 'modal-transacao', 'data-type': 'despesa' } }
+                ]
+            })}
             ${Components.transactionSummary(filtered)}
             <section class="nv-tx-panel" aria-label="Lista de transações"><div class="nv-tx-panel-toolbar"><div><h2>Histórico de transações</h2><p>${totalItems} ${totalItems === 1 ? 'movimentação encontrada' : 'movimentações encontradas'}</p></div></div>${Components.filtersSection(f, db.bancos, db.categorias, db.cartoes)}<div class="nv-tx-results">${Components.transactionList(pagedTransactions, appState)}${paginationHtml}</div></section>
         </div>`);

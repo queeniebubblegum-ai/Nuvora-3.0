@@ -177,21 +177,21 @@
 
     <div class="fixed bottom-8 right-8 flex flex-col items-end" style="z-index: 30;">
         
-        <div id="speed-dial-menu" class="flex flex-col items-end gap-3 opacity-0 translate-y-4 pointer-events-none transition-all duration-300 mb-3">
+        <div id="speed-dial-menu" aria-hidden="true" class="flex flex-col items-end gap-3 opacity-0 translate-y-4 pointer-events-none transition-all duration-300 mb-3">
             
-            <button data-action="openModal" data-modal="modal-transacao" data-type="receita" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer">
+            <button type="button" tabindex="-1" data-action="openModal" data-modal="modal-transacao" data-type="receita" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer">
                 <span class="bg-surface text-text-primary text-xs font-bold py-1.5 px-3 rounded-[8px] shadow-soft group-hover/item:scale-105 transition-transform">Receita</span>
                 <div class="w-11 h-11 bg-success text-white rounded-full shadow-soft flex items-center justify-center text-sm group-hover/item:scale-110 active:scale-95 transition-transform">
                     <i class="fa-solid fa-arrow-down"></i>
                 </div>
             </button>
 
-            <button type="button" data-action="openModal" data-modal="modal-transferencia" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer">
+            <button type="button" tabindex="-1" data-action="openModal" data-modal="modal-transferencia" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer">
                 <span class="bg-surface text-text-primary text-xs font-bold py-1.5 px-3 rounded-[8px] shadow-soft group-hover/item:scale-105 transition-transform">Transferência</span>
                 <div class="w-11 h-11 bg-brand-medium text-white rounded-full shadow-soft flex items-center justify-center text-sm group-hover/item:scale-110 active:scale-95 transition-transform"><i class="fa-solid fa-arrow-right-arrow-left"></i></div>
             </button>
 
-            <button data-action="openModal" data-modal="modal-transacao" data-type="despesa" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer">
+            <button type="button" tabindex="-1" data-action="openModal" data-modal="modal-transacao" data-type="despesa" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer">
                 <span class="bg-surface text-text-primary text-xs font-bold py-1.5 px-3 rounded-[8px] shadow-soft group-hover/item:scale-105 transition-transform">Despesa</span>
                 <div class="w-11 h-11 bg-danger text-white rounded-full shadow-soft flex items-center justify-center text-sm group-hover/item:scale-110 active:scale-95 transition-transform">
                     <i class="fa-solid fa-arrow-up"></i>
@@ -200,8 +200,8 @@
 
         </div>
 
-        <button id="btn-flutuante-main" onclick="toggleSpeedDial()" class="w-14 h-14 bg-brand-medium text-white rounded-full shadow-medium flex items-center justify-center text-xl hover:bg-brand-dark active:scale-95 transition-all focus:outline-none z-10">
-            <i id="speed-dial-icon" class="fa-solid fa-plus transition-transform duration-300"></i>
+        <button type="button" id="btn-flutuante-main" onclick="toggleSpeedDial()" aria-controls="speed-dial-menu" aria-expanded="false" aria-label="Abrir menu de novo lançamento" class="w-14 h-14 bg-brand-medium text-white rounded-full shadow-medium flex items-center justify-center text-xl hover:bg-brand-dark active:scale-95 transition-all focus:outline-none z-10">
+            <i id="speed-dial-icon" class="fa-solid fa-plus transition-transform duration-300" aria-hidden="true"></i>
         </button>
     </div>
 
@@ -209,18 +209,27 @@
         function toggleSpeedDial() {
             const menu = document.getElementById('speed-dial-menu');
             const icon = document.getElementById('speed-dial-icon');
+            const buttons = [document.getElementById('btn-flutuante-main'), ...document.querySelectorAll('.nv-dashboard-primary-action')].filter(Boolean);
+            const menuItems = menu.querySelectorAll('button');
+            const isOpening = menu.classList.contains('opacity-0');
             
-            if (menu.classList.contains('opacity-0')) {
-                // Abre o menu e gira o ícone
+            if (isOpening) {
+                // Abre o menu e gira o ícone.
                 menu.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
                 menu.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
                 icon.classList.add('rotate-45');
             } else {
-                // Fecha o menu e volta o ícone ao normal
+                // Fecha o menu e volta o ícone ao normal.
                 menu.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
                 menu.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
                 icon.classList.remove('rotate-45');
             }
+            menu.setAttribute('aria-hidden', String(!isOpening));
+            menuItems.forEach(item => item.tabIndex = isOpening ? 0 : -1);
+            buttons.forEach(button => {
+                button.setAttribute('aria-expanded', String(isOpening));
+                if (button.id === 'btn-flutuante-main') button.setAttribute('aria-label', isOpening ? 'Fechar menu de novo lançamento' : 'Abrir menu de novo lançamento');
+            });
         }
 
         // UX: Fecha o menu automaticamente se o usuário clicar fora da área dele
@@ -229,7 +238,7 @@
             const mainBtn = document.getElementById('btn-flutuante-main');
             
             // Se o menu estiver aberto, e o clique não for no botão principal nem dentro do menu
-            if (!menu.classList.contains('opacity-0') && !menu.contains(event.target) && !mainBtn.contains(event.target)) {
+            if (!menu.classList.contains('opacity-0') && !menu.contains(event.target) && !mainBtn.contains(event.target) && !event.target?.closest?.('.nv-dashboard-primary-action')) {
                 toggleSpeedDial();
             }
         });

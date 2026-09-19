@@ -4,7 +4,8 @@ Run from `index.html` with the app's normal local/static serving setup.
 
 ## Visual and responsive
 
-- [ ] Open **Transações** and confirm the eyebrow, title/subtitle, summary cards, single transactions panel, visible search, and primary **Nova transação** action.
+- [ ] Open **Transações** and confirm the shared eyebrow/title/subtitle header, summary cards, single transactions panel, prominent search, and exactly one primary **Nova transação** action.
+- [ ] Confirm **Exportar**, **Importar OFX**, and **Importar CSV** are secondary utility actions and do not compete visually with the primary CTA.
 - [ ] Confirm all visible values come from the current data (no placeholder/example transaction values).
 - [ ] Check desktop widths: income/expense/balance values are easy to scan and amounts are right-aligned.
 - [ ] Check a narrow mobile viewport: the header actions remain usable, filters stack, rows remain readable, and Editar/Apagar actions are not hover-only.
@@ -27,4 +28,11 @@ Run from `index.html` with the app's normal local/static serving setup.
 - [ ] Delete a transaction from **Apagar** and confirm it is removed after the existing confirmation flow.
 - [ ] Export the filtered transactions to CSV; confirm the export uses the existing action and current filters.
 - [ ] Start OFX import from the existing **Importar OFX** action and confirm the normal import flow opens.
+- [ ] Start CSV import from the existing **Importar CSV** action and confirm the normal import flow opens.
 - [ ] Verify descriptions, categories, account names, contact names, payment methods, identifiers, and other user-controlled metadata render escaped.
+
+## Phase 1 responsive acceptance
+
+- [ ] At 375px and 400px wide, keep the primary CTA readable, keep utility actions keyboard/touch reachable, and keep the search field prominent without horizontal overflow.
+- [ ] At 375px and 400px wide, keep **Mais filtros** compact/collapsible while category, account/card, date range, and clear-filter controls remain usable when expanded.
+- [ ] Repeat the header, filter, selection, pagination, import/export, and row-action checks in light and dark themes.

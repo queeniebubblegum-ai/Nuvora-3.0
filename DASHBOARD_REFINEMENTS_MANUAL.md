@@ -1,14 +1,27 @@
 # Dashboard refinements — manual checklist
 
+## Dashboard hierarchy and actions
+
+- [ ] Confirm the header has one primary **Novo lançamento** action. It toggles the existing speed dial and exposes Receita, Transferência and Despesa; no duplicate transaction CTAs appear in the header.
+- [ ] Confirm **Fechar mês** and **Simular** remain secondary actions and retain their existing delegated `data-action`/modal contracts.
+- [ ] Confirm the period selector is adjacent to the header and the section order is: summary metrics; Contas e cartões; Anora; Agenda financeira/Categorias; Pilares.
+- [ ] Confirm the large financial summary area is transparent and does not create a nested card, while the three actionable/informational metric cards remain visible.
+
+## Financial semantics
+
+- [ ] Select a period and confirm **Saldo atual** equals the global balance (not the selected period).
+- [ ] Confirm **Resultado do período** equals filtered period receitas minus filtered period despesas.
+- [ ] Confirm **Próximos vencimentos** keeps the existing pending-account calculation through the end of the current month.
+- [ ] Confirm no transaction or total calculation changes when switching periods.
+
 ## Onboarding Anora
 
-- [ ] With no bank and no transactions, open Dashboard and confirm the Anora onboarding panel appears immediately after the greeting/header, before the financial summary, without needing to scroll.
-- [ ] Confirm the onboarding CTA opens the existing bank or first-transaction modal according to the displayed setup step.
+- [ ] With no bank and no transactions, open Dashboard and confirm the Anora onboarding panel and its existing CTA still appear and open the correct setup flow.
 - [ ] Add a bank and confirm the onboarding guidance updates without losing existing data or changing summary calculations.
 - [ ] Add the first transaction and confirm the CTA and guidance update again.
-- [ ] With existing data, confirm the financial summary/accounts remain first and Anora appears afterward as contextual insight.
-- [ ] Confirm the responsive order remains usable on narrow and wide viewports.
-- [ ] Confirm the compact Anora panel keeps the score, insights, recommendation, and onboarding CTA readable without excessive empty space; the CTA remains visually prominent and at least 40px high.
+- [ ] With existing data, confirm Anora appears after Contas e cartões as a compact recommendation/most relevant insight.
+- [ ] Activate **Ver diagnóstico** with keyboard and pointer and confirm native details expansion reveals all existing insights without a dead button.
+- [ ] Confirm the responsive order remains usable on narrow and wide viewports and the onboarding CTA remains at least 40px high.
 
 ## Agenda calendar
 

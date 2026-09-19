@@ -9,40 +9,44 @@ export const DashboardComponents = {
             return { val: Math.abs(diff).toFixed(1), isUp: diff >= 0 };
         };
 
-        const recT = calcTrend(atual.receitas, anterior.receitas);
-        const desT = calcTrend(atual.despesas, anterior.despesas);
+        // Receitas/despesas are intentionally period-filtered. Saldo atual is
+        // the existing global Database.getTotals().saldo passed by the page;
+        // none of these values change the underlying financial calculations.
+        const resultadoPeriodo = atual.receitas - atual.despesas;
+        const resultadoAnterior = anterior.receitas - anterior.despesas;
+        const resultadoT = calcTrend(resultadoPeriodo, resultadoAnterior);
+        const vencimentos = atual.contasPendentes || 0;
+        const resultadoColor = resultadoPeriodo >= 0 ? 'text-success' : 'text-danger';
+        const vencimentosColor = vencimentos > 0 ? 'text-danger' : 'text-success';
 
-        // --- ENGENHARIA DE UI: Card Especial de Saldo Livre ---
-        const contasPendentes = atual.contasPendentes || 0;
-        const saldoLivre = atual.saldo - contasPendentes;
-        
-        const saldoBrutoFmt = Utils.formatMoney(atual.saldo);
-        const pendentesFmt = Utils.formatMoney(contasPendentes);
-        const pendentesColor = contasPendentes > 0 ? 'text-danger' : 'text-text-secondary';
-        const livreColor = saldoLivre >= 0 ? 'text-success' : 'text-danger';
+        const resultadoCard = `
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--result group">
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Resultado do período</span>
+                    <span class="${resultadoT.isUp ? 'text-success' : 'text-danger'} text-[10px] font-bold flex items-center gap-1 font-mono"><i class="fa-solid ${resultadoT.isUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i> ${resultadoT.val}%</span>
+                </div>
+                <div class="w-10 h-10 text-brand-medium bg-brand-soft rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i></div>
+            </div>
+            <h3 class="text-3xl font-bold ${resultadoColor} mb-1 font-mono tracking-tight">${Utils.formatMoney(resultadoPeriodo)}</h3>
+            <p class="text-[11px] text-text-secondary font-medium">Receitas ${Utils.formatMoney(atual.receitas)} · Despesas ${Utils.formatMoney(atual.despesas)}</p>
+        </div>`;
 
-        const cardSaldoLivre = `
-        <div class="nv-dashboard-card nv-summary-card nv-summary-card--health flex flex-col justify-between relative overflow-hidden group">
-            <div class="flex justify-between items-start mb-3">
-                <div>
-                    <h4 class="text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1 font-primary flex items-center gap-1.5"><i class="fa-solid fa-wallet text-success"></i> Saldo Livre</h4>
-                    <h2 class="text-2xl font-black ${livreColor} font-mono tracking-tight">${Utils.formatMoney(saldoLivre)}</h2>
-                </div>
-                <div class="w-10 h-10 rounded-[12px] bg-bg border border-border text-brand-medium flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <i class="fa-solid fa-unlock-keyhole"></i>
-                </div>
+        const vencimentosCard = `
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--due group">
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Próximos vencimentos</span></div>
+                <div class="w-10 h-10 ${vencimentos > 0 ? 'text-danger bg-danger/10' : 'text-success bg-success/10'} rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-clock" aria-hidden="true"></i></div>
             </div>
-            <div class="text-[10px] text-text-secondary flex flex-col gap-1.5 bg-bg p-2.5 rounded-[8px] border border-border">
-                <div class="flex justify-between items-center"><span class="flex items-center gap-1"><i class="fa-solid fa-building-columns opacity-50"></i> Saldo Bruto:</span> <span class="font-mono font-medium text-text-primary">${saldoBrutoFmt}</span></div>
-                <div class="flex justify-between items-center"><span class="flex items-center gap-1"><i class="fa-solid fa-clock opacity-50"></i> Agendamentos:</span> <span class="font-mono font-bold ${pendentesColor}">- ${pendentesFmt}</span></div>
-            </div>
+            <h3 class="text-3xl font-bold ${vencimentosColor} mb-1 font-mono tracking-tight">${Utils.formatMoney(vencimentos)}</h3>
+            <p class="text-[11px] text-text-secondary font-medium">Contas pendentes até o fim do mês</p>
         </div>`;
 
         return `
         <div class="nv-dashboard-summary-grid grid grid-cols-1 md:grid-cols-3 gap-6">
-            ${CoreComponents._buildSummaryCard('Receitas', atual.receitas, recT.val, recT.isUp, 'fa-arrow-trend-up', 'vs período anterior')}
-            ${CoreComponents._buildSummaryCard('Despesas', atual.despesas, desT.val, !desT.isUp, 'fa-arrow-trend-down', 'vs período anterior')}
-            ${cardSaldoLivre}
+            ${CoreComponents._buildSummaryCard('Saldo atual', atual.saldo, '', true, 'fa-wallet', 'Saldo global de todas as contas')}
+            ${resultadoCard}
+            ${vencimentosCard}
         </div>`;
     },
 
@@ -50,50 +54,54 @@ export const DashboardComponents = {
         let btnHtml = '';
         if (mentoria.onboardingAction) {
             const { label, action, modal, type } = mentoria.onboardingAction;
-            btnHtml = `<button data-action="${action}" data-modal="${modal}" ${type ? `data-type="${type}"` : ''} class="nv-onboarding-action"><i class="fa-solid fa-bolt"></i> ${label}</button>`;
+            btnHtml = `<button data-action="${action}" data-modal="${modal}" ${type ? `data-type="${type}"` : ''} class="nv-onboarding-action"><i class="fa-solid fa-bolt" aria-hidden="true"></i> ${label}</button>`;
         }
 
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
         const mesAtual = meses[new Date().getMonth()];
         const trendBadge = mentoria.trend > 0 ? `<span class="bg-success text-white px-2 py-0.5 rounded-md text-[10px] ml-2 shadow-sm whitespace-nowrap">▲ +${mentoria.trend} pts</span>` : (mentoria.trend < 0 ? `<span class="bg-danger text-white px-2 py-0.5 rounded-md text-[10px] ml-2 shadow-sm whitespace-nowrap">▼ ${mentoria.trend} pts</span>` : '');
+        const primeiroInsight = mentoria.insights?.[0] || 'A Anora está analisando seus dados financeiros.';
 
-        // Badge Visual do Nível da Jornada Semântica
         const levelBadges = {
-            1: '<span class="nv-insight-badge nv-insight-badge--neutral"><i class="fa-solid fa-seedling"></i> Nível 1: Explorador</span>',
-            2: '<span class="nv-insight-badge nv-insight-badge--positive"><i class="fa-solid fa-piggy-bank"></i> Nível 2: Poupador</span>',
-            3: '<span class="nv-insight-badge nv-insight-badge--attention"><i class="fa-solid fa-chess-knight"></i> Nível 3: Estrategista</span>'
+            1: '<span class="nv-insight-badge nv-insight-badge--neutral"><i class="fa-solid fa-seedling" aria-hidden="true"></i> Nível 1: Explorador</span>',
+            2: '<span class="nv-insight-badge nv-insight-badge--positive"><i class="fa-solid fa-piggy-bank" aria-hidden="true"></i> Nível 2: Poupador</span>',
+            3: '<span class="nv-insight-badge nv-insight-badge--attention"><i class="fa-solid fa-chess-knight" aria-hidden="true"></i> Nível 3: Estrategista</span>'
         };
         const badgeHtml = mentoria.isOnboarding ? '' : (levelBadges[mentoria.userLevel] || levelBadges[1]);
+        const diagnosisHtml = (mentoria.insights || []).map(insight => `
+            <div class="nv-insight-item flex items-start">
+                <i class="fa-solid fa-angle-right mt-1 text-[10px] text-brand-medium" aria-hidden="true"></i>
+                <p class="text-sm text-text-primary leading-relaxed font-medium">${Utils.escapeHTML(insight)}</p>
+            </div>
+        `).join('');
 
         return `
         <section class="nv-insight-panel relative" aria-label="Insight contextual da Anora">
             <div class="nv-insight-panel__content relative z-10">
                 <div class="nv-insight-panel__score-column">
-                    <div class="nv-insight-score rounded-full shadow-inner border" aria-label="Pontuação da mentoria">
-                        ${mentoria.score}
-                    </div>
+                    <div class="nv-insight-score rounded-full shadow-inner border" aria-label="Pontuação da mentoria">${mentoria.score}</div>
                     <span class="nv-insight-panel__diagnosis text-[10px] font-black uppercase tracking-widest text-brand-medium flex items-center justify-center flex-wrap gap-1">Diagnóstico Estratégico <br> ${mesAtual} ${trendBadge}</span>
-                    <span class="nv-insight-panel__classification text-sm font-bold text-text-primary bg-bg px-3 py-1 rounded-full border border-border">${mentoria.classification}</span>
+                    <span class="nv-insight-panel__classification text-sm font-bold text-text-primary bg-bg px-3 py-1 rounded-full border border-border">${Utils.escapeHTML(mentoria.classification)}</span>
                     ${badgeHtml}
                 </div>
 
                 <div class="nv-insight-panel__body">
-                    <div class="nv-insight-list">
-                        ${mentoria.insights.map(insight => `
-                            <div class="nv-insight-item flex items-start">
-                                <i class="fa-solid fa-angle-right mt-1 text-[10px] text-brand-medium"></i>
-                                <p class="text-sm text-text-primary leading-relaxed font-medium">${Utils.escapeHTML(insight)}</p>
-                            </div>
-                        `).join('')}
+                    <div class="nv-insight-panel__lead">
+                        <p class="nv-insight-panel__lead-label text-[10px] font-black uppercase tracking-widest text-brand-medium">Insight mais relevante</p>
+                        <p class="text-sm text-text-primary leading-relaxed font-medium">${Utils.escapeHTML(primeiroInsight)}</p>
                     </div>
-                    
                     <div class="nv-insight-panel__recommendation border shadow-inner">
-                        <h4 class="nv-insight-panel__recommendation-title text-[10px] font-black uppercase flex items-center gap-2 text-brand-medium">
-                            <i class="fa-solid fa-crosshairs"></i> Diretriz Executiva
-                        </h4>
+                        <h4 class="nv-insight-panel__recommendation-title text-[10px] font-black uppercase flex items-center gap-2 text-brand-medium"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> Diretriz Executiva</h4>
                         <p class="text-[15px] font-bold text-text-primary leading-tight font-mentor tracking-wide">${Utils.escapeHTML(mentoria.recommendation)}</p>
                         ${btnHtml}
                     </div>
+                    <details class="nv-insight-details">
+                        <summary>Ver diagnóstico <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary>
+                        <div class="nv-insight-details__content">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-text-secondary mb-2">Todos os insights</p>
+                            <div class="nv-insight-list">${diagnosisHtml}</div>
+                        </div>
+                    </details>
                 </div>
             </div>
         </section>`;
