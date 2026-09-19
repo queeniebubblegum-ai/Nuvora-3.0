@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { db, BankRepo, TransactionsRepo } from './db.js';
+import { db, BankRepo, CardRepo, CategoryRepo, TransactionsRepo, BudgetRepo } from './db.js';
 
 // Mock do localStorage para garantir um ambiente limpo isolado do navegador real
 const localStorageMock = (() => {
@@ -24,6 +24,15 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
             { id: 1, nome: 'Conta Principal', saldo: 1000, saldoInicial: 1000, cor: 'blue' }
         ];
         db.cartoes = [];
+        db.orcamentos = [];
+    });
+
+    it('Deve manter limites de orçamento separados por mês', () => {
+        BudgetRepo.updateLimit('Alimentação', 800, 2026, 7);
+        BudgetRepo.updateLimit('Alimentação', 1000, 2026, 8);
+        expect(db.orcamentos).toHaveLength(2);
+        expect(db.orcamentos.find(o => o.mes === 7).limite).toBe(800);
+        expect(db.orcamentos.find(o => o.mes === 8).limite).toBe(1000);
     });
 
     it('Deve recalcular corretamente o saldo da conta bancária (Soma de Receitas e Despesas)', () => {
@@ -75,4 +84,20 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         
         expect(t1.valor + t2.valor + t3.valor).toBe(1000);
     });
+    it('não deve excluir conta bancária que possui dados vinculados', () => {
+        db.transacoes = [{ id: 10, bancoId: 1, isCartao: false, valor: 10, tipo: 'despesa' }];
+        expect(BankRepo.remove(1)).toBe(false);
+        expect(db.bancos).toHaveLength(1);
+    });
+
+    it('não deve excluir cartão que possui compras vinculadas', () => {
+        db.transacoes = [{ id: 11, bancoId: 99, isCartao: true, valor: 10, tipo: 'despesa' }];
+        expect(CardRepo.remove(99)).toBe(false);
+    });
+
+    it('não deve excluir categoria usada por uma transação', () => {
+        db.transacoes = [{ id: 12, categoria: 'Alimentação', valor: 10, tipo: 'despesa' }];
+        expect(CategoryRepo.remove('cat_1')).toBe(false);
+    });
+
 });

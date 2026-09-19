@@ -35,6 +35,11 @@ export const UIRenderer = {
         }
     },
 
+    renderInvoiceAdjustmentsReview: (adjustments) => {
+        const content = document.getElementById('modal-fatura-content');
+        if (content) content.innerHTML = Components.invoiceAdjustmentsReview(adjustments);
+    },
+
     updateCategorySelects: () => {
         if (!db.categorias || db.categorias.length === 0) return;
         const type = document.getElementById('input-tipo')?.value || 'despesa';
