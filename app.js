@@ -203,6 +203,7 @@ export const App = {
         budgetYear: new Date().getFullYear(),
         agendaMonth: new Date().getMonth(),
         agendaYear: new Date().getFullYear(),
+        agendaSelectedDate: null,
         filters: { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' },
         reportTab: 'fluxo',
         isNotifOpen: false,
@@ -782,6 +783,7 @@ export const App = {
     },
     
     showAgendaDay: (date) => {
+        App.viewState.agendaSelectedDate = date;
         const items = [...(db.agendamentos || []), ...(db.receitasFuturas || [])].filter(i => (i.dataVencimento || i.data) === date);
         const dataFormatada = new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
         const lista = document.getElementById('agenda-dia-lista');
@@ -837,6 +839,7 @@ export const App = {
         const hoje = new Date();
         App.viewState.agendaMonth = hoje.getMonth();
         App.viewState.agendaYear = hoje.getFullYear();
+        App.viewState.agendaSelectedDate = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
         App.scheduleRender();
     },
 

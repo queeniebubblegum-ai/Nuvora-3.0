@@ -130,140 +130,106 @@ export const PageRenderers = {
         const dateValue = isSpecificDate ? appState.dashboardPeriod : '';
 
         const filterHtml = `
-        <div class="flex gap-2 border-b border-border pb-4 overflow-x-auto items-center w-full xl:w-auto">
-            <button data-action="setDashboardPeriod" data-payload="este_mes" class="px-5 py-2.5 rounded-[12px] text-sm font-bold transition-all whitespace-nowrap ${appState.dashboardPeriod === 'este_mes' ? 'bg-brand-deep text-white shadow-soft' : 'bg-transparent text-text-secondary hover:bg-border'}">Este mês</button>
-            <button data-action="setDashboardPeriod" data-payload="mes_passado" class="px-5 py-2.5 rounded-[12px] text-sm font-bold transition-all whitespace-nowrap ${appState.dashboardPeriod === 'mes_passado' ? 'bg-brand-deep text-white shadow-soft' : 'bg-transparent text-text-secondary hover:bg-border'}">Mês passado</button>
-            <button data-action="setDashboardPeriod" data-payload="trimestre" class="px-5 py-2.5 rounded-[12px] text-sm font-bold transition-all whitespace-nowrap ${appState.dashboardPeriod === 'trimestre' ? 'bg-brand-deep text-white shadow-soft' : 'bg-transparent text-text-secondary hover:bg-border'}">Trimestre</button>
-            <button data-action="setDashboardPeriod" data-payload="este_ano" class="px-5 py-2.5 rounded-[12px] text-sm font-bold transition-all whitespace-nowrap ${appState.dashboardPeriod === 'este_ano' ? 'bg-brand-deep text-white shadow-soft' : 'bg-transparent text-text-secondary hover:bg-border'}">Este ano</button>
-            
+        <div class="nv-dashboard-filter flex gap-2 border-b border-border pb-4 overflow-x-auto items-center w-full xl:w-auto" aria-label="Período do resumo financeiro">
+            <button data-action="setDashboardPeriod" data-payload="este_mes" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'este_mes' ? 'is-active' : ''}">Este mês</button>
+            <button data-action="setDashboardPeriod" data-payload="mes_passado" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'mes_passado' ? 'is-active' : ''}">Mês passado</button>
+            <button data-action="setDashboardPeriod" data-payload="trimestre" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'trimestre' ? 'is-active' : ''}">Trimestre</button>
+            <button data-action="setDashboardPeriod" data-payload="este_ano" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'este_ano' ? 'is-active' : ''}">Este ano</button>
+
             <div class="ml-auto flex items-center gap-2">
                 <span class="text-xs font-bold text-text-secondary uppercase tracking-wider hidden sm:block">Por dia:</span>
-                <input type="date" data-change="setDashboardDate" value="${dateValue}" title="Escolher data específica" class="px-4 py-2 text-text-primary text-sm font-bold bg-surface rounded-[12px] border border-border shadow-sm focus:outline-none focus:border-brand-medium cursor-pointer transition-all ${isSpecificDate ? 'bg-brand-deep text-white border-transparent' : ''}">
+                <input type="date" data-change="setDashboardDate" value="${dateValue}" title="Escolher data específica" class="nv-dashboard-date px-4 py-2 text-text-primary text-sm font-bold bg-surface rounded-[12px] border border-border shadow-sm focus:outline-none focus:border-brand-medium cursor-pointer transition-all ${isSpecificDate ? 'is-active' : ''}">
             </div>
         </div>`;
 
         UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div class="nv-dashboard-shell">
+            <header class="nv-dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
+                    <p class="nv-dashboard-eyebrow">Visão geral</p>
                     <h2 class="text-2xl font-bold text-text-primary mb-1">${saudacao}!</h2>
                     <p class="text-text-secondary text-sm">${insightMsg}</p>
                 </div>
                 <div class="flex flex-wrap gap-3">
                     ${actionsHtml}
                 </div>
-            </div>
+            </header>
 
-            ${Components.insightsSection(resultadoMentoria)}
-            ${resultadoMentoria.isOnboarding ? '' : Components.dashboardPillars(resultadoMentoria.pillars)}
-            
-            <div class="mb-10 pt-6 border-t border-border">
-                <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-4">
-                    <h3 class="font-bold text-text-primary text-base tracking-tight flex items-center gap-2 font-primary">
-                        <i class="fa-solid fa-wallet text-brand-medium"></i> Resumo Financeiro
-                    </h3>
+            ${resultadoMentoria.isOnboarding ? Components.insightsSection(resultadoMentoria) : ''}
+
+            <section class="nv-dashboard-financial mb-10" aria-label="Resumo financeiro e saúde financeira">
+                <div class="flex flex-col xl:flex-row xl:items-center justify-between gap-4 mb-5">
+                    <div>
+                        <p class="nv-dashboard-eyebrow">Saúde financeira</p>
+                        <h3 class="font-bold text-text-primary text-xl tracking-tight flex items-center gap-2 font-primary">
+                            <i class="fa-solid fa-wallet text-success"></i> Resumo financeiro
+                        </h3>
+                    </div>
                     ${filterHtml}
                 </div>
                 ${Components.dashboardCards(atual, anterior)}
                 ${Components.dashboardAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
-            </div>
+            </section>
+
+            ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria)}
+            ${resultadoMentoria.isOnboarding ? '' : Components.dashboardPillars(resultadoMentoria.pillars)}
             
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+            <div class="nv-dashboard-supporting grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
                 ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
                 ${Components.dashboardCategories(transacoesPeriodoAtual)}
             </div>
+        </div>
         `);
     },
     Transacoes: (appState) => {
         const bancoPadraoId = db.bancos.length > 0 ? db.bancos[0].id : '';
-        const actionsHtml = `
-            <button data-action="exportTransactionsCSV" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-export"></i> Exportar CSV</button>
-            <button data-action="iniciarImportacaoOFX" data-banco-id="${bancoPadraoId}" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-import"></i> Importar OFX</button>
-            <button data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="bg-brand-medium text-white px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-brand-dark transition-all shadow-brand-glow hover:-translate-y-0.5 flex items-center gap-2"><i class="fa-solid fa-plus"></i> Novo Lançamento</button>
-        `;
-        
-        let filtered = db.transacoes;
         const f = appState.filters;
-        
-        if(f.desc) {
-            const termoBusca = f.desc.toLowerCase();
+        let filtered = [...db.transacoes];
+
+        if (f.desc) {
+            const termoBusca = String(f.desc).toLowerCase();
             filtered = filtered.filter(t => {
-                const textoRef = t.codigoRef ? t.codigoRef.toLowerCase() : `tx-${t.id.toString(36).substring(0,6).toLowerCase()}`;
-                return t.desc.toLowerCase().includes(termoBusca) || textoRef.includes(termoBusca);
+                const descricao = String(t.desc || '').toLowerCase();
+                const textoRef = t.codigoRef ? String(t.codigoRef).toLowerCase() : `tx-${String(t.id).substring(0, 8)}`;
+                return descricao.includes(termoBusca) || textoRef.includes(termoBusca);
             });
         }
-        if(f.categoria) filtered = filtered.filter(t => t.categoria === f.categoria);
-        if(f.tipo) filtered = filtered.filter(t => t.tipo === f.tipo);
-        if(f.dataInicio) filtered = filtered.filter(t => String(t.data || '') >= f.dataInicio);
-        if(f.dataFim) filtered = filtered.filter(t => String(t.data || '') <= f.dataFim);
-        if(f.mes !== '') filtered = filtered.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes));
-        if(f.bancoId) {
+        if (f.categoria) filtered = filtered.filter(t => t.categoria === f.categoria);
+        if (f.tipo === 'transferencia') filtered = filtered.filter(t => !!t.transferenciaInterna || t.tipo === 'transferencia');
+        else if (f.tipo) filtered = filtered.filter(t => t.tipo === f.tipo);
+        if (f.dataInicio) filtered = filtered.filter(t => String(t.data || '') >= f.dataInicio);
+        if (f.dataFim) filtered = filtered.filter(t => String(t.data || '') <= f.dataFim);
+        if (f.mes !== '') filtered = filtered.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes, 10));
+        if (f.bancoId) {
             const [type, id] = f.bancoId.split('_');
-            if(type === 'banco') filtered = filtered.filter(t => !t.isCartao && t.bancoId == id);
-            if(type === 'cartao') filtered = filtered.filter(t => t.isCartao && t.bancoId == id);
+            if (type === 'banco') filtered = filtered.filter(t => !t.isCartao && t.bancoId == id);
+            if (type === 'cartao') filtered = filtered.filter(t => t.isCartao && t.bancoId == id);
         }
-
-        filtered.sort((a, b) => new Date(b.data) - new Date(a.data));
+        filtered.sort((a, b) => new Date(b.data || b.id) - new Date(a.data || a.id));
 
         const totalItems = filtered.length;
         const perPage = appState.txPerPage || 10;
         const totalPages = Math.ceil(totalItems / perPage) || 1;
-        
         let currentPage = appState.txPage || 1;
         if (currentPage > totalPages) currentPage = totalPages;
         if (currentPage < 1) currentPage = 1;
-
-        const startIndex = (currentPage - 1) * perPage;
-        const pagedTransactions = filtered.slice(startIndex, startIndex + perPage);
+        const pagedTransactions = filtered.slice((currentPage - 1) * perPage, currentPage * perPage);
 
         let pageButtons = '';
         for (let i = 1; i <= totalPages; i++) {
             if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
-                pageButtons += `<button data-action="setTxPage" data-payload="${i}" class="w-8 h-8 flex items-center justify-center rounded-[8px] text-sm font-bold transition-colors ${i === currentPage ? 'bg-brand-medium text-white shadow-soft' : 'bg-surface border border-border text-text-secondary hover:bg-border'}">${i}</button>`;
+                pageButtons += `<button type="button" data-action="setTxPage" data-payload="${i}" aria-label="Página ${i}" aria-current="${i === currentPage ? 'page' : 'false'}" class="nv-tx-page-button ${i === currentPage ? 'is-current' : ''}">${i}</button>`;
             } else if (i === currentPage - 2 || i === currentPage + 2) {
-                if (!pageButtons.endsWith('...</span>')) {
-                    pageButtons += `<span class="text-text-secondary px-1">...</span>`;
-                }
+                if (!pageButtons.endsWith('…</span>')) pageButtons += '<span class="nv-tx-page-gap" aria-hidden="true">…</span>';
             }
         }
+        const paginationHtml = totalItems > 0 ? `<footer class="nv-tx-pagination"><label>Exibir <select data-change="changeTxPerPage" aria-label="Quantidade por página"><option value="10" ${perPage === 10 ? 'selected' : ''}>10</option><option value="20" ${perPage === 20 ? 'selected' : ''}>20</option><option value="50" ${perPage === 50 ? 'selected' : ''}>50</option><option value="100" ${perPage === 100 ? 'selected' : ''}>100</option></select> por página</label><nav aria-label="Paginação de transações"><button type="button" data-action="setTxPage" data-payload="${currentPage - 1}" aria-label="Página anterior" ${currentPage === 1 ? 'disabled' : ''} class="nv-tx-page-button"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>${pageButtons}<button type="button" data-action="setTxPage" data-payload="${currentPage + 1}" aria-label="Próxima página" ${currentPage === totalPages ? 'disabled' : ''} class="nv-tx-page-button"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></nav></footer>` : '';
 
-        const paginationHtml = totalItems > 0 ? `
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-6 border-t border-border">
-                <div class="flex items-center gap-2 text-sm text-text-secondary">
-                    <span>Exibir:</span>
-                    <select data-change="changeTxPerPage" class="bg-surface border border-border rounded-[8px] p-1.5 text-text-primary outline-none focus:border-brand-medium cursor-pointer">
-                        <option value="10" ${perPage === 10 ? 'selected' : ''}>10</option>
-                        <option value="20" ${perPage === 20 ? 'selected' : ''}>20</option>
-                        <option value="50" ${perPage === 50 ? 'selected' : ''}>50</option>
-                        <option value="100" ${perPage === 100 ? 'selected' : ''}>100</option>
-                    </select>
-                    <span>por página</span>
-                </div>
-                <div class="flex items-center gap-1">
-                    <button data-action="setTxPage" data-payload="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''} class="w-8 h-8 flex items-center justify-center rounded-[8px] text-sm font-bold bg-surface border border-border text-text-secondary hover:bg-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-left"></i></button>
-                    ${pageButtons}
-                    <button data-action="setTxPage" data-payload="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''} class="w-8 h-8 flex items-center justify-center rounded-[8px] text-sm font-bold bg-surface border border-border text-text-secondary hover:bg-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"><i class="fa-solid fa-chevron-right"></i></button>
-                </div>
-            </div>
-        ` : '';
-
-        UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Transações</h2>
-                    <p class="text-text-secondary text-sm">Acompanhe e filtre suas movimentações.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
-
-            <details class="bg-surface border border-border rounded-[12px] shadow-soft mb-4 group" open><summary class="cursor-pointer list-none px-4 py-3 flex items-center justify-between text-sm font-bold text-text-primary"><span><i class="fa-solid fa-sliders mr-2 text-brand-medium"></i>Filtros da consulta</span><i class="fa-solid fa-chevron-down text-xs text-text-secondary group-open:rotate-180 transition-transform"></i></summary><div class="px-4 pb-4">${Components.filtersSection(f, db.bancos, db.categorias, db.cartoes)}</div></details>
+        UIRenderer.updateDOM('main-content', `<div class="nv-transactions-page">
+            <header class="nv-tx-page-header"><div><p class="nv-tx-eyebrow">Movimentações financeiras</p><h1>Transações</h1><p class="nv-tx-page-subtitle">Acompanhe, filtre e organize cada entrada, saída e transferência.</p></div><div class="nv-tx-page-actions"><button type="button" data-action="exportTransactionsCSV" class="nv-tx-secondary-action"><i class="fa-solid fa-file-export" aria-hidden="true"></i><span>Exportar</span></button><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${Utils.escapeHTML(String(bancoPadraoId))}" class="nv-tx-secondary-action"><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Importar OFX</span></button><button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-tx-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Nova transação</span></button></div></header>
             ${Components.transactionSummary(filtered)}
-            <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft transition-colors duration-300 flex flex-col min-h-[400px]">
-                ${Components.transactionList(pagedTransactions, appState)}
-                ${paginationHtml}
-            </div>
-        `);
+            <section class="nv-tx-panel" aria-label="Lista de transações"><div class="nv-tx-panel-toolbar"><div><h2>Histórico de transações</h2><p>${totalItems} ${totalItems === 1 ? 'movimentação encontrada' : 'movimentações encontradas'}</p></div></div>${Components.filtersSection(f, db.bancos, db.categorias, db.cartoes)}<div class="nv-tx-results">${Components.transactionList(pagedTransactions, appState)}${paginationHtml}</div></section>
+        </div>`);
     },
 
     Agendamentos: (appState) => {
@@ -285,33 +251,69 @@ export const PageRenderers = {
 
     Planejamento: (appState) => {
         const money = value => Utils.formatMoney(Number(value) || 0);
+        const now = new Date();
+        const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+        const budget = Components.budgetSummary(db.orcamentos, db.transacoes, appState);
+        const periodLabel = `${meses[budget.mes]} de ${budget.ano}`;
         const receitas = (db.receitasFuturas || []).filter(i => i.status !== 'recebida');
         const contas = (db.agendamentos || []).filter(i => i.status !== 'pago');
         const assinaturas = (db.assinaturas || []).filter(i => i.ativa !== false);
         const investimentos = db.investimentos || [];
-        const parcelamentos = db.transacoes.filter(t => t.isCartao && t.totalParcelas > 1 && t.parcelaAtual < t.totalParcelas);
-        const receitaTotal = receitas.reduce((s,i)=>s+(Number(i.valor)||0),0), contasTotal = contas.filter(i=>i.tipo!=='receita').reduce((s,i)=>s+(Number(i.valor)||0),0), compromissoTotal = assinaturas.reduce((s,i)=>s+(Number(i.valor)||0),0)+parcelamentos.reduce((s,i)=>s+(Number(i.valor)||0),0);
-        const lista=(dados,vazio,fn)=>dados.length?dados.slice(0,6).map(fn).join(''):`<p class="text-xs text-text-secondary py-3">${vazio}</p>`;
-        const linha=(nome,detalhe,valor,cor='text-text-primary')=>`<div class="flex justify-between items-center py-2 border-b border-border last:border-0"><span class="text-xs text-text-primary">${Utils.escapeHTML(nome)}<small class="block text-[10px] text-text-secondary">${Utils.escapeHTML(detalhe||'')}</small></span><strong class="text-xs font-mono ${cor}">${money(valor)}</strong></div>`;
-        const box=(titulo,icone,resumo,conteudo)=>`<details class="bg-surface border border-border rounded-[14px] shadow-soft group"><summary class="cursor-pointer list-none p-4 flex items-center justify-between"><div class="flex items-center gap-3"><i class="${icone} text-brand-medium"></i><span><strong class="block text-sm text-text-primary">${titulo}</strong><small class="text-xs text-text-secondary">${resumo}</small></span></div><i class="fa-solid fa-chevron-down text-xs text-text-secondary group-open:rotate-180 transition-transform"></i></summary><div class="px-4 pb-4">${conteudo}</div></details>`;
-        const add=(label,form)=>`<details class="inline-block mb-3"><summary title="${label}" class="cursor-pointer list-none w-7 h-7 rounded-full bg-brand-medium/10 border border-brand-medium/30 text-brand-medium hover:bg-brand-medium hover:text-white transition-colors flex items-center justify-center text-xs"><i class="fa-solid fa-plus"></i><span class="sr-only">${label}</span></summary><div class="mt-2 p-3 bg-bg border border-border rounded-lg">${form}</div></details>`;
-        const receitaForm='<form data-submit="receitaFutura" class="grid grid-cols-1 sm:grid-cols-3 gap-2"><input name="desc" required placeholder="Descrição" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><input name="valor" required type="number" min="0.01" step="0.01" placeholder="Valor" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><input name="data" required type="date" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><button class="sm:col-span-3 bg-brand-medium text-white p-2 rounded-lg text-xs font-bold">Salvar receita</button></form>';
-        const assinaturaForm='<form data-submit="assinatura" class="grid grid-cols-1 sm:grid-cols-3 gap-2"><input name="nome" required placeholder="Serviço" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><input name="valor" required type="number" min="0.01" step="0.01" placeholder="Valor" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><select name="periodicidade" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><option>mensal</option><option>anual</option></select><button class="sm:col-span-3 bg-brand-medium text-white p-2 rounded-lg text-xs font-bold">Salvar assinatura</button></form>';
-        const investimentoForm='<form data-submit="investimento" class="grid grid-cols-1 sm:grid-cols-2 gap-2"><input name="nome" required placeholder="Ativo ou instituição" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><input name="valorAtual" required type="number" min="0" step="0.01" placeholder="Valor atual" class="p-2 bg-bg border border-border rounded-lg text-xs text-text-primary"><button class="sm:col-span-2 bg-brand-medium text-white p-2 rounded-lg text-xs font-bold">Salvar investimento</button></form>';
-        UIRenderer.updateDOM('main-content', `<div class="flex items-center justify-between gap-3 mb-5"><div><h2 class="text-2xl font-bold text-text-primary">Planejamento</h2><p class="text-sm text-text-secondary">Organize o que vem pela frente.</p></div><button data-action="openModal" data-modal="modal-agendamento" class="bg-brand-medium text-white px-4 py-2 rounded-[10px] text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>Novo lançamento</button></div><div class="grid grid-cols-3 gap-3 mb-5"><div class="bg-surface border border-border rounded-[12px] p-3"><small class="text-[10px] uppercase font-bold text-text-secondary">Receitas</small><strong class="block text-base font-mono text-success mt-1">${money(receitaTotal)}</strong></div><div class="bg-surface border border-border rounded-[12px] p-3"><small class="text-[10px] uppercase font-bold text-text-secondary">Contas</small><strong class="block text-base font-mono text-danger mt-1">${money(contasTotal)}</strong></div><div class="bg-surface border border-border rounded-[12px] p-3"><small class="text-[10px] uppercase font-bold text-text-secondary">Compromissos</small><strong class="block text-base font-mono text-brand-medium mt-1">${money(compromissoTotal)}</strong></div></div><div class="space-y-3">${box('Receitas recorrentes','fa-solid fa-arrow-trend-up','Previsões de entrada',lista(receitas,'Nenhuma receita recorrente.',i=>linha(i.desc||'Receita prevista',i.data,i.valor,'text-success')))}${box('Despesas recorrentes','fa-solid fa-arrow-trend-down','Previsões de saída',lista(contas,'Nenhuma despesa recorrente.',i=>linha(i.desc||'Despesa prevista','Vencimento: '+(i.dataVencimento||''),i.valor,'text-danger')))}${box('Assinaturas','fa-solid fa-repeat','Serviços recorrentes',add('Adicionar assinatura',assinaturaForm)+lista(assinaturas,'Nenhuma assinatura ativa.',i=>linha(i.nome||i.desc||'Assinatura',i.periodicidade||'Mensal',i.valor,'text-brand-medium')))}${box('Investimentos','fa-solid fa-chart-line','Patrimônio',add('Adicionar investimento',investimentoForm)+lista(investimentos,'Nenhum investimento cadastrado.',i=>linha(i.nome||i.ativo||'Investimento','Valor atual',i.valorAtual||i.valor,'text-success')))}${box('Orçamento mensal','fa-solid fa-chart-pie','Limites por categoria',`<button data-action="openModal" data-modal="modal-orcamento" class="mb-3 px-3 py-1.5 rounded-lg bg-brand-medium/10 border border-brand-medium/30 text-brand-medium text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>Definir limite</button>${Components.budgetView(db.orcamentos,db.transacoes,appState)}`)}${box('Metas e reservas','fa-solid fa-bullseye','Objetivos financeiros',`<button data-action="openModal" data-modal="modal-meta" class="mb-3 px-3 py-1.5 rounded-lg bg-brand-medium/10 border border-brand-medium/30 text-brand-medium text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>Criar meta</button>${Components.goalsPage(db.metas,db.transacoes)}`)}${box('Parcelamentos','fa-regular fa-credit-card',`${parcelamentos.length} parcela(s) pendente(s)`,lista(parcelamentos,'Nenhum parcelamento pendente.',i=>linha(i.desc,`Parcela ${i.parcelaAtual}/${i.totalParcelas}`,i.valor)))}</div>`);
+        const parcelamentos = (db.transacoes || []).filter(t => t.isCartao && t.totalParcelas > 1 && t.parcelaAtual < t.totalParcelas);
+        const receitaTotal = receitas.reduce((s, i) => s + (Number(i.valor) || 0), 0);
+        const contasTotal = contas.filter(i => i.tipo !== 'receita').reduce((s, i) => s + (Number(i.valor) || 0), 0);
+        const compromissoTotal = assinaturas.reduce((s, i) => s + (Number(i.valor) || 0), 0) + parcelamentos.reduce((s, i) => s + (Number(i.valor) || 0), 0);
+        const lista = (dados, vazio, fn) => dados.length ? dados.slice(0, 6).map(fn).join('') : `<p class="text-xs text-text-secondary py-3">${vazio}</p>`;
+        const linha = (nome, detalhe, valor, cor = 'text-text-primary') => `<div class="flex justify-between items-center py-2 border-b border-border last:border-0"><span class="text-xs text-text-primary">${Utils.escapeHTML(nome)}<small class="block text-[10px] text-text-secondary">${Utils.escapeHTML(detalhe || '')}</small></span><strong class="text-xs font-mono ${cor}">${money(valor)}</strong></div>`;
+        const quantidade = (total, descricao) => `${total} ${total === 1 ? 'item' : 'itens'} · ${descricao}`;
+        const box = (titulo, icone, resumo, conteudo) => `<details class="nv-planning-details-card"><summary class="nv-planning-details-summary"><div class="nv-planning-details-summary__copy"><i class="${icone} nv-planning-details-icon" aria-hidden="true"></i><span><strong>${titulo}</strong><small>${resumo}</small></span></div><i class="fa-solid fa-chevron-down nv-planning-details-chevron" aria-hidden="true"></i></summary><div class="nv-planning-details-body">${conteudo}</div></details>`;
+
+        const budgetCategories = budget.orcamentos.map(o => {
+            const limit = Number(o.limite) || 0;
+            const spent = Number(budget.gastosPorCat[o.categoria]) || 0;
+            const pct = limit > 0 ? (spent / limit) * 100 : 0;
+            const status = pct > 100 ? 'over' : pct > 80 ? 'near' : 'ok';
+            const statusText = status === 'over' ? `Excedido em ${money(spent - limit)}` : status === 'near' ? 'Perto do limite' : `${pct.toFixed(0)}% utilizado`;
+            const cat = Components._getCategoryConfig(o.categoria);
+            return `<div class="nv-planning-budget-row ${status}"><div class="nv-planning-budget-row__top"><span class="nv-planning-budget-name"><span class="nv-planning-category-icon" style="background:${cat.cor || 'var(--c-brand-medium)'}"><i class="fa-solid ${cat.icone}" aria-hidden="true"></i></span><strong>${Utils.escapeHTML(o.categoria)}</strong></span><span class="nv-planning-budget-values"><b>${money(spent)}</b><span>de ${money(limit)}</span></span></div><div class="nv-planning-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, Math.max(0, pct)).toFixed(0)}" aria-label="${Utils.escapeHTML(o.categoria)}"><span style="width:${Math.min(100, Math.max(0, pct)).toFixed(2)}%"></span></div><p class="nv-planning-budget-alert">${statusText}</p></div>`;
+        }).join('');
+        const budgetCategoriesHtml = budget.orcamentos.length ? budgetCategories : `<div class="nv-planning-empty nv-planning-empty--compact"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><div><strong>Você ainda não definiu um orçamento para ${Utils.escapeHTML(periodLabel)}.</strong><p>Defina limites por categoria para acompanhar o planejado sem inventar um saldo.</p></div><button data-action="openModal" data-modal="modal-orcamento">Definir limite</button></div>`;
+
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const dueItems = [...(db.agendamentos || []).map(item => ({ ...item, _col: 'agendamentos', _date: item.dataVencimento })), ...(db.receitasFuturas || []).map(item => ({ ...item, _col: 'receitasFuturas', _date: item.data }))]
+            .filter(item => item.status !== 'pago' && item.status !== 'recebida' && item._date)
+            .sort((a, b) => String(a._date).localeCompare(String(b._date)))
+            .slice(0, 5);
+        const dueHtml = dueItems.length ? dueItems.map(item => {
+            const date = new Date(`${item._date}T12:00:00`);
+            const overdue = date < today;
+            const isIncome = item.tipo === 'receita' || item._col === 'receitasFuturas';
+            const dateText = date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+            return `<div class="nv-planning-due-row ${overdue ? 'is-overdue' : ''}"><span class="nv-planning-due-icon ${isIncome ? 'is-income' : ''}"><i class="fa-solid ${isIncome ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}" aria-hidden="true"></i></span><div class="nv-planning-due-copy"><strong>${Utils.escapeHTML(item.desc || item.nome || 'Lançamento')}</strong><span>${overdue ? 'Vencido' : 'Vence'} · ${dateText}</span></div><b class="${isIncome ? 'is-income' : ''}">${isIncome ? '+' : '-'}${money(item.valor)}</b><div class="nv-planning-row-actions"><button data-action="markAgendaPaid" data-col="${item._col}" data-id="${item.id}" title="Dar baixa" aria-label="Dar baixa"><i class="fa-solid fa-check"></i></button><button data-action="editAgenda" data-col="${item._col}" data-id="${item.id}" title="Editar previsão" aria-label="Editar previsão"><i class="fa-solid fa-pen"></i></button><button data-action="delete" data-col="${item._col}" data-id="${item.id}" title="Apagar previsão" aria-label="Apagar previsão"><i class="fa-solid fa-trash-can"></i></button></div></div>`;
+        }).join('') : '<div class="nv-planning-empty nv-planning-empty--compact"><i class="fa-regular fa-calendar-check" aria-hidden="true"></i><div><strong>Nenhum vencimento pendente.</strong><p>Suas previsões pagas ou recebidas não aparecem aqui.</p></div></div>';
+
+        const goalsHtml = (db.metas || []).slice(0, 3).map(meta => {
+            const goalProgress = Components._getGoalProgress(meta);
+            const pct = goalProgress.pct;
+            return `<div class="nv-planning-goal-row"><span class="nv-planning-goal-icon"><i class="fa-regular fa-star" aria-hidden="true"></i></span><div class="nv-planning-goal-copy"><div><strong>${Utils.escapeHTML(meta.nome)}</strong><span>${pct.toFixed(0)}%</span></div><div class="nv-planning-progress"><span style="width:${pct.toFixed(2)}%"></span></div><small>${money(goalProgress.atual)} de ${money(goalProgress.alvo)}</small></div><button data-action="openDepositModal" data-id="${meta.id}" data-nome="${Utils.escapeHTML(meta.nome)}" title="Depositar na meta" aria-label="Depositar na meta"><i class="fa-solid fa-plus"></i></button></div>`;
+        }).join('');
+        const goalsSection = goalsHtml || '<div class="nv-planning-empty nv-planning-empty--compact"><i class="fa-regular fa-star" aria-hidden="true"></i><div><strong>Nenhuma meta ativa.</strong><p>Crie uma meta para acompanhar o próximo objetivo.</p></div><button data-action="openModal" data-modal="modal-meta">Criar meta</button></div>';
+        const budgetSummaryHtml = budget.orcamentos.length ? `<div class="nv-planning-budget-summary"><div><span>Planejado</span><strong>${money(budget.totalOrcado)}</strong></div><div><span>Gasto</span><strong class="is-expense">${money(budget.totalGastoMes)}</strong></div><div><span>Disponível</span><strong class="${budget.disponivelGeral < 0 ? 'is-expense' : 'is-positive'}">${money(budget.disponivelGeral)}</strong></div></div><p class="nv-planning-summary-note">Valores calculados a partir dos limites e despesas registrados neste mês.</p>` : `<div class="nv-planning-empty nv-planning-empty--compact nv-planning-budget-empty"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><div><strong>Sem orçamento definido para ${Utils.escapeHTML(periodLabel)}.</strong><p>Cadastre pelo menos um limite para ver o planejado, o gasto e o disponível com dados reais.</p></div><button data-action="openModal" data-modal="modal-orcamento">Definir limite</button></div>`;
+
+        UIRenderer.updateDOM('main-content', `<div class="nv-planning-page">
+            <header class="nv-planning-header"><div><p class="nv-planning-eyebrow">Visão de planejamento</p><h1>Planejamento</h1><p class="nv-planning-subtitle">Organize decisões financeiras para <strong>${Utils.escapeHTML(periodLabel)}</strong>.</p></div><div class="nv-planning-header-actions"><button data-action="changeMonth" data-type="budget" data-dir="-1" class="nv-planning-period-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left"></i></button><span class="nv-planning-period">${Utils.escapeHTML(periodLabel)}</span><button data-action="changeMonth" data-type="budget" data-dir="1" class="nv-planning-period-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right"></i></button><button data-action="openModal" data-modal="modal-agendamento" class="nv-planning-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Novo lançamento</span></button></div></header>
+            <div class="nv-planning-quick-actions"><button class="nv-planning-action" data-action="openModal" data-modal="modal-transacao" data-type="receita"><i class="fa-solid fa-arrow-trend-up"></i><span>Adicionar receita</span></button><button class="nv-planning-action" data-action="openModal" data-modal="modal-transacao" data-type="despesa"><i class="fa-solid fa-arrow-trend-down"></i><span>Adicionar despesa</span></button><button class="nv-planning-action" data-action="openModal" data-modal="modal-meta"><i class="fa-regular fa-star"></i><span>Criar meta</span></button><button class="nv-planning-action" data-action="openModal" data-modal="modal-orcamento"><i class="fa-solid fa-chart-pie"></i><span>Definir limite</span></button></div>
+            <dl class="nv-planning-signal-strip" aria-label="Compromissos registrados"><div class="nv-planning-signal-card nv-planning-signal-card--income"><dt>Receitas previstas</dt><dd class="is-positive">${money(receitaTotal)}</dd></div><div class="nv-planning-signal-card nv-planning-signal-card--expense"><dt>Contas pendentes</dt><dd class="is-expense">${money(contasTotal)}</dd></div><div class="nv-planning-signal-card nv-planning-signal-card--commitments"><dt>Compromissos</dt><dd>${money(compromissoTotal)}</dd></div></dl>
+            <section class="nv-planning-overview" aria-label="Resumo do planejamento"><div class="nv-planning-overview-head"><div><p class="nv-planning-eyebrow">Resumo mensal</p><h2>${Utils.escapeHTML(periodLabel)}</h2></div><button data-action="navigate" data-payload="Orcamento" class="nv-planning-text-action">Ver orçamento completo <i class="fa-solid fa-arrow-up-right-from-square"></i></button></div>${budgetSummaryHtml}</section>
+            <div class="nv-planning-main-grid"><section class="nv-planning-panel" aria-labelledby="nv-budget-title"><div class="nv-planning-panel-head"><div><p class="nv-planning-eyebrow">Acompanhamento</p><h2 id="nv-budget-title">Orçamento por categoria</h2></div><span class="nv-planning-count">${budget.orcamentos.length} ${budget.orcamentos.length === 1 ? 'limite' : 'limites'}</span></div><div class="nv-planning-budget-list">${budgetCategoriesHtml}</div></section><section class="nv-planning-panel" aria-labelledby="nv-due-title"><div class="nv-planning-panel-head"><div><p class="nv-planning-eyebrow">Próximos movimentos</p><h2 id="nv-due-title">Vencimentos e previsões</h2></div><button data-action="navigate" data-payload="Agendamentos" class="nv-planning-text-action">Ver agenda</button></div><div class="nv-planning-due-list">${dueHtml}</div></section></div>
+            <section class="nv-planning-panel nv-planning-goals-panel" aria-labelledby="nv-goals-title"><div class="nv-planning-panel-head"><div><p class="nv-planning-eyebrow">Progresso financeiro</p><h2 id="nv-goals-title">Metas e reservas</h2></div><button data-action="navigate" data-payload="Metas" class="nv-planning-text-action">Ver todas</button></div><div class="nv-planning-goals-list">${goalsSection}</div></section>
+            <section class="nv-planning-details" aria-labelledby="nv-planning-details-title"><div class="nv-planning-details-head"><div><p class="nv-planning-eyebrow">Dados completos</p><h2 id="nv-planning-details-title">Detalhes do planejamento</h2><p>Abra uma seção para revisar os registros. As alterações continuam disponíveis nas ações principais acima.</p></div></div><div class="nv-planning-details-list">${box('Receitas recorrentes', 'fa-solid fa-arrow-trend-up', quantidade(receitas.length, 'Previsões de entrada'), lista(receitas, 'Nenhuma receita recorrente.', i => linha(i.desc || 'Receita prevista', i.data, i.valor, 'text-success')))}${box('Despesas recorrentes', 'fa-solid fa-arrow-trend-down', quantidade(contas.length, 'Previsões de saída'), lista(contas, 'Nenhuma despesa recorrente.', i => linha(i.desc || 'Despesa prevista', 'Vencimento: ' + (i.dataVencimento || ''), i.valor, 'text-danger')))}${box('Assinaturas', 'fa-solid fa-repeat', quantidade(assinaturas.length, 'Serviços recorrentes'), lista(assinaturas, 'Nenhuma assinatura ativa.', i => linha(i.nome || i.desc || 'Assinatura', i.periodicidade || 'Mensal', i.valor, 'text-brand-medium')))}${box('Investimentos', 'fa-solid fa-chart-line', quantidade(investimentos.length, 'Posições cadastradas'), lista(investimentos, 'Nenhum investimento cadastrado.', i => linha(i.nome || i.ativo || 'Investimento', 'Valor atual', i.valorAtual || i.valor, 'text-success')))}${box('Orçamento mensal', 'fa-solid fa-chart-pie', quantidade(budget.orcamentos.length, 'Limites por categoria'), Components.budgetView(db.orcamentos, db.transacoes, appState, { readOnly: true }))}${box('Metas e reservas', 'fa-solid fa-bullseye', quantidade((db.metas || []).length, 'Objetivos financeiros'), Components.goalsPage(db.metas, db.transacoes, { readOnly: true }))}${box('Parcelamentos', 'fa-regular fa-credit-card', quantidade(parcelamentos.length, 'Parcelas pendentes'), lista(parcelamentos, 'Nenhum parcelamento pendente.', i => linha(i.desc, `Parcela ${i.parcelaAtual}/${i.totalParcelas}`, i.valor)))}</div></section>
+        </div>`);
     },
 
     Contas: (appState) => {
-        const bancoPadraoId = db.bancos.length > 0 ? db.bancos[0].id : '';
-        const actionsHtml = `
-            <button data-action="iniciarImportacaoOFX" data-banco-id="${bancoPadraoId}" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-import"></i> Importar OFX</button>
-            <button data-action="iniciarImportacaoCSV" data-banco-id="${bancoPadraoId}" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft flex items-center gap-2"><i class="fa-solid fa-file-csv"></i> Importar CSV</button>
-            <button data-action="openModal" data-modal="modal-banco" class="bg-surface border border-border text-text-primary px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-bg transition-all shadow-soft"><i class="fa-solid fa-building-columns mr-2"></i> Nova Conta</button>
-            <button data-action="openModal" data-modal="modal-cartao" class="bg-brand-medium text-white px-5 py-2.5 rounded-[12px] text-sm font-bold hover:bg-brand-dark transition-all shadow-brand-glow hover:-translate-y-0.5"><i class="fa-regular fa-credit-card mr-2"></i> Novo Cartão</button>
-        `;
-        
         const selectBancosCartao = document.getElementById('cartao-bancoId');
-        if(selectBancosCartao) {
+        if (selectBancosCartao) {
             const bankOptions = db.bancos.map(b => {
                 const displayName = Utils.formatBankName(b);
                 return `<option value="${b.id}">${Utils.escapeHTML(displayName)}</option>`;
@@ -319,18 +321,7 @@ export const PageRenderers = {
             selectBancosCartao.innerHTML = '<option value="" disabled selected>Selecione a conta</option>' + bankOptions;
         }
 
-        UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Contas Bancárias</h2>
-                    <p class="text-text-secondary text-sm">Gerencie seus saldos e faturas.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
-            <details class="bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-building-columns text-brand-medium mr-2"></i>Contas e cartões</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.contasDashboard(db.bancos, db.cartoes, db.comprasCartao, appState)}</div></details>
-        `);
+        UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, appState));
     },
 
     Metas: (appState) => {

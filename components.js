@@ -7,5 +7,7 @@ export const Components = {
     ...CoreComponents,
     ...DashboardComponents,
     ...ReportComponents,
+    // PageComponents intentionally comes last: its transaction list and filters
+    // are the active renderer used by PageRenderers.Transacoes.
     ...PageComponents
 };

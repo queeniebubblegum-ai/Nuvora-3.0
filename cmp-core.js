@@ -27,8 +27,10 @@ export const CoreComponents = {
             trendIcon = isUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down';
         }
         
+        const cardTone = title.toLowerCase().includes('receita') ? 'nv-summary-card--income' : title.toLowerCase().includes('despesa') ? 'nv-summary-card--expense' : 'nv-summary-card--neutral';
+
         return `
-        <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform duration-300 group">
+        <div class="nv-dashboard-card nv-summary-card ${cardTone} group">
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-2">
                     <span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">${Utils.escapeHTML(title)}</span>
@@ -118,7 +120,8 @@ export const CoreComponents = {
         </div>`;
     },
 
-    _buildBudgetCard: (o, gasto) => {
+    _buildBudgetCard: (o, gasto, options = {}) => {
+        const readOnly = options.readOnly === true;
         const restante = o.limite - gasto; 
         const pctReal = (gasto / o.limite) * 100; 
         const pctBarra = Math.min(pctReal, 100);
@@ -152,9 +155,9 @@ export const CoreComponents = {
                         <span class="block font-bold text-text-primary text-base font-mono">${Utils.formatMoney(restante)}</span>
                         <span class="text-xs text-text-secondary">restante</span>
                     </div>
-                    <div class="flex gap-2">
+                    ${readOnly ? '' : `<div class="flex gap-2">
                         <button data-action="delete" data-col="orcamentos" data-id="${o.id}" class="text-border hover:text-danger transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg"><i class="fa-solid fa-trash-can"></i></button>
-                    </div>
+                    </div>`}
                 </div>
             </div>
             <div class="relative pt-2">
@@ -166,8 +169,15 @@ export const CoreComponents = {
         </div>`;
     },
 
-    _buildGoalCard: (m, hoje) => {
-        const pct = Math.min((m.atual/m.alvo)*100, 100); 
+    _getGoalProgress: (m) => {
+        const atual = Number(m?.atual) || 0;
+        const alvo = Number(m?.alvo) || 0;
+        return { atual, alvo, pct: alvo > 0 ? Math.min((atual / alvo) * 100, 100) : 0 };
+    },
+
+    _buildGoalCard: (m, hoje, options = {}) => {
+        const readOnly = options.readOnly === true;
+        const pct = CoreComponents._getGoalProgress(m).pct; 
         let diasRestantes = 0; 
         let economiaMensal = 0; 
         let temPrazo = false;
@@ -193,7 +203,7 @@ export const CoreComponents = {
                         <p class="text-sm text-text-secondary font-medium">${temPrazo ? `<span class="font-mono">${diasRestantes}</span> dias restantes` : 'Sem prazo definido'}</p>
                     </div>
                 </div>
-                <button data-action="delete" data-col="metas" data-id="${m.id}" class="text-border hover:text-danger transition-colors"><i class="fa-solid fa-trash-can"></i></button>
+                ${readOnly ? '' : `<button data-action="delete" data-col="metas" data-id="${m.id}" class="text-border hover:text-danger transition-colors"><i class="fa-solid fa-trash-can"></i></button>`}
             </div>
             <div class="mb-6">
                 <div class="flex justify-between text-sm mb-2"><span class="font-bold text-text-primary">Progresso</span><span class="font-bold text-text-primary font-mono">${pct.toFixed(1)}%</span></div>
@@ -204,7 +214,7 @@ export const CoreComponents = {
                 <div class="bg-bg border border-border p-4 rounded-[12px]"><p class="text-xs text-text-secondary mb-1">Meta</p><p class="font-bold text-text-primary font-mono">${Utils.formatMoney(m.alvo)}</p></div>
             </div>
             ${temPrazo && m.atual < m.alvo ? `<div class="bg-bg border border-border rounded-[12px] p-4 mb-6"><p class="text-xs font-bold text-investment flex items-center gap-2 mb-1"><i class="fa-solid fa-arrow-trend-up"></i> Planejamento</p><p class="text-xs text-text-secondary leading-relaxed">Poupe <strong class="text-investment font-mono">${Utils.formatMoney(economiaMensal)}/mês</strong> para atingir o objetivo.</p></div>` : ''}
-            <button data-action="openDepositModal" data-id="${m.id}" data-nome="${Utils.escapeHTML(m.nome)}" class="w-full py-3 bg-brand-medium hover:bg-brand-dark text-white font-bold rounded-[12px] transition-all flex items-center justify-center gap-2 shadow-brand-glow hover:-translate-y-0.5"><i class="fa-solid fa-plus"></i> Depositar</button>
+            ${readOnly ? '' : `<button data-action="openDepositModal" data-id="${m.id}" data-nome="${Utils.escapeHTML(m.nome)}" class="w-full py-3 bg-brand-medium hover:bg-brand-dark text-white font-bold rounded-[12px] transition-all flex items-center justify-center gap-2 shadow-brand-glow hover:-translate-y-0.5"><i class="fa-solid fa-plus"></i> Depositar</button>`}
         </div>`;
     },
 

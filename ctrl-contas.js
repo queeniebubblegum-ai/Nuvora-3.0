@@ -38,7 +38,12 @@ export const ContasController = {
 
     submitCartao: (e) => {
         e.preventDefault();
-        const bancoId = parseInt(document.getElementById('cartao-bancoId').value);
+        // Select values are strings, while persisted bank IDs may be numbers or
+        // application-generated strings. Resolve against the stored record and
+        // keep its original ID type instead of coercing it with parseInt().
+        const bancoIdRaw = document.getElementById('cartao-bancoId').value;
+        const bancoRelacionado = db.bancos.find(b => String(b.id) === String(bancoIdRaw));
+        const bancoId = bancoRelacionado ? bancoRelacionado.id : bancoIdRaw;
         const modeloElement = document.getElementById('cartao-modelo');
         const modelo = modeloElement ? modeloElement.value : 'custom';
         const nome = document.getElementById('cartao-nome').value;
@@ -64,7 +69,6 @@ export const ContasController = {
         }
 
         if (!cor) {
-            const bancoRelacionado = db.bancos.find(b => b.id === bancoId);
             if (bancoRelacionado && bancoRelacionado.cor) {
                 cor = bancoRelacionado.cor;
             } else {

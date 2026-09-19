@@ -19,13 +19,13 @@ export const DashboardComponents = {
         const saldoBrutoFmt = Utils.formatMoney(atual.saldo);
         const pendentesFmt = Utils.formatMoney(contasPendentes);
         const pendentesColor = contasPendentes > 0 ? 'text-danger' : 'text-text-secondary';
-        const livreColor = saldoLivre >= 0 ? 'text-text-primary' : 'text-danger';
+        const livreColor = saldoLivre >= 0 ? 'text-success' : 'text-danger';
 
         const cardSaldoLivre = `
-        <div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft flex flex-col justify-between relative overflow-hidden group hover:-translate-y-1 transition-all">
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--health flex flex-col justify-between relative overflow-hidden group">
             <div class="flex justify-between items-start mb-3">
                 <div>
-                    <h4 class="text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1 font-primary flex items-center gap-1.5"><i class="fa-solid fa-wallet text-brand-medium"></i> Saldo Livre</h4>
+                    <h4 class="text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1 font-primary flex items-center gap-1.5"><i class="fa-solid fa-wallet text-success"></i> Saldo Livre</h4>
                     <h2 class="text-2xl font-black ${livreColor} font-mono tracking-tight">${Utils.formatMoney(saldoLivre)}</h2>
                 </div>
                 <div class="w-10 h-10 rounded-[12px] bg-bg border border-border text-brand-medium flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
@@ -39,7 +39,7 @@ export const DashboardComponents = {
         </div>`;
 
         return `
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="nv-dashboard-summary-grid grid grid-cols-1 md:grid-cols-3 gap-6">
             ${CoreComponents._buildSummaryCard('Receitas', atual.receitas, recT.val, recT.isUp, 'fa-arrow-trend-up', 'vs período anterior')}
             ${CoreComponents._buildSummaryCard('Despesas', atual.despesas, desT.val, !desT.isUp, 'fa-arrow-trend-down', 'vs período anterior')}
             ${cardSaldoLivre}
@@ -50,7 +50,7 @@ export const DashboardComponents = {
         let btnHtml = '';
         if (mentoria.onboardingAction) {
             const { label, action, modal, type } = mentoria.onboardingAction;
-            btnHtml = `<button data-action="${action}" data-modal="${modal}" ${type ? `data-type="${type}"` : ''} class="mt-5 w-full sm:w-auto bg-white text-brand-deep font-bold px-8 py-3.5 rounded-[12px] shadow-dark-glow hover:shadow-white-glow transition-all flex items-center justify-center gap-2 hover:-translate-y-1"><i class="fa-solid fa-bolt"></i> ${label}</button>`;
+            btnHtml = `<button data-action="${action}" data-modal="${modal}" ${type ? `data-type="${type}"` : ''} class="nv-onboarding-action"><i class="fa-solid fa-bolt"></i> ${label}</button>`;
         }
 
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -59,45 +59,44 @@ export const DashboardComponents = {
 
         // Badge Visual do Nível da Jornada Semântica
         const levelBadges = {
-            1: '<span class="bg-white/10 border border-white/20 text-white px-3 py-1.5 rounded-full text-[10px] font-bold shadow-sm flex items-center gap-1.5 justify-center mt-3"><i class="fa-solid fa-seedling text-brand-soft"></i> Nível 1: Explorador</span>',
-            2: '<span class="bg-brand-soft border border-white/30 text-brand-deep px-3 py-1.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1.5 justify-center mt-3"><i class="fa-solid fa-piggy-bank text-brand-deep"></i> Nível 2: Poupador</span>',
-            3: '<span class="bg-[#F9D342] border border-white/30 text-brand-deep px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg flex items-center gap-1.5 justify-center mt-3"><i class="fa-solid fa-chess-knight text-brand-deep"></i> Nível 3: Estrategista</span>'
+            1: '<span class="nv-insight-badge nv-insight-badge--neutral"><i class="fa-solid fa-seedling"></i> Nível 1: Explorador</span>',
+            2: '<span class="nv-insight-badge nv-insight-badge--positive"><i class="fa-solid fa-piggy-bank"></i> Nível 2: Poupador</span>',
+            3: '<span class="nv-insight-badge nv-insight-badge--attention"><i class="fa-solid fa-chess-knight"></i> Nível 3: Estrategista</span>'
         };
         const badgeHtml = mentoria.isOnboarding ? '' : (levelBadges[mentoria.userLevel] || levelBadges[1]);
 
         return `
-        <div class="rounded-[20px] shadow-soft overflow-hidden mb-8 relative" style="background: linear-gradient(135deg, var(--c-brand-deep) 0%, var(--c-brand-dark) 100%); color: #FFFFFF;">
-            <div class="p-8 flex flex-col md:flex-row gap-8 items-center relative z-10">
-                <div class="flex flex-col items-center text-center shrink-0 w-44">
-                    <div class="w-24 h-24 rounded-full flex items-center justify-center text-4xl shadow-inner border border-brand-medium" style="background-color: #6C3BB6; color: #FFFFFF; font-family: 'Playfair Display', serif;">
+        <section class="nv-insight-panel relative" aria-label="Insight contextual da Anora">
+            <div class="nv-insight-panel__content relative z-10">
+                <div class="nv-insight-panel__score-column">
+                    <div class="nv-insight-score rounded-full shadow-inner border" aria-label="Pontuação da mentoria">
                         ${mentoria.score}
                     </div>
-                    <span class="text-[10px] font-black uppercase tracking-widest text-brand-soft mt-4 flex items-center justify-center flex-wrap gap-1">Diagnóstico Estratégico <br> ${mesAtual} ${trendBadge}</span>
-                    <span class="text-sm font-bold mt-2 text-white bg-black/20 px-3 py-1 rounded-full border border-white/10">${mentoria.classification}</span>
+                    <span class="nv-insight-panel__diagnosis text-[10px] font-black uppercase tracking-widest text-brand-medium flex items-center justify-center flex-wrap gap-1">Diagnóstico Estratégico <br> ${mesAtual} ${trendBadge}</span>
+                    <span class="nv-insight-panel__classification text-sm font-bold text-text-primary bg-bg px-3 py-1 rounded-full border border-border">${mentoria.classification}</span>
                     ${badgeHtml}
                 </div>
 
-                <div class="flex-1 space-y-5 md:border-l md:border-brand-medium/30 md:pl-8 w-full">
-                    <div class="space-y-3">
+                <div class="nv-insight-panel__body">
+                    <div class="nv-insight-list">
                         ${mentoria.insights.map(insight => `
-                            <div class="flex gap-3 items-start">
-                                <i class="fa-solid fa-angle-right mt-1 text-[10px] text-brand-soft"></i>
-                                <p class="text-sm text-white/90 leading-relaxed font-medium">${Utils.escapeHTML(insight)}</p>
+                            <div class="nv-insight-item flex items-start">
+                                <i class="fa-solid fa-angle-right mt-1 text-[10px] text-brand-medium"></i>
+                                <p class="text-sm text-text-primary leading-relaxed font-medium">${Utils.escapeHTML(insight)}</p>
                             </div>
                         `).join('')}
                     </div>
                     
-                    <div class="bg-black/20 p-5 rounded-[16px] border border-white/10 backdrop-blur-sm shadow-inner">
-                        <h4 class="text-[10px] font-black uppercase mb-2 flex items-center gap-2 text-brand-soft">
+                    <div class="nv-insight-panel__recommendation border shadow-inner">
+                        <h4 class="nv-insight-panel__recommendation-title text-[10px] font-black uppercase flex items-center gap-2 text-brand-medium">
                             <i class="fa-solid fa-crosshairs"></i> Diretriz Executiva
                         </h4>
-                        <p class="text-[15px] font-bold text-white leading-tight font-mentor tracking-wide">${Utils.escapeHTML(mentoria.recommendation)}</p>
+                        <p class="text-[15px] font-bold text-text-primary leading-tight font-mentor tracking-wide">${Utils.escapeHTML(mentoria.recommendation)}</p>
                         ${btnHtml}
                     </div>
                 </div>
             </div>
-            <div class="absolute -right-20 -bottom-20 w-64 h-64 rounded-full blur-[100px] opacity-20 pointer-events-none bg-brand-soft"></div>
-        </div>`;
+        </section>`;
     },
 
     dashboardPillars: (pillars) => {
@@ -108,10 +107,13 @@ export const DashboardComponents = {
             else if (score >= 40) status = 'Atenção'; 
             else status = 'Crítico'; 
 
-            if(name === 'fluxoCaixa') { icon = 'fa-arrow-trend-up'; color = 'text-reserve'; } 
-            else if(name === 'reservas') { icon = 'fa-shield-halved'; color = 'text-investment'; } 
-            else if(name === 'credito') { icon = 'fa-credit-card'; color = 'text-credit'; } 
+            if(name === 'fluxoCaixa') { icon = 'fa-arrow-trend-up'; color = 'text-success'; } 
+            else if(name === 'reservas') { icon = 'fa-shield-halved'; color = 'text-success'; } 
+            else if(name === 'credito') { icon = 'fa-credit-card'; color = 'text-info'; } 
             else if(name === 'futuro') { icon = 'fa-road'; color = 'text-text-secondary'; } 
+
+            if (status === 'Atenção') color = 'text-warning';
+            if (status === 'Crítico') color = 'text-danger';
 
             return { status, icon, color };
         };
@@ -121,11 +123,12 @@ export const DashboardComponents = {
             const cfg = getPillarConfig(score, key);
             
             let feedbackText = 'text-text-secondary';
-            if(cfg.status === 'Excelente') feedbackText = 'text-success';
+            if(cfg.status === 'Excelente' || cfg.status === 'Equilibrado') feedbackText = 'text-success';
+            if(cfg.status === 'Atenção') feedbackText = 'text-warning';
             if(cfg.status === 'Crítico') feedbackText = 'text-danger';
 
             return `
-            <div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-all flex flex-col justify-between group">
+            <div class="nv-dashboard-card nv-dashboard-pillar-card flex flex-col justify-between group">
                 <div class="flex justify-between items-start mb-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-[12px] bg-bg border border-border ${cfg.color} flex items-center justify-center text-lg shadow-sm">
@@ -148,7 +151,7 @@ export const DashboardComponents = {
         };
 
         return `
-        <div class="mb-10">
+        <section class="nv-dashboard-pillars mb-10" aria-label="Pilares estratégicos">
             <h3 class="font-bold text-text-primary text-base mb-4 tracking-tight flex items-center gap-2 font-primary">
                 <i class="fa-solid fa-chart-column text-brand-medium"></i> Pilares Estratégicos
             </h3>
@@ -158,26 +161,64 @@ export const DashboardComponents = {
                 ${renderCard('credito', 'Crédito', 'Dependência de terceiros.')}
                 ${renderCard('futuro', 'O Futuro', 'Peso dos parcelamentos.')}
             </div>
-        </div>
+        </section>
         `;
     },
 
     dashboardAccounts: (bancos = [], cartoes = [], compras = []) => {
         // Identidade local: não depende de serviços externos para renderizar o Dashboard.
         const logo = (nome, cor) => { const iniciais = String(nome || 'C').slice(0, 2).toUpperCase(); return `<div class="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-border bg-bg" style="color:${cor || 'var(--c-brand-medium)'}"><span class="text-[10px] font-black">${Utils.escapeHTML(iniciais)}</span></div>`; };
-        const contasHtml = bancos.length ? bancos.map(b => `<div class="flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(b.instituicao || b.nome, b.cor)}</span><span class="flex-1 min-w-0 text-xs text-text-primary truncate"><strong class="block truncate">${Utils.escapeHTML(b.nome || b.instituicao || 'Conta')}</strong><small class="text-[10px] text-text-secondary">${Utils.escapeHTML(b.instituicao || 'Conta')}</small></span><strong class="text-xs font-mono text-text-primary">${Utils.formatMoney(b.saldo || 0)}</strong></div>`).join('') : '<p class="text-xs text-text-secondary">Nenhuma conta cadastrada.</p>';
-        const cartoesHtml = cartoes.length ? cartoes.map(c => { const limite = Number(c.limite || c.limiteTotal || 0); const usado = compras.filter(t => String(t.cartaoId || t.bancoId) === String(c.id)).reduce((s,t) => s + (Number(t.valor)||0), 0); const disponivel = Math.max(limite - usado, 0); const pct = limite ? Math.min(usado / limite * 100, 100) : 0; const cor = pct > 80 ? 'bg-danger' : pct > 50 ? 'bg-credit' : 'bg-success'; const banco = bancos.find(b => String(b.id) === String(c.bancoId)); return `<div class="flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(banco?.instituicao || c.nome, banco?.cor)}</span><div class="flex-1 min-w-0"><div class="flex justify-between"><span class="text-xs text-text-primary truncate">${Utils.escapeHTML(c.nome || 'Cartão')}</span><strong class="text-xs font-mono text-text-primary">${Utils.formatMoney(disponivel)}</strong></div><div class="flex justify-between text-[10px] text-text-secondary mt-1"><span>disponível</span><span>limite ${Utils.formatMoney(limite)}</span></div><div class="w-full h-1.5 bg-border rounded-full mt-1"><div class="${cor} h-1.5 rounded-full" style="width:${pct}%"></div></div></div></div>`; }).join('') : '<p class="text-xs text-text-secondary">Nenhum cartão cadastrado.</p>';
-        return `<div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft mt-8 mb-8"><div class="flex items-center gap-2 mb-3"><i class="fa-solid fa-wallet text-brand-medium"></i><h3 class="font-bold text-text-primary text-base font-primary">Contas e cartões</h3></div><div class="grid grid-cols-1 md:grid-cols-2 gap-5"><div><p class="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">Contas correntes e poupança</p>${contasHtml}</div><div><p class="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">Cartões de crédito</p>${cartoesHtml}</div></div></div>`;
+        const contasHtml = bancos.length ? bancos.map(b => `<div class="nv-dashboard-account-row flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(b.instituicao || b.nome, b.cor)}</span><span class="flex-1 min-w-0 text-xs text-text-primary truncate"><strong class="block truncate">${Utils.escapeHTML(b.nome || b.instituicao || 'Conta')}</strong><small class="text-[10px] text-text-secondary">${Utils.escapeHTML(b.instituicao || 'Conta')}</small></span><strong class="text-xs font-mono text-success">${Utils.formatMoney(b.saldo || 0)}</strong></div>`).join('') : '<p class="text-xs text-text-secondary">Nenhuma conta cadastrada.</p>';
+        const cartoesHtml = cartoes.length ? cartoes.map(c => { const limite = Number(c.limite || c.limiteTotal || 0); const usado = compras.filter(t => String(t.cartaoId || t.bancoId) === String(c.id)).reduce((s,t) => s + (Number(t.valor)||0), 0); const disponivel = Math.max(limite - usado, 0); const pct = limite ? Math.min(usado / limite * 100, 100) : 0; const cor = pct > 80 ? 'bg-credit' : pct > 50 ? 'bg-brand-medium' : 'bg-success'; const banco = bancos.find(b => String(b.id) === String(c.bancoId)); return `<div class="nv-dashboard-card-row flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(banco?.instituicao || c.nome, banco?.cor)}</span><div class="flex-1 min-w-0"><div class="flex justify-between gap-3"><span class="text-xs text-text-primary truncate">${Utils.escapeHTML(c.nome || 'Cartão')}</span><strong class="text-xs font-mono text-success whitespace-nowrap">${Utils.formatMoney(disponivel)}</strong></div><div class="flex justify-between text-[10px] text-text-secondary mt-1"><span>disponível</span><span>limite ${Utils.formatMoney(limite)}</span></div><div class="w-full h-1.5 bg-border rounded-full mt-1"><div class="${cor} h-1.5 rounded-full" style="width:${pct}%" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100" aria-label="Utilização de ${Utils.escapeHTML(c.nome || 'cartão')}"></div></div></div></div>`; }).join('') : '<p class="text-xs text-text-secondary">Nenhum cartão cadastrado.</p>';
+        return `<div class="nv-dashboard-accounts-grid" aria-label="Contas e cartões"><section class="nv-dashboard-card nv-dashboard-accounts nv-dashboard-accounts--bank" aria-label="Contas"><div class="nv-dashboard-accounts__header flex items-center justify-between gap-3 mb-3"><div class="flex items-center gap-2 min-w-0"><i class="fa-solid fa-wallet text-success" aria-hidden="true"></i><div class="min-w-0"><h3 class="font-bold text-text-primary text-base font-primary">Contas</h3><p class="text-[10px] text-text-secondary uppercase tracking-wider">Contas correntes e poupança</p></div></div><span class="nv-dashboard-accounts__count text-[10px] font-bold text-success bg-bg px-2 py-1 rounded-full whitespace-nowrap">${bancos.length}</span></div><div class="nv-dashboard-accounts__list">${contasHtml}</div></section><section class="nv-dashboard-card nv-dashboard-accounts nv-dashboard-accounts--cards" aria-label="Cartões"><div class="nv-dashboard-accounts__header flex items-center justify-between gap-3 mb-3"><div class="flex items-center gap-2 min-w-0"><i class="fa-regular fa-credit-card text-brand-medium" aria-hidden="true"></i><div class="min-w-0"><h3 class="font-bold text-text-primary text-base font-primary">Cartões</h3><p class="text-[10px] text-text-secondary uppercase tracking-wider">Limite disponível e utilização</p></div></div><span class="nv-dashboard-accounts__count text-[10px] font-bold text-brand-medium bg-brand-soft px-2 py-1 rounded-full whitespace-nowrap">${cartoes.length}</span></div><div class="nv-dashboard-accounts__list">${cartoesHtml}</div></section></div>`;
     },
 
     dashboardAgenda: (agendamentos = [], receitas = [], state = {}) => {
-        const hoje = new Date(); const ano = Number(state.agendaYear ?? hoje.getFullYear()); const mes = Number(state.agendaMonth ?? hoje.getMonth());
+        const hoje = new Date();
+        const ano = Number(state.agendaYear ?? hoje.getFullYear());
+        const mes = Number(state.agendaMonth ?? hoje.getMonth());
         const nomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-        const itens = [...agendamentos.map(i => ({...i, dataAgenda: i.dataVencimento || i.data})), ...receitas.map(i => ({...i, dataAgenda: i.data, tipo: 'receita'}))].filter(i => i.dataAgenda);
-        const porDia = {}; itens.forEach(i => { const d = new Date(i.dataAgenda + 'T12:00:00'); if (d.getFullYear() === ano && d.getMonth() === mes) (porDia[d.getDate()] ||= []).push(i); });
-        const primeiro = new Date(ano, mes, 1).getDay(); const totalDias = new Date(ano, mes + 1, 0).getDate();
-        let cells = ''; for (let i=0;i<primeiro;i++) cells += '<div></div>'; for (let dia=1;dia<=totalDias;dia++) { const lista = porDia[dia] || []; const ehHoje = ano === new Date().getFullYear() && mes === new Date().getMonth() && dia === new Date().getDate(); cells += `<button type="button" data-action="showAgendaDay" onclick="App.showAgendaDay('${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}')" data-payload="${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}" class="min-h-[54px] p-1.5 rounded-lg border ${lista.length ? 'border-brand-medium/40 bg-brand-medium/5' : 'border-border'} ${ehHoje ? 'ring-2 ring-brand-medium ring-offset-1' : ''} text-left" style="${ehHoje ? 'border-color: var(--c-brand-medium); box-shadow: 0 0 0 2px var(--c-brand-medium);' : ''} hover:bg-bg transition-colors"><span class="text-xs font-bold text-text-primary">${dia}</span>${lista.length ? `<span class="block mt-1 text-[9px] font-bold ${lista.some(i=>i.tipo==='receita') ? 'text-success' : 'text-danger'}">${lista.length} item(ns)</span>` : ''}</button>`; }
-        return `<div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft"><div class="flex justify-between items-center mb-4"><div><h3 class="font-bold text-text-primary text-lg font-primary">Agenda financeira</h3><p class="text-xs text-text-secondary">${nomes[mes]} de ${ano} · clique em um dia</p></div><div class="flex items-center gap-1"><button type="button" data-action="resetAgendaToday" class="px-2 h-8 rounded-lg border border-border text-[10px] font-bold text-text-secondary hover:bg-bg">Hoje</button><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="w-8 h-8 rounded-lg border border-border text-text-secondary hover:bg-bg" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left text-xs"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="w-8 h-8 rounded-lg border border-border text-text-secondary hover:bg-bg" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right text-xs"></i></button></div></div><div class="grid grid-cols-7 gap-1.5 mb-2 text-center text-[9px] font-bold text-text-secondary"><span>DOM</span><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span></div><div class="grid grid-cols-7 gap-1.5">${cells}</div></div>`;
+        const diasSemana = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
+        const isoDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const safeDate = (value) => {
+            if (!value) return null;
+            const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
+            return Number.isNaN(date.getTime()) ? null : date;
+        };
+        const isCompleted = (item) => item.completed === true || item.isCompleted === true || ['pago', 'recebida', 'concluido', 'concluida', 'completed', 'done', 'realizado', 'realizada', 'quitado', 'quitada', 'liquidado', 'liquidada'].includes(item.status);
+        const itens = [
+            ...agendamentos.map(item => ({ ...item, dataAgenda: item.dataVencimento || item.data, origem: 'agendamento' })),
+            ...receitas.map(item => ({ ...item, dataAgenda: item.data || item.dataVencimento, origem: 'receita' }))
+        ].map(item => ({ ...item, dataObj: safeDate(item.dataAgenda) })).filter(item => item.dataObj);
+        const porData = {};
+        itens.forEach(item => { (porData[isoDate(item.dataObj)] ||= []).push(item); });
+        const selectedDate = state.agendaSelectedDate || state.selectedAgendaDate || '';
+        const firstOfMonth = new Date(ano, mes, 1);
+        // JS starts on Sunday; rotate it so the visible week starts on Monday.
+        const mondayOffset = (firstOfMonth.getDay() + 6) % 7;
+        const gridStart = new Date(ano, mes, 1 - mondayOffset);
+        const cells = [];
+        for (let index = 0; index < 42; index += 1) {
+            const date = new Date(gridStart);
+            date.setDate(gridStart.getDate() + index);
+            const dateKey = isoDate(date);
+            const lista = porData[dateKey] || [];
+            const isOutside = date.getMonth() !== mes;
+            const isToday = dateKey === isoDate(hoje);
+            const isSelected = dateKey === selectedDate;
+            const hasCommitment = lista.some(item => item.origem === 'agendamento' || item.origem === 'receita');
+            const hasDueDate = lista.some(item => item.origem === 'agendamento' && !isCompleted(item));
+            const hasCompleted = lista.some(isCompleted);
+            const dots = [
+                hasCommitment ? '<span class="calendar-dot calendar-dot--commitment" aria-hidden="true"></span>' : '',
+                hasDueDate ? '<span class="calendar-dot calendar-dot--due-date" aria-hidden="true"></span>' : '',
+                hasCompleted ? '<span class="calendar-dot calendar-dot--completed" aria-hidden="true"></span>' : ''
+            ].join('');
+            const states = [isOutside ? 'is-outside' : '', isToday ? 'is-today agenda-day--today' : '', isSelected ? 'is-selected' : '', lista.length ? 'agenda-day--has-items' : ''].filter(Boolean).join(' ');
+            const label = `${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${lista.length ? `, ${lista.length} ${lista.length === 1 ? 'item' : 'itens'}` : ''}`;
+            cells.push(`<button type="button" data-action="showAgendaDay" onclick="App.showAgendaDay('${dateKey}')" data-payload="${dateKey}" class="calendar-day agenda-day ${states}" aria-label="${Utils.escapeHTML(label)}" aria-current="${isToday ? 'date' : 'false'}" aria-pressed="${isSelected ? 'true' : 'false'}"><span class="calendar-day-number">${date.getDate()}</span>${dots ? `<span class="calendar-day-dots" aria-label="Indicadores do dia">${dots}</span>` : '<span class="calendar-day-dots" aria-hidden="true"></span>'}</button>`);
+        }
+        return `<section class="nv-dashboard-card nv-dashboard-agenda agenda-calendar" aria-label="Agenda financeira"><header class="calendar-header"><div><p class="calendar-eyebrow">Planejamento</p><h3 class="calendar-title">Agenda financeira</h3><p class="calendar-subtitle">${nomes[mes]} de ${ano} · selecione um dia para ver os detalhes</p></div><div class="calendar-controls"><button type="button" data-action="resetAgendaToday" class="calendar-today" aria-label="Ir para hoje">Hoje</button><div class="calendar-nav" role="group" aria-label="Navegação da agenda"><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="calendar-nav-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="calendar-nav-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div></header><div class="calendar-weekdays agenda-weekdays" aria-hidden="true">${diasSemana.map(dia => `<span>${dia}</span>`).join('')}</div><div class="calendar-grid agenda-grid" role="grid" aria-label="${nomes[mes]} de ${ano}">${cells.join('')}</div><footer class="calendar-legend" aria-label="Legenda da agenda"><span><i class="calendar-legend-dot calendar-legend-dot--commitment" aria-hidden="true"></i>Compromisso</span><span><i class="calendar-legend-dot calendar-legend-dot--due-date" aria-hidden="true"></i>Vencimento</span><span><i class="calendar-legend-dot calendar-legend-dot--completed" aria-hidden="true"></i>Concluído</span></footer></section>`;
     },
 
     dashboardCategories: (transacoesPeriodoAtual) => {
@@ -216,7 +257,7 @@ export const DashboardComponents = {
         `;
 
         return `
-        <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft">
+        <section class="nv-dashboard-card nv-dashboard-categories" aria-label="Principais categorias">
             <div class="flex justify-between items-center mb-6">
                 <h3 class="font-bold text-text-primary text-lg font-primary">Principais Categorias</h3>
                 <button data-action="navigate" data-payload="Categorias" class="text-sm font-bold text-text-secondary hover:text-text-primary transition-colors">Ver todas &rarr;</button>
@@ -224,7 +265,7 @@ export const DashboardComponents = {
             <div class="space-y-1">
                 ${listHtml || emptyState}
             </div>
-        </div>`;
+        </section>`;
     },
 
     dashboardRecentTransactions: (transacoes, mentoria = null) => {

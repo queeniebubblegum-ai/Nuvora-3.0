@@ -4,6 +4,113 @@ import { CoreComponents } from './cmp-core.js';
 import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, invoiceReconciliationKey } from './reconciliation.js';
 
 export const PageComponents = {
+    /**
+     * Avenera accounts workspace: keeps the existing bank/card records and action
+     * hooks, but presents them as two independent, scannable collections.
+     */
+    accountsPage: (bancos = [], cartoes = [], transacoes = []) => {
+        const hoje = new Date();
+        const anoAtual = hoje.getFullYear();
+        const mesAtual = hoje.getMonth();
+        const money = value => Utils.formatMoney(Number(value) || 0);
+        const dateLabel = date => date ? date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '') : '—';
+        const dateAtNoon = (year, month, day) => new Date(year, month, day, 12, 0, 0);
+        const dueDateFor = card => {
+            const day = Number(card?.vencimento || card?.diaVencimento || 0);
+            if (!Number.isFinite(day) || day < 1) return null;
+            const currentLastDay = new Date(anoAtual, mesAtual + 1, 0).getDate();
+            let due = dateAtNoon(anoAtual, mesAtual, Math.min(day, currentLastDay));
+            const today = dateAtNoon(anoAtual, mesAtual, hoje.getDate());
+            if (due < today) {
+                const nextLastDay = new Date(anoAtual, mesAtual + 2, 0).getDate();
+                due = dateAtNoon(anoAtual, mesAtual + 1, Math.min(day, nextLastDay));
+            }
+            return due;
+        };
+        const invoiceFor = card => {
+            const items = listInvoiceTransactions(transacoes, card, anoAtual, mesAtual);
+            const record = (db.conciliacoesFaturas || []).find(item => item.chave === invoiceReconciliationKey(card.id, anoAtual, mesAtual));
+            return calculateReconciliation(items, record?.valorFaturaReal, record?.ajustes || []);
+        };
+        const totalBalance = bancos.reduce((sum, bank) => sum + (Number(bank.saldo) || 0), 0);
+        const cardsData = cartoes.map(card => {
+            // Keep the existing committed/available calculation: it is based on
+            // every persisted card transaction, not only the current invoice.
+            const committed = transacoes.filter(t => t?.isCartao && String(t.bancoId) === String(card.id)).reduce((sum, t) => sum + (Number(t.valor) || 0), 0);
+            const limit = Number(card.limite ?? card.limiteTotal) || 0;
+            const invoice = invoiceFor(card);
+            return { card, committed, limit, available: Math.max(limit - committed, 0), invoice, dueDate: dueDateFor(card) };
+        });
+        const openInvoiceAmount = cardsData.reduce((sum, item) => sum + (Number(item.invoice.explainedTotal) || 0), 0);
+        const nextDue = cardsData.map(item => item.dueDate).filter(Boolean).sort((a, b) => a - b)[0] || null;
+        const firstBankId = bancos.length ? Utils.escapeHTML(String(bancos[0].id)) : '';
+        // A card can only be linked to an existing bank. Keep the CTA useful in
+        // both states: open the card form when possible, otherwise take the user
+        // to the safe prerequisite (without creating an unlinked card).
+        const cardCtaAction = bancos.length
+            ? 'data-action="openModal" data-modal="modal-cartao"'
+            : 'data-action="openModal" data-modal="modal-banco" data-prerequisite-message="Cadastre uma conta antes de adicionar um cartão."';
+        const cardCtaLabel = bancos.length ? 'Adicionar cartão' : 'Adicionar conta primeiro';
+        const cardMenuTitle = bancos.length ? 'Cartão' : 'Conta necessária';
+        const cardMenuDescription = bancos.length ? 'Fatura e limite' : 'Cadastre uma conta antes';
+        const bankFor = card => bancos.find(bank => String(bank.id) === String(card.bancoId));
+        const cardFinal = card => {
+            const candidate = card.ultimosDigitos ?? card.ultimo4 ?? card.last4 ?? card.lastDigits ?? card.digitosFinais ?? card.numeroFinal;
+            const digits = candidate == null ? '' : String(candidate).replace(/\D/g, '').slice(-4);
+            return digits ? `•••• ${digits}` : 'Final não informado';
+        };
+        const accountType = bank => bank.tipoConta || bank.tipo || 'Conta bancária';
+        const accountStatus = bank => bank.status || (bank.ativo === false ? 'Inativa' : 'Ativa');
+        const accountStatusClass = bank => bank.ativo === false || bank.status === 'inativa' ? 'is-inactive' : 'is-active';
+        const actionButton = (action, label, icon, attrs = '', tone = 'secondary') => `<button type="button" data-action="${action}" ${attrs} class="nv-accounts-action nv-accounts-action--${tone}"><i class="${icon}" aria-hidden="true"></i><span>${label}</span></button>`;
+
+        const accountsHtml = bancos.length ? bancos.map(bank => `
+            <article class="nv-accounts-card nv-accounts-card--account" data-key="banco_${Utils.escapeHTML(String(bank.id))}">
+                <div class="nv-accounts-card-head">
+                    <div class="nv-accounts-card-icon nv-accounts-card-icon--account"><i class="fa-solid fa-building-columns" aria-hidden="true"></i></div>
+                    <div class="nv-accounts-card-heading"><h3>${Utils.escapeHTML(bank.nome || 'Conta sem nome')}</h3><p>${Utils.escapeHTML(bank.instituicao || 'Instituição não informada')}</p></div>
+                    <span class="nv-accounts-status ${accountStatusClass(bank)}"><i class="fa-solid fa-circle" aria-hidden="true"></i>${Utils.escapeHTML(accountStatus(bank))}</span>
+                </div>
+                <div class="nv-accounts-card-meta"><span>${Utils.escapeHTML(accountType(bank))}</span><span>Conta cadastrada</span></div>
+                <div class="nv-accounts-card-balance"><span>Saldo atual</span><strong class="money money--large">${money(bank.saldo)}</strong></div>
+                <div class="nv-accounts-card-actions">
+                    ${actionButton('iniciarImportacaoOFX', 'OFX', 'fa-solid fa-file-import', `data-banco-id="${Utils.escapeHTML(String(bank.id))}"`)}
+                    ${actionButton('iniciarImportacaoCSV', 'CSV', 'fa-solid fa-file-csv', `data-banco-id="${Utils.escapeHTML(String(bank.id))}"`)}
+                    <button type="button" data-action="delete" data-col="bancos" data-id="${Utils.escapeHTML(String(bank.id))}" class="nv-accounts-icon-action nv-accounts-icon-action--danger" title="Excluir conta" aria-label="Excluir conta"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+                </div>
+            </article>`).join('') : `
+            <div class="nv-accounts-empty"><div class="nv-accounts-empty-icon"><i class="fa-solid fa-building-columns" aria-hidden="true"></i></div><div><strong>Nenhuma conta cadastrada</strong><p>Adicione uma conta para acompanhar saldos e importar movimentações.</p></div><button type="button" data-action="openModal" data-modal="modal-banco" class="nv-accounts-empty-action">Adicionar conta</button></div>`;
+
+        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, available, invoice, dueDate }) => {
+            const bank = bankFor(card);
+            const usagePercent = limit > 0 ? Math.min((committed / limit) * 100, 100) : 0;
+            const usageClass = usagePercent >= 80 ? 'is-high' : usagePercent >= 50 ? 'is-medium' : 'is-low';
+            return `
+            <article class="nv-accounts-card nv-accounts-card--credit" data-key="cartao_${Utils.escapeHTML(String(card.id))}">
+                <div class="nv-credit-card-top">
+                    <div><span class="nv-accounts-overline">Cartão de crédito</span><h3>${Utils.escapeHTML(card.nome || 'Cartão sem nome')}</h3><p>${Utils.escapeHTML(bank?.instituicao || bank?.nome || 'Conta vinculada')} · ${Utils.escapeHTML(cardFinal(card))}</p></div>
+                    <div class="nv-credit-card-mark"><i class="fa-regular fa-credit-card" aria-hidden="true"></i></div>
+                </div>
+                <div class="nv-credit-card-details"><div><span>Fechamento</span><strong>Dia ${Utils.escapeHTML(String(card.fechamento || card.diaFechamento || '—'))}</strong></div><div><span>Vencimento</span><strong>Dia ${Utils.escapeHTML(String(card.vencimento || card.diaVencimento || '—'))}</strong></div><div><span>Próximo vencimento</span><strong>${dateLabel(dueDate)}</strong></div></div>
+                <div class="nv-credit-card-metrics"><div><span>Fatura em aberto</span><strong class="money">${money(invoice.explainedTotal)}</strong></div><div><span>Comprometido</span><strong class="money">${money(committed)}</strong></div><div><span>Disponível</span><strong class="money is-positive">${money(available)}</strong></div><div><span>Limite total</span><strong class="money">${money(limit)}</strong></div></div>
+                <div class="nv-credit-card-progress"><div class="nv-credit-card-progress-label"><span>Limite comprometido</span><strong>${usagePercent.toFixed(0)}%</strong></div><div class="nv-credit-card-progress-track"><span class="${usageClass}" style="width:${usagePercent}%"></span></div></div>
+                <div class="nv-accounts-card-actions">
+                    ${actionButton('openInvoiceDetails', 'Abrir fatura', 'fa-solid fa-file-invoice-dollar', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}
+                    ${actionButton('openCardExpenseModal', 'Lançar despesa', 'fa-solid fa-plus', `data-id="${Utils.escapeHTML(String(card.id))}" data-nome="${Utils.escapeHTML(card.nome || 'Cartão')}"`, 'primary')}
+                    <button type="button" data-action="delete" data-col="cartoes" data-id="${Utils.escapeHTML(String(card.id))}" class="nv-accounts-icon-action nv-accounts-icon-action--danger" title="Excluir cartão" aria-label="Excluir cartão"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+                </div>
+            </article>`;
+        }).join('') : `
+            <div class="nv-accounts-empty"><div class="nv-accounts-empty-icon nv-accounts-empty-icon--card"><i class="fa-regular fa-credit-card" aria-hidden="true"></i></div><div><strong>Nenhum cartão cadastrado</strong><p>Cadastre um cartão vinculado a uma conta para acompanhar faturas e limite.</p></div><button type="button" ${cardCtaAction} class="nv-accounts-empty-action" title="${bancos.length ? 'Adicionar cartão' : 'Cadastre uma conta antes de adicionar um cartão'}">${cardCtaLabel}</button></div>`;
+
+        return `<div class="nv-accounts-page">
+            <header class="nv-accounts-header"><div><p class="nv-accounts-eyebrow">Visão financeira</p><h1>Contas e cartões</h1><p class="nv-accounts-subtitle">Acompanhe saldos, faturas e limites em um só lugar.</p></div><div class="nv-accounts-header-actions"><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Importar OFX</span></button><button type="button" data-action="iniciarImportacaoCSV" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span>Importar CSV</span></button><details class="nv-accounts-add"><summary class="nv-accounts-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Adicionar</span><i class="fa-solid fa-chevron-down nv-accounts-add-chevron" aria-hidden="true"></i></summary><div class="nv-accounts-add-menu"><button type="button" data-action="openModal" data-modal="modal-banco"><i class="fa-solid fa-building-columns" aria-hidden="true"></i><span><strong>Conta</strong><small>Saldo e movimentações</small></span></button><button type="button" ${cardCtaAction}><i class="fa-regular fa-credit-card" aria-hidden="true"></i><span><strong>${cardMenuTitle}</strong><small>${cardMenuDescription}</small></span></button></div></details></div></header>
+            <section class="nv-accounts-overview" aria-labelledby="nv-accounts-overview-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Resumo</p><h2 id="nv-accounts-overview-title">Panorama financeiro</h2></div></div><div class="nv-accounts-summary-grid"><div class="nv-accounts-summary-card nv-accounts-summary-card--balance"><div class="nv-accounts-summary-icon"><i class="fa-solid fa-wallet" aria-hidden="true"></i></div><div><span>Saldo total das contas</span><strong class="money money--large">${money(totalBalance)}</strong><small>${bancos.length} ${bancos.length === 1 ? 'conta cadastrada' : 'contas cadastradas'}</small></div></div><div class="nv-accounts-summary-card nv-accounts-summary-card--invoice"><div class="nv-accounts-summary-icon"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></div><div><span>Faturas em aberto</span><strong class="money money--large">${money(openInvoiceAmount)}</strong><small>${nextDue ? `Próximo vencimento · ${dateLabel(nextDue)}` : 'Nenhum vencimento informado'}</small></div></div></div></section>
+            <section class="nv-accounts-section" aria-labelledby="nv-accounts-bank-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Patrimônio</p><h2 id="nv-accounts-bank-title">Contas</h2><p>Saldo disponível e origem de cada movimentação.</p></div><span class="nv-accounts-count">${bancos.length}</span></div><div class="nv-accounts-grid">${accountsHtml}</div></section>
+            <section class="nv-accounts-section nv-accounts-section--cards" aria-labelledby="nv-accounts-card-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Crédito</p><h2 id="nv-accounts-card-title">Cartões</h2><p>Faturas abertas, comprometimento e limite disponível.</p></div><span class="nv-accounts-count">${cartoes.length}</span></div><div class="nv-accounts-grid">${cardsHtml}</div></section>
+        </div>`;
+    },
+
     contatosPage: (contatos) => {
         const listHtml = contatos.map(c => `
             <div data-key="${c.id}" class="flex items-center justify-between p-4 bg-surface border border-border rounded-[16px] shadow-soft mb-3 group hover:-translate-y-0.5 transition-all">
@@ -14,7 +121,7 @@ export const PageComponents = {
                         <p class="text-xs text-text-secondary font-mono mt-0.5 tracking-wider">${Utils.escapeHTML(c.documento || 'Documento não informado')}</p>
                     </div>
                 </div>
-                <button data-action="delete" data-col="contatos" data-id="${c.id}" class="text-border hover:text-danger w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg transition-colors"><i class="fa-solid fa-pen"></i></button><button data-action="delete" data-col="categorias" data-id="${id}" class="text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors w-10 h-10 flex items-center justify-center rounded-xl border border-transparent hover:border-danger/20"><i class="fa-solid fa-trash-can"></i></button>
+                <button data-action="delete" data-col="contatos" data-id="${c.id}" class="text-border hover:text-danger w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg transition-colors"><i class="fa-solid fa-trash-can"></i></button>
             </div>
         `).join('');
 
@@ -165,20 +272,45 @@ export const PageComponents = {
 
     filtersSection: (f, bancos, categorias = [], cartoes = []) => {
         const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-        let contas = '<option value="">Todas</option>';
-        if (bancos?.length) contas += '<optgroup label="Contas">' + bancos.map(b => `<option value="banco_${b.id}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${Utils.escapeHTML(b.instituicao && b.instituicao !== 'Outro' ? b.instituicao + ' (' + b.nome + ')' : b.nome)}</option>`).join('') + '</optgroup>';
-        if (cartoes?.length) contas += '<optgroup label="Cartões">' + cartoes.map(c => `<option value="cartao_${c.id}" ${f.bancoId === 'cartao_'+c.id ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('') + '</optgroup>';
-        const cats = categorias.map(c => { const nome = typeof c === 'string' ? c : c.nome; return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`; }).join('');
-        return `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"><div class="sm:col-span-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Buscar</label><input type="text" placeholder="Descrição ou ID" value="${Utils.escapeHTML(f.desc)}" data-input="setFilterDesc" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Mês</label><select data-change="setFilter" data-filter-key="mes" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todos</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Tipo</label><select data-change="setFilter" data-filter-key="tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todos</option><option value="receita" ${f.tipo==='receita'?'selected':''}>Receitas</option><option value="despesa" ${f.tipo==='despesa'?'selected':''}>Despesas</option></select></div></div><details class="mt-3 border-t border-border pt-3 group"><summary class="cursor-pointer list-none text-xs font-bold text-brand-medium"><i class="fa-solid fa-sliders mr-1"></i>Mais filtros <i class="fa-solid fa-chevron-down text-[10px] ml-1 group-open:rotate-180 transition-transform"></i></summary><div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3"><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todas</option>${cats}</select></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Conta/Cartão</label><select data-change="setFilter" data-filter-key="bancoId" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary">${contas}</select></div><div class="flex gap-2"><div class="flex-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">De</label><input type="date" data-change="setFilter" data-filter-key="dataInicio" value="${f.dataInicio || ''}" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div><div class="flex-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Até</label><input type="date" data-change="setFilter" data-filter-key="dataFim" value="${f.dataFim || ''}" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div></div><button data-action="clearFilters" class="sm:col-span-3 justify-self-start px-3 py-2 bg-bg text-text-primary rounded-[10px] text-xs font-bold"><i class="fa-solid fa-eraser mr-1"></i>Limpar filtros</button></div></details>`;
+        const currentType = f.tipo || '';
+        const tabs = [
+            ['', 'Todas', 'fa-layer-group'],
+            ['receita', 'Receitas', 'fa-arrow-trend-up'],
+            ['despesa', 'Despesas', 'fa-arrow-trend-down'],
+            ['transferencia', 'Transferências', 'fa-right-left']
+        ];
+        const tabHtml = tabs.map(([value, label, icon]) => `<button type="button" role="tab" data-action="setTransactionTypeFilter" data-payload="${value}" class="nv-tx-tab ${currentType === value ? 'is-active' : ''}" aria-selected="${currentType === value ? 'true' : 'false'}" aria-pressed="${currentType === value ? 'true' : 'false'}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`).join('');
+
+        let contas = '<option value="">Todas as contas</option>';
+        if (bancos?.length) contas += '<optgroup label="Contas bancárias">' + bancos.map(b => `<option value="banco_${Utils.escapeHTML(String(b.id))}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${Utils.escapeHTML(b.instituicao && b.instituicao !== 'Outro' ? b.instituicao + ' (' + b.nome + ')' : b.nome)}</option>`).join('') + '</optgroup>';
+        if (cartoes?.length) contas += '<optgroup label="Cartões">' + cartoes.map(c => `<option value="cartao_${Utils.escapeHTML(String(c.id))}" ${f.bancoId === 'cartao_'+c.id ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('') + '</optgroup>';
+        const cats = categorias.map(c => {
+            const nome = typeof c === 'string' ? c : c.nome;
+            return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`;
+        }).join('');
+
+        return `<div class="nv-tx-filters">
+            <div class="nv-tx-filter-tabs" role="tablist" aria-label="Filtrar por tipo">${tabHtml}</div>
+            <div class="nv-tx-filter-grid">
+                <div class="nv-tx-filter-search"><label for="transactions-search" class="nv-tx-label">Buscar movimentação</label><div class="nv-tx-search-wrap"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="transactions-search" type="search" autocomplete="off" placeholder="Descrição ou identificador" value="${Utils.escapeHTML(f.desc || '')}" data-input="setFilterDesc" class="nv-tx-input"></div></div>
+                <div><label for="transactions-month" class="nv-tx-label">Período</label><select id="transactions-month" data-change="setFilter" data-filter-key="mes" class="nv-tx-input"><option value="">Todos os meses</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>
+                <div><label for="transactions-type" class="nv-tx-label">Tipo</label><select id="transactions-type" data-change="setFilter" data-filter-key="tipo" class="nv-tx-input"><option value="">Todos os tipos</option><option value="receita" ${f.tipo==='receita'?'selected':''}>Receitas</option><option value="despesa" ${f.tipo==='despesa'?'selected':''}>Despesas</option><option value="transferencia" ${f.tipo==='transferencia'?'selected':''}>Transferências</option></select></div>
+            </div>
+            <details class="nv-tx-more-filters" ${f.categoria || f.bancoId || f.dataInicio || f.dataFim ? 'open' : ''}><summary>Mais filtros <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid">
+                <div><label for="transactions-category" class="nv-tx-label">Categoria</label><select id="transactions-category" data-change="setFilter" data-filter-key="categoria" class="nv-tx-input"><option value="">Todas as categorias</option>${cats}</select></div>
+                <div><label for="transactions-account" class="nv-tx-label">Conta ou cartão</label><select id="transactions-account" data-change="setFilter" data-filter-key="bancoId" class="nv-tx-input">${contas}</select></div>
+                <div class="nv-tx-date-range"><div><label for="transactions-start" class="nv-tx-label">De</label><input id="transactions-start" type="date" data-change="setFilter" data-filter-key="dataInicio" value="${Utils.escapeHTML(f.dataInicio || '')}" class="nv-tx-input"></div><div><label for="transactions-end" class="nv-tx-label">Até</label><input id="transactions-end" type="date" data-change="setFilter" data-filter-key="dataFim" value="${Utils.escapeHTML(f.dataFim || '')}" class="nv-tx-input"></div></div>
+                <button type="button" data-action="clearFilters" class="nv-tx-clear"><i class="fa-solid fa-eraser" aria-hidden="true"></i> Limpar filtros</button>
+            </div></details>
+        </div>`;
     },
 
     transactionSummary: (transacoes = []) => {
-        const receitas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((s,t) => s + (Number(t.valor)||0), 0);
-        const despesas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((s,t) => s + (Number(t.valor)||0), 0);
-        const cats = {}; transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => cats[t.categoria] = (cats[t.categoria] || 0) + (Number(t.valor)||0));
-        const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3);
-        const card=(label,value,cor)=>`<div class="bg-surface border border-border rounded-[10px] px-3 py-2 min-w-0"><span class="block text-[9px] uppercase font-bold text-text-secondary truncate">${label}</span><strong class="block text-sm font-mono ${cor} mt-0.5 truncate">${value}</strong></div>`;
-        return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">${card('Receitas',Utils.formatMoney(receitas),'text-success')}${card('Despesas',Utils.formatMoney(despesas),'text-danger')}${card('Saldo',Utils.formatMoney(receitas-despesas),receitas-despesas>=0?'text-success':'text-danger')}${card('Transações',transacoes.length,'text-text-primary')}<div class="col-span-2 sm:col-span-4 flex items-center gap-2 px-2 py-1.5 overflow-x-auto whitespace-nowrap"><span class="text-[9px] uppercase font-bold text-text-secondary">Categorias:</span>${topCats.length ? topCats.map(([cat,val])=>`<span class="text-[10px] text-text-primary"><strong>${Utils.escapeHTML(cat)}</strong> ${Utils.formatMoney(val)}</span>`).join('<span class="text-border">•</span>') : '<span class="text-[10px] text-text-secondary">Sem despesas</span>'}</div></div>`;
+        const receitas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita').reduce((s,t) => s + (Number(t.valor)||0), 0);
+        const despesas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa').reduce((s,t) => s + (Number(t.valor)||0), 0);
+        const saldo = receitas - despesas;
+        const card = (label, value, tone, icon) => `<article class="nv-tx-summary-card ${tone}"><span class="nv-tx-summary-icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></span><div><p>${label}</p><strong class="money">${value}</strong></div></article>`;
+        return `<section class="nv-tx-summary" aria-label="Resumo da consulta">${card('Receitas', Utils.formatMoney(receitas), 'is-income', 'fa-arrow-trend-up')}${card('Despesas', Utils.formatMoney(despesas), 'is-expense', 'fa-arrow-trend-down')}${card('Saldo', Utils.formatMoney(saldo), saldo >= 0 ? 'is-balance-positive' : 'is-balance-negative', 'fa-scale-balanced')}<div class="nv-tx-summary-count"><span>Movimentações</span><strong>${transacoes.length}</strong></div></section>`;
     },
 
     transactionList: (list, state) => {
@@ -186,82 +318,30 @@ export const PageComponents = {
         const allVisibleSelected = list.length > 0 && list.every(t => selected.includes(String(t.id)));
 
         if (!list.length) {
-            return `
-            <div class="text-center py-20 px-6 bg-surface flex flex-col items-center justify-center">
-                <div class="w-24 h-24 bg-bg text-brand-soft border border-border rounded-full flex items-center justify-center text-4xl mb-6 shadow-inner">
-                    <i class="fa-solid fa-file-invoice-dollar"></i>
-                </div>
-                <h4 class="font-bold text-text-primary text-xl mb-2 font-primary">Nenhuma transação encontrada</h4>
-                <p class="text-sm text-text-secondary mb-8 max-w-sm">Os filtros aplicados não retornaram resultados ou você não registrou movimentações.</p>
-                <button data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="bg-brand-deep hover:bg-brand-dark text-white px-8 py-3 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Fazer Lançamento</button>
-            </div>`;
+            return `<div class="nv-tx-empty"><div class="nv-tx-empty-icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div><h4>Nenhuma transação encontrada</h4><p>Os filtros aplicados não retornaram resultados ou você ainda não registrou movimentações.</p><button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-tx-empty-action">Nova transação</button></div>`;
         }
-        
-        return `
-            <div class="flex justify-between items-center mb-6">
-                <div class="flex items-center gap-3">
-                    <input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} class="w-4 h-4 text-brand-medium bg-surface border-border rounded cursor-pointer">
-                    <h4 class="font-bold text-text-primary font-primary">Histórico Completo</h4>
-                </div>
-                ${selected.length > 0 ? `
-                <button data-action="deleteSelectedTx" class="text-xs text-danger px-4 py-2 font-bold hover:bg-bg rounded-[12px] transition-colors flex items-center gap-2 border border-border">
-                    <i class="fa-solid fa-trash-can"></i> Apagar Selecionados (${selected.length})
-                </button>
-                ` : ''}
-            </div>
-            <div class="space-y-0">
-                ${list.map(t => {
-                    const isRec = t.transferenciaInterna ? (t.transferenciaEntrada === true || (t.transferenciaInterna && String(t.bancoId) === String(t.contaDestinoId))) : t.tipo === 'receita';
-                    const signal = isRec ? '+' : '-'; const color = isRec ? 'text-success' : 'text-danger';
-                    
-                    let dataFormatada = 'Hoje';
-                    if (t.data) {
-                        const parsed = new Date(t.data + 'T12:00:00');
-                        dataFormatada = isNaN(parsed.getTime()) ? 'Data Inválida' : parsed.toLocaleDateString('pt-BR');
-                    }
-                    
-                    const contatoStr = t.contatoId && db.contatos ? db.contatos.find(c => c.id === t.contatoId) : null;
-                    const contatoBadge = contatoStr ? `<span class="text-[10px] px-2 py-0.5 rounded bg-bg border border-border text-text-secondary font-bold tracking-wider flex items-center gap-1"><i class="fa-regular fa-address-book"></i> ${Utils.escapeHTML(contatoStr.nome)}</span>` : '';
-                    
-                    const txId = t.codigoRef || `TX-${t.id.toString(36).substring(0,6).toUpperCase()}`;
-                    const badgeRecorrente = t.recorrente && !t.isCartao ? `<span class="text-[10px] text-reserve bg-bg border border-border px-1.5 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-repeat"></i> Fixa ${t.parcelaAtual ? `${t.parcelaAtual}/${t.totalParcelas}` : ''}</span>` : '';
-                    const isSelected = selected.includes(t.id.toString());
-                    
-                    const catObj = CoreComponents._getCategoryConfig(t.categoria);
 
-                    return `
-                    <div data-key="${t.id}" class="flex items-center justify-between p-4 hover:bg-bg rounded-[16px] transition-all group border-b border-border last:border-0 ${isSelected ? 'bg-bg' : ''}">
-                        <div class="flex items-center gap-4">
-                            <input type="checkbox" data-change="toggleSelectTx" value="${t.id}" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-brand-medium bg-surface border-border rounded cursor-pointer">
-                            <div class="w-10 h-10 rounded-[12px] flex items-center justify-center shadow-sm text-white border border-border" style="background-color: ${catObj.cor}">
-                                <i class="fa-solid ${catObj.icone}"></i>
-                            </div>
-                            <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <p class="font-bold text-text-primary text-sm tracking-tight font-primary">${Utils.escapeHTML(t.desc)}</p>
-                                    <span class="text-[9px] font-mono text-text-secondary bg-bg border border-border px-1.5 py-0.5 rounded" title="ID de Registro">#${txId}</span>
-                                </div>
-                                <div class="flex flex-wrap items-center gap-2 mt-1.5">
-                                    <span class="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-white" style="background-color: ${catObj.cor}99">${Utils.escapeHTML(t.categoria)}</span>
-                                    <span class="text-[10px] text-text-secondary flex items-center gap-1"><i class="fa-regular fa-calendar"></i> ${dataFormatada}</span>
-                                    ${(() => { const banco = db.bancos.find(b => String(b.id) === String(t.bancoId)); return banco ? `<span class="text-[10px] text-text-secondary flex items-center gap-1"><i class="fa-solid fa-building-columns"></i> ${Utils.escapeHTML(banco.nome || banco.instituicao)}</span>` : ''; })()}
-                                    ${t.isCartao ? `<span class="text-[10px] text-credit bg-bg border border-border px-1.5 py-0.5 rounded flex items-center gap-1 font-bold"><i class="fa-regular fa-credit-card"></i> Cartão (Parc. ${t.parcelaAtual}/${t.totalParcelas})</span>` : ''}
-                                    ${!t.isCartao && t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="text-[10px] text-text-secondary border border-border px-1.5 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-money-check"></i> ${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}
-                                    ${badgeRecorrente}
-                                    ${contatoBadge}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-right flex flex-col items-end">
-                            <span class="block font-bold text-sm ${color} font-mono tracking-tight">${signal} ${Utils.formatMoney(t.valor)}</span>
-                            <div class="flex gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button data-action="openEditModal" data-id="${t.id}" class="text-[10px] text-text-primary hover:text-brand-medium font-bold border border-border bg-surface px-2 py-1 rounded-[8px]"><i class="fa-solid fa-pen mr-1"></i> Editar</button>
-                                <button data-action="deleteExpense" data-id="${t.id}" class="text-[10px] text-danger font-bold hover:bg-surface border border-transparent hover:border-border px-2 py-1 rounded-[8px]"><i class="fa-solid fa-trash-can mr-1"></i> Apagar</button>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('')}
-            </div>`;
+        return `<div class="nv-tx-list-head"><label class="nv-tx-select-all"><input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} aria-label="Selecionar todas as movimentações visíveis"><span>Selecionar página</span></label>${selected.length > 0 ? `<button type="button" data-action="deleteSelectedTx" class="nv-tx-bulk-delete"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Apagar selecionadas (${selected.length})</button>` : ''}</div><div class="nv-tx-list">${list.map(t => {
+            const isTransfer = !!t.transferenciaInterna || t.tipo === 'transferencia';
+            const isRec = isTransfer ? !!t.transferenciaEntrada : t.tipo === 'receita';
+            const valColor = isRec ? 'is-income' : 'is-expense';
+            const sign = isRec ? '+' : '-';
+            let dataFormatada = 'Hoje';
+            if (t.data) {
+                const parsed = new Date(t.data + 'T12:00:00');
+                dataFormatada = isNaN(parsed.getTime()) ? 'Data inválida' : parsed.toLocaleDateString('pt-BR');
+            }
+            const contato = t.contatoId && db.contatos ? db.contatos.find(c => c.id === t.contatoId) : null;
+            const banco = db.bancos?.find(b => String(b.id) === String(t.bancoId));
+            const cartao = t.isCartao ? db.cartoes?.find(c => String(c.id) === String(t.bancoId)) : null;
+            const contaLabel = cartao?.nome || banco?.nome || banco?.instituicao || '';
+            const txId = t.codigoRef || `TX-${String(t.id).substring(0, 8).toUpperCase()}`;
+            const catObj = CoreComponents._getCategoryConfig(t.categoria);
+            const catColor = Utils.escapeHTML(String(catObj.cor || 'var(--c-text-secondary)'));
+            const isSelected = selected.includes(String(t.id));
+            const typeLabel = isTransfer ? 'Transferência' : (t.tipo === 'receita' ? 'Receita' : 'Despesa');
+            return `<div class="swipe-container nv-tx-row ${isSelected ? 'is-selected' : ''}" data-id="${Utils.escapeHTML(String(t.id))}"><div class="swipe-front nv-tx-row-front"><div class="nv-tx-row-main"><label class="nv-tx-check"><input type="checkbox" data-change="toggleSelectTx" value="${Utils.escapeHTML(String(t.id))}" ${isSelected ? 'checked' : ''} aria-label="Selecionar ${Utils.escapeHTML(t.desc || typeLabel)}"><span></span></label><span class="nv-tx-category-icon" style="background-color: ${catColor}"><i class="fa-solid ${Utils.escapeHTML(catObj.icone)}" aria-hidden="true"></i></span><div class="nv-tx-description"><div class="nv-tx-title-line"><strong>${Utils.escapeHTML(t.desc || typeLabel)}</strong><span class="nv-tx-reference">#${Utils.escapeHTML(String(txId))}</span></div><div class="nv-tx-meta"><span class="nv-tx-type" style="--tx-category-color: ${catColor}">${Utils.escapeHTML(t.categoria || typeLabel)}</span><span><i class="fa-regular fa-calendar" aria-hidden="true"></i>${Utils.escapeHTML(dataFormatada)}</span>${contaLabel ? `<span><i class="fa-solid fa-building-columns" aria-hidden="true"></i>${Utils.escapeHTML(contaLabel)}</span>` : ''}${t.isCartao ? `<span><i class="fa-regular fa-credit-card" aria-hidden="true"></i>Cartão${t.parcelaAtual ? ` · ${Utils.escapeHTML(String(t.parcelaAtual))}/${Utils.escapeHTML(String(t.totalParcelas))}` : ''}</span>` : ''}${t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="nv-tx-meta-optional">${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}${t.recorrente && !t.isCartao ? '<span><i class="fa-solid fa-repeat" aria-hidden="true"></i>Fixa</span>' : ''}${contato ? `<span class="nv-tx-meta-optional"><i class="fa-regular fa-address-book" aria-hidden="true"></i>${Utils.escapeHTML(contato.nome)}</span>` : ''}</div></div></div><div class="nv-tx-row-value"><strong class="money ${valColor}">${sign} ${Utils.formatMoney(t.valor)}</strong><span class="nv-tx-row-kind">${typeLabel}</span><div class="nv-tx-row-actions"><button type="button" data-action="openEditModal" data-id="${Utils.escapeHTML(String(t.id))}" title="Editar transação" aria-label="Editar transação"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Editar</span></button><button type="button" data-action="deleteExpense" data-id="${Utils.escapeHTML(String(t.id))}" title="Apagar transação" aria-label="Apagar transação"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Apagar</span></button></div></div></div></div>`;
+        }).join('')}</div>`;
     },
 
     contasDashboard: (bancos, cartoes, comprasCartao, state) => {
@@ -614,7 +694,8 @@ export const PageComponents = {
         `;
     },
 
-    goalsPage: (metas, transacoes) => {
+    goalsPage: (metas, transacoes, options = {}) => {
+        const readOnly = options.readOnly === true;
         const hoje = new Date(); 
         const tresMesesAtras = new Date(); 
         tresMesesAtras.setMonth(hoje.getMonth() - 3);
@@ -631,39 +712,51 @@ export const PageComponents = {
                 </div>
                 <h4 class="font-bold text-text-primary text-lg mb-2 font-primary">Sem metas definidas</h4>
                 <p class="text-sm text-text-secondary mb-6 max-w-sm">Criar metas ajuda a dar propósito às suas economias.</p>
-                <button data-action="openModal" data-modal="modal-meta" class="bg-brand-deep hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Criar Nova Meta</button>
+                ${readOnly ? '' : '<button data-action="openModal" data-modal="modal-meta" class="bg-brand-medium hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Criar Nova Meta</button>'}
             </div>
         `;
 
-        const metasHtml = metas.length === 0 ? emptyState : metas.map(m => CoreComponents._buildGoalCard(m, hoje)).join('');
+        const metasHtml = metas.length === 0 ? emptyState : metas.map(m => CoreComponents._buildGoalCard(m, hoje, { readOnly })).join('');
 
         return `
             <div class="rounded-[16px] p-8 mb-10 shadow-soft text-white relative overflow-hidden" style="background: linear-gradient(135deg, var(--c-brand-deep) 0%, var(--c-brand-dark) 100%);"><div class="relative z-10"><div class="flex items-center gap-3 mb-2"><div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><i class="fa-solid fa-wallet"></i></div><span class="font-bold text-sm opacity-90 tracking-wide font-primary">Capacidade de Poupança</span></div><h3 class="text-4xl font-bold mb-1 font-mono">${capacidadeFormatada}</h3><p class="text-sm opacity-80">média mensal calculada dos últimos 3 meses</p></div><div class="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div></div>
             <h3 class="font-bold text-text-primary text-lg mb-6 tracking-tight font-primary">Metas Ativas</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">${metasHtml}</div>`;
     },
 
-    budgetView: (orcamentos, transacoes, state = {}) => {
-        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        const anoSelecionado = state.budgetYear || new Date().getFullYear();
-        const mesSelecionado = state.budgetMonth ?? new Date().getMonth();
-        const mesAtualNome = meses[mesSelecionado];
-        const orcamentosDoMes = (orcamentos || []).filter(o => o.ano == null || (Number(o.ano) === Number(anoSelecionado) && Number(o.mes) === Number(mesSelecionado))); 
-        const gastosPorCat = {}; 
-        let totalGastoMes = 0;
-        
+    budgetSummary: (orcamentos, transacoes, state = {}) => {
+        const now = new Date();
+        const anoSelecionado = state.budgetYear ?? now.getFullYear();
+        const mesSelecionado = state.budgetMonth ?? now.getMonth();
+        const orcamentosDoMes = (orcamentos || []).filter(o => o.ano == null || (Number(o.ano) === Number(anoSelecionado) && Number(o.mes) === Number(mesSelecionado)));
+        const gastosPorCat = {};
         const transacoesMes = Database.getTransacoesPorMes(anoSelecionado, mesSelecionado);
-        transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => { 
-            if(!gastosPorCat[t.categoria]) gastosPorCat[t.categoria] = 0; 
-            gastosPorCat[t.categoria] += t.valor; 
-            totalGastoMes += t.valor; 
+        transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => {
+            const categoria = t.categoria || 'Outros';
+            gastosPorCat[categoria] = (gastosPorCat[categoria] || 0) + (Number(t.valor) || 0);
         });
-        
-        const totalOrcado = orcamentosDoMes.reduce((a, b) => a + b.limite, 0); 
-        const disponivelGeral = totalOrcado - totalGastoMes;
+        const totalOrcado = orcamentosDoMes.reduce((total, item) => total + (Number(item.limite) || 0), 0);
+        const totalGastoMes = Object.values(gastosPorCat).reduce((total, value) => total + value, 0);
+        return {
+            ano: Number(anoSelecionado),
+            mes: Number(mesSelecionado),
+            orcamentos: orcamentosDoMes,
+            gastosPorCat,
+            totalOrcado,
+            totalGastoMes,
+            disponivelGeral: totalOrcado - totalGastoMes
+        };
+    },
+
+    budgetView: (orcamentos, transacoes, state = {}, options = {}) => {
+        const readOnly = options.readOnly === true;
+        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        const resumo = PageComponents.budgetSummary(orcamentos, transacoes, state);
+        const { ano: anoSelecionado, mes: mesSelecionado, orcamentos: orcamentosDoMes, gastosPorCat, totalOrcado, totalGastoMes, disponivelGeral } = resumo;
+        const mesAtualNome = meses[mesSelecionado];
 
         const listHTML = orcamentosDoMes.map(o => {
-            const gasto = gastosPorCat[o.categoria] || 0; 
-            return CoreComponents._buildBudgetCard(o, gasto);
+            const gasto = gastosPorCat[o.categoria] || 0;
+            return CoreComponents._buildBudgetCard(o, gasto, { readOnly });
         }).join('');
 
         const emptyState = `
@@ -673,12 +766,12 @@ export const PageComponents = {
                 </div>
                 <h4 class="font-bold text-text-primary text-lg mb-2 font-primary">Sem limites definidos</h4>
                 <p class="text-sm text-text-secondary mb-6 max-w-sm">Estabelecer orçamentos ajuda a manter o controle.</p>
-                <button data-action="openModal" data-modal="modal-orcamento" class="bg-brand-deep hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Definir Orçamento</button>
+                ${readOnly ? '' : '<button data-action="openModal" data-modal="modal-orcamento" class="bg-brand-medium hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Definir Orçamento</button>'}
             </div>
         `;
 
         return `
-        <div class="flex items-center justify-center gap-8 mb-10"><button data-action="changeMonth" data-type="budget" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors"><i class="fa-solid fa-chevron-left"></i></button><span class="text-lg font-bold text-text-primary min-w-[180px] text-center capitalize font-primary">${mesAtualNome} de ${state.budgetYear}</span><button data-action="changeMonth" data-type="budget" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors"><i class="fa-solid fa-chevron-right"></i></button></div>
+        <div class="flex items-center justify-center gap-8 mb-10">${readOnly ? '' : '<button data-action="changeMonth" data-type="budget" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left"></i></button>'}<span class="text-lg font-bold text-text-primary min-w-[180px] text-center capitalize font-primary">${mesAtualNome} de ${anoSelecionado}</span>${readOnly ? '' : '<button data-action="changeMonth" data-type="budget" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right"></i></button>'}</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Orçamento Total</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalOrcado)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Total Gasto</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalGastoMes)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Disponível</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(disponivelGeral)}</h3></div></div>
         <div>${orcamentosDoMes.length > 0 ? listHTML : emptyState}</div>`;
     }, 

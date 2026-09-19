@@ -5,28 +5,39 @@ import { App } from './app.js';
 export const ClickEvents = {
     setup: () => {
         document.body.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-action]');
+            // Delegation must work when the click lands on an icon, label, SVG or
+            // text node inside the actionable control. The composed path also
+            // covers embedded/SVG targets that do not expose parentElement.
+            const path = typeof e.composedPath === 'function' ? e.composedPath() : [];
+            const target = e.target instanceof Element ? e.target : e.target?.parentElement;
+            const btn = path.find(node => node instanceof Element && node.matches('button[data-action], [role="button"][data-action], a[data-action], summary[data-action]'))
+                || target?.closest?.('button[data-action], [role="button"][data-action], a[data-action], summary[data-action]')
+                || target?.closest?.('[data-action]');
 
-            // Agenda: tratamento prioritário para evitar conflito com outros handlers
-            if (btn?.getAttribute('data-action') === 'showAgendaDay') {
-                e.preventDefault();
-                App.showAgendaDay(btn.getAttribute('data-payload'));
-                return;
-            }
-            
             const anoraMenu = document.getElementById('anora-menu');
-            const anoraWrapper = e.target.closest('.anora-wrapper');
+            const anoraWrapper = target?.closest?.('.anora-wrapper');
             if (anoraMenu && !anoraMenu.classList.contains('hidden') && !anoraWrapper) {
                 anoraMenu.classList.add('hidden');
             }
 
-            if (!btn) return;
-            
+            // A disabled button can still be reached through delegated events in
+            // some webviews. Do not execute its action (or block its parent).
+            if (!btn || btn.disabled === true || btn.hasAttribute('disabled') || btn.getAttribute('aria-disabled') === 'true') return;
+
             const action = btn.getAttribute('data-action');
-            
+            const actionId = () => {
+                const ownId = btn.getAttribute('data-id');
+                if (ownId !== null && ownId !== '') return ownId;
+                return btn.closest('.nv-tx-row[data-id]')?.getAttribute('data-id') || null;
+            };
+
             const actionsMap = {
                 'navigate': () => App.navigate(btn.getAttribute('data-payload')),
-                'openModal': () => App.openModal(btn.getAttribute('data-modal'), btn.getAttribute('data-type')),
+                'openModal': () => {
+                    const prerequisiteMessage = btn.getAttribute('data-prerequisite-message');
+                    if (prerequisiteMessage) Utils.showToast(prerequisiteMessage, 'warning');
+                    App.openModal(btn.getAttribute('data-modal'), btn.getAttribute('data-type'));
+                },
                 'switchToTransferMode': () => App.switchToTransferMode(),
                 'closeModal': () => App.closeModal(true, btn.closest('[id^="modal-"]')?.id || null),
                 'delete': () => Controllers.delete(btn.getAttribute('data-col'), btn.getAttribute('data-id')),
@@ -35,10 +46,12 @@ export const ClickEvents = {
                 'acceptClassification': () => App.acceptClassification(),
                 'editClassification': () => App.editClassification(),
                 'markAgendaPaid': () => App.markAgendaPaid(btn.getAttribute('data-id'), btn.getAttribute('data-col')),
-                'deleteExpense': () => Controllers.deleteExpense(btn.getAttribute('data-id')),
+                // Keep row IDs as DOM strings. The controller performs the
+                // canonical comparison against numeric or string persisted IDs.
+                'deleteExpense': () => Controllers.deleteExpense(actionId()),
                 'deleteSelectedTx': () => Controllers.deleteSelectedTransactions(),
-                'openEditModal': () => App.openEditModal(btn.getAttribute('data-id')), 
-                'toggleEditLock': () => App.toggleEditLock(), 
+                'openEditModal': () => App.openEditModal(actionId()),
+                'toggleEditLock': () => App.toggleEditLock(),
                 'openDepositModal': () => App.openDepositModal(btn.getAttribute('data-id'), btn.getAttribute('data-nome')),
                 'openInvoiceDetails': () => App.openInvoiceDetails(btn.getAttribute('data-id')),
                 'switchInvoiceTab': () => App.switchInvoiceTab(btn.getAttribute('data-tab')),
@@ -68,26 +81,29 @@ export const ClickEvents = {
                 'exportBackup': () => App.exportBackup(),
                 'clearFilters': () => App.clearFilters(),
                 'setTransactionType': () => App.setTransactionType(btn.getAttribute('data-payload')),
-                'setTxPage': () => {
-                    if(!btn.hasAttribute('disabled')) {
-                        App.setTxPage(btn.getAttribute('data-payload'));
-                    }
-                },
+                'setTransactionTypeFilter': () => App.setFilter('tipo', btn.getAttribute('data-payload') || ''),
+                'setTxPage': () => App.setTxPage(btn.getAttribute('data-payload')),
                 'simularDespesaCartao': () => Controllers.simularDespesaCartao(),
                 'simularTransacaoGeral': () => Controllers.simularTransacaoGeral(),
                 'salvarOFXAprovado': () => App.salvarOFXAprovado(),
                 'iniciarImportacaoOFX': () => App.iniciarImportacaoOFX(btn.getAttribute('data-banco-id')),
                 'iniciarImportacaoCSV': () => App.iniciarImportacaoCSV(btn.getAttribute('data-banco-id')),
-                'iniciarFechamentoMes': () => App.iniciarFechamentoMes(), // <-- GATILHO ADICIONADO AQUI
+                'iniciarFechamentoMes': () => App.iniciarFechamentoMes(),
                 'silenciarAnora': () => {
                     Utils.showToast('Alertas da Anora silenciados por 24 horas.', 'success');
                     document.getElementById('anora-menu').classList.add('hidden');
                 }
             };
 
-            if (actionsMap[action]) {
-                actionsMap[action]();
-            }
+            const handler = actionsMap[action];
+            // Only consume clicks that have a known delegated action. This keeps
+            // native links and <details>/<summary> controls unrelated to actions
+            // working normally, while stopping parent handlers from interfering
+            // with modal/edit/delete controls.
+            if (!handler) return;
+            e.preventDefault();
+            e.stopPropagation();
+            handler();
         });
     }
 };
