@@ -134,6 +134,7 @@ export const OFXManager = {
         }
 
         const categorias = db.categorias || [];
+        const activeCategoriesFor = item => categorias.filter(c => (c.ativo !== false && !c.arquivada) || c.nome === item.categoria);
         const html = viewState.ofxPendente.map(item => {
             const isDuplicada = item.status === 'duplicada';
             const isRetroativa = item.status === 'ignorada_saldo_inicial';
@@ -186,7 +187,7 @@ export const OFXManager = {
                         <div class="text-right shrink-0 ml-2">
                             <p class="text-sm font-bold font-mono ${item.tipo === 'receita' ? 'text-success' : 'text-text-primary'}">${valorFormatado}</p>
                             ${badgeStatus}
-                            <select class="mt-1 max-w-[120px] text-[10px] bg-surface border border-border rounded p-1 text-text-primary" onclick="event.stopPropagation()" onchange="App.alterarCategoriaOFX('${item.idTemp}', this.value)"><option value="">Categoria</option>${categorias.map(c => `<option value="${Utils.escapeHTML(c.nome)}" ${item.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('')}</select>
+                            <select class="mt-1 max-w-[120px] text-[10px] bg-surface border border-border rounded p-1 text-text-primary" onclick="event.stopPropagation()" onchange="App.alterarCategoriaOFX('${item.idTemp}', this.value)"><option value="">Categoria</option>${activeCategoriesFor(item).map(c => `<option value="${Utils.escapeHTML(c.nome)}" ${item.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}${c.ativo === false || c.arquivada ? ' (arquivada · histórico)' : ''}</option>`).join('')}</select>
                         </div>
                     </div>
                     ${alertaDuplicidade}

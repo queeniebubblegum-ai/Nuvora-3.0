@@ -42,57 +42,64 @@ export const UIRenderer = {
 
     updateCategorySelects: () => {
         if (!db.categorias || db.categorias.length === 0) return;
+        const isArchived = c => c && (c.ativo === false || c.arquivada === true);
         const type = document.getElementById('input-tipo')?.value || 'despesa';
-        const available = db.categorias.filter(c => !c.tipo || c.tipo === type);
-        const groups = [...new Set(available.map(c => c.grupo || c.nome))].sort();
+        const matchesType = c => c && (!c.tipo || c.tipo === type);
+        const available = db.categorias.filter(c => !isArchived(c) && matchesType(c));
+        const currentValue = id => document.getElementById(id)?.value || '';
+        const currentCategory = id => db.categorias.find(c => String(c.nome) === String(currentValue(id)));
+        const keepCurrent = (items, value) => {
+            if (!value) return items;
+            const selected = db.categorias.find(c => String(c.nome) === String(value));
+            return selected && !items.some(c => String(c.nome) === String(selected.nome)) ? [...items, selected] : items;
+        };
+        const uniqueByName = items => Array.from(new Map(items.map(c => [String(c.nome), c])).values());
         const groupSelect = document.getElementById('input-categoria-grupo');
+        const selectedForGroups = currentCategory('input-categoria');
+        const groupNames = [...new Set(available.map(c => c.grupo || c.nome))];
+        if (selectedForGroups && isArchived(selectedForGroups)) groupNames.push(selectedForGroups.grupo || selectedForGroups.nome);
+        const groups = [...new Set(groupNames.filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
         const subSelect = document.getElementById('input-categoria-subgrupo');
         const canonical = document.getElementById('input-categoria');
         if (groupSelect && subSelect && canonical) {
             const current = canonical.value;
-            const selected = available.find(c => c.nome === current);
-            groupSelect.innerHTML = '<option value="">Grupo principal</option>' + groups.map(g => `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}</option>`).join('');
+            const selected = db.categorias.find(c => c.nome === current);
+            groupSelect.innerHTML = '<option value="">Grupo principal</option>' + groups.map(g => {
+                const archivedGroup = selectedForGroups && isArchived(selectedForGroups) && String(selectedForGroups.grupo || selectedForGroups.nome) === String(g);
+                return `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}${archivedGroup ? ' (arquivada · histórico)' : ''}</option>`;
+            }).join('');
             groupSelect.value = selected?.grupo || '';
-            const subgroup = available.filter(c => (c.grupo || c.nome) === groupSelect.value);
-            subSelect.innerHTML = '<option value="">Subgrupo (opcional)</option>' + subgroup.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}</option>`).join('');
+            const subgroup = keepCurrent(available.filter(c => (c.grupo || c.nome) === groupSelect.value), current);
+            subSelect.innerHTML = '<option value="">Subgrupo (opcional)</option>' + uniqueByName(subgroup).map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}${isArchived(c) ? ' (arquivada · histórico)' : ''}</option>`).join('');
             subSelect.value = selected?.nome || '';
-            canonical.innerHTML = available.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.nome)}</option>`).join('');
+            const canonicalItems = keepCurrent(available, current);
+            canonical.innerHTML = canonicalItems.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.nome)}${isArchived(c) ? ' (arquivada · histórico)' : ''}</option>`).join('');
             canonical.value = selected?.nome || '';
         }
 
-        // Other forms continue to receive the complete flat catalog.
-        const optionsHtml = db.categorias.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.nome)}</option>`).join('');
-
-        // Array com os IDs dos selects que precisam receber as categorias
+        // New category/transaction choices contain active categories only. If a form is
+        // editing an old record, its archived value is retained as a marked option.
         const ids = ['input-categoria', 'dc-categoria', 'orcamento-categoria', 'edit-categoria', 'agendamento-categoria'];
-        
-        // Itera sobre os IDs garantindo a injeção limpa e a pré-seleção
-        ids.forEach(id => { 
-            const el = document.getElementById(id); 
-            if (el) {
-                const valorAtual = el.value;
-                // CORREÇÃO DE UX e ESTADO: Placeholder adicionado para garantir que a IA consiga transitar de "Vazio" para "Selecionado"
-                el.innerHTML = `<option value="" disabled ${!valorAtual ? 'selected' : ''}>Selecione a categoria</option>` + optionsHtml;
-                
-                if (valorAtual) {
-                    el.value = valorAtual;
-                }
-            } 
+        ids.forEach(id => {
+            const el = document.getElementById(id); if (!el) return;
+            const current = el.value;
+            const items = uniqueByName(keepCurrent(db.categorias.filter(c => !isArchived(c) && matchesType(c)), current));
+            el.innerHTML = '<option value="" disabled>Selecione a categoria</option>' + items.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.nome)}${isArchived(c) ? ' (arquivada · histórico)' : ''}</option>`).join('');
+            if (current) el.value = current;
         });
 
-        // O formulário de compra no cartão usa o mesmo catálogo hierárquico.
         const dcGroup = document.getElementById('dc-categoria-grupo');
         const dcSubgroup = document.getElementById('dc-categoria-subgrupo');
         const dcCategory = document.getElementById('dc-categoria');
         if (dcGroup && dcSubgroup && dcCategory) {
-            const cardAvailable = db.categorias.filter(c => !c.tipo || c.tipo === 'despesa');
-            const cardGroups = [...new Set(cardAvailable.map(c => c.grupo || c.nome))].sort();
+            const cardAvailable = db.categorias.filter(c => !isArchived(c) && (!c.tipo || c.tipo === 'despesa'));
+            const cardGroups = [...new Set(cardAvailable.map(c => c.grupo || c.nome))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
             const current = dcCategory.value;
-            const selected = cardAvailable.find(c => c.nome === current);
+            const selected = db.categorias.find(c => c.nome === current);
             dcGroup.innerHTML = '<option value="">Grupo principal</option>' + cardGroups.map(g => `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}</option>`).join('');
             dcGroup.value = selected?.grupo || '';
-            const subgroup = cardAvailable.filter(c => (c.grupo || c.nome) === dcGroup.value);
-            dcSubgroup.innerHTML = '<option value="">Subgrupo (opcional)</option>' + subgroup.map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}</option>`).join('');
+            const subgroup = keepCurrent(cardAvailable.filter(c => (c.grupo || c.nome) === dcGroup.value), current);
+            dcSubgroup.innerHTML = '<option value="">Subgrupo (opcional)</option>' + uniqueByName(subgroup).map(c => `<option value="${Utils.escapeHTML(c.nome)}">${Utils.escapeHTML(c.subgrupo || c.nome)}${isArchived(c) ? ' (arquivada · histórico)' : ''}</option>`).join('');
             dcSubgroup.value = selected?.nome || '';
         }
     },

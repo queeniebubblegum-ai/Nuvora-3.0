@@ -5,7 +5,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Alimentação",
     "subgrupo": "Alimentação",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-utensils",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -15,7 +15,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Alimentação",
     "subgrupo": "Supermercado",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-utensils",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -25,7 +25,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Alimentação",
     "subgrupo": "Alimentos e bebidas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-utensils",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -35,7 +35,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Alimentação",
     "subgrupo": "Restaurantes, bares e lanchonetes",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-utensils",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -45,7 +45,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Alimentação",
     "subgrupo": "Delivery de alimentos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-utensils",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -55,7 +55,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Compras",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-bag-shopping",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -65,7 +65,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Compras online",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-laptop",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -75,7 +75,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Eletrônicos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-laptop",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -85,7 +85,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Pet Shops e veterinários",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-paw",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -95,7 +95,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Vestuário",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-shirt",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -105,7 +105,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Roupas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-shirt",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -115,7 +115,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Artigos infantis",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-child",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -125,7 +125,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Livraria",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-book",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -135,7 +135,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Artigos esportivos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-futbol",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -145,7 +145,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Papelaria",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-book",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -155,7 +155,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Compras",
     "subgrupo": "Presentes",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-gift",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -165,7 +165,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Transporte",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-car",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -175,7 +175,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Táxi e transporte privado urbano",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-bus",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -185,7 +185,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Transporte público",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-bus",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -195,7 +195,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Aluguel de veículos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-car",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -205,7 +205,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Aluguel de bicicletas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-car",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -215,7 +215,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Serviços automotivos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wrench",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -225,7 +225,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Postos de gasolina",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-gas-pump",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -235,7 +235,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Estacionamentos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-square-parking",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -245,7 +245,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Pedágios e pagamentos no veículo",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-road",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -255,7 +255,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Taxas e impostos sobre veículos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-file-invoice-dollar",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -265,7 +265,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Manutenção de veículos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wrench",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -275,7 +275,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Transporte",
     "subgrupo": "Multas de trânsito",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-ticket",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -285,7 +285,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Moradia",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-house",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -295,7 +295,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Aluguel",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-house",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -305,7 +305,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Serviços de utilidade pública",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-bolt",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -315,7 +315,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Água",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-droplet",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -325,7 +325,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Eletricidade",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-bolt",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -335,7 +335,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Gás",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-fire-flame-simple",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -345,7 +345,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Utensílios para casa",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-house",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -355,7 +355,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Impostos sobre moradia",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-file-invoice-dollar",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -365,7 +365,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Telecomunicação",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wifi",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -375,7 +375,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Comunicação",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wifi",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -385,7 +385,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Internet",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wifi",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -395,7 +395,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "Celular",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-mobile-screen-button",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -405,7 +405,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Moradia",
     "subgrupo": "TV",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-tv",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -415,7 +415,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Lazer",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-gamepad",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -425,7 +425,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Viagens",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-plane",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -435,7 +435,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Aeroportos e cias. aéreas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-plane",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -445,7 +445,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Hospedagem",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-bed",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -455,7 +455,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Programas de milhagem",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-ticket",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -465,7 +465,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Passagem de ônibus",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-bus",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -475,7 +475,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Bilhetes",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-ticket",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -485,7 +485,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Estádios e arenas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-ticket",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -495,7 +495,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Museus e pontos turísticos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-ticket",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -505,7 +505,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Lazer e entretenimento",
     "subgrupo": "Cinema, Teatro e Concertos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-ticket",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -515,7 +515,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Saúde",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -525,7 +525,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Saúde e bem-estar",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -535,7 +535,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Bem-estar",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -545,7 +545,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Cuidados pessoais",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -555,7 +555,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Academia e centros de lazer",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -565,7 +565,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Prática de esportes",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -575,7 +575,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Dentista",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -585,7 +585,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Ótica",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -595,7 +595,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Hospitais, clínicas e laboratórios",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -605,7 +605,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Saúde e bem-estar",
     "subgrupo": "Farmácia",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-heart-pulse",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -615,7 +615,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Educação",
     "subgrupo": "Educação",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-graduation-cap",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -625,7 +625,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Educação",
     "subgrupo": "Cursos online",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-laptop",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -635,7 +635,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Educação",
     "subgrupo": "Universidade",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-graduation-cap",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -645,7 +645,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Educação",
     "subgrupo": "Escola",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-graduation-cap",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -655,7 +655,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Educação",
     "subgrupo": "Creche",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-child",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -665,7 +665,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Serviços digitais",
     "subgrupo": "Serviços digitais",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-layer-group",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -675,7 +675,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Serviços digitais",
     "subgrupo": "Assinaturas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-layer-group",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -685,7 +685,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Serviços digitais",
     "subgrupo": "Streaming de música",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-music",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -695,7 +695,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Serviços digitais",
     "subgrupo": "Jogos e videogames",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-gamepad",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -705,7 +705,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Serviços digitais",
     "subgrupo": "Streaming de vídeo",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-film",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -715,7 +715,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Investimentos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-chart-line",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -725,7 +725,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Fundos multimercado",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-chart-line",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -735,7 +735,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Pagamento de cartão de crédito",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-credit-card",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -745,7 +745,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Empréstimos e financiamento",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-hand-holding-dollar",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -755,7 +755,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Atraso no pagamento e custos de cheque especial",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-percent",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -765,7 +765,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Juros cobrados",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-percent",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -775,7 +775,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Financiamento de veículos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-hand-holding-dollar",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -785,7 +785,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Empréstimos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-hand-holding-dollar",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -795,7 +795,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Seguros",
     "subgrupo": "Seguros",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-shield-halved",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -805,7 +805,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Outros",
     "subgrupo": "Impostos e taxas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-file-invoice-dollar",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -815,7 +815,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Outros",
     "subgrupo": "Dívidas e juros",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-hand-holding-dollar",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -825,7 +825,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Outros",
     "subgrupo": "Despesas gerais",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-receipt",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -835,7 +835,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Outros",
     "subgrupo": "A classificar",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-circle-question",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -845,7 +845,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Renda",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wallet",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -855,7 +855,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Salário",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wallet",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -865,7 +865,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Freelance",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-laptop",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -875,7 +875,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Rendimentos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wallet",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -885,7 +885,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Reembolsos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wallet",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -895,7 +895,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Vendas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wallet",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -905,7 +905,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Outras receitas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-wallet",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -915,7 +915,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Renda não-recorrente",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-calendar-days",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -925,7 +925,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Juros de rendimentos de dividendos",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-percent",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -935,7 +935,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Renda",
     "subgrupo": "Cashback",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-arrow-rotate-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -945,7 +945,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Outros",
     "subgrupo": "Estorno",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-rotate-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -955,7 +955,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Transferência entre contas",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-right-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -965,7 +965,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Reserva/investimento",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-piggy-bank",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -975,7 +975,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Pagamento de cartão",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-credit-card",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -985,7 +985,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Ajuste",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-sliders",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -995,7 +995,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Transferência mesma titularidade",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-right-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -1005,7 +1005,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Transferências",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-right-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -1015,7 +1015,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Transferência - Boleto bancário",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-right-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -1025,7 +1025,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Transferência - Dinheiro",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-right-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -1035,7 +1035,7 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Transferência - Câmbio",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-right-left",
     "cor": "#F43F5E",
     "fixa": true
   },
@@ -1045,8 +1045,60 @@ export const CATEGORIAS_PADRAO = [
     "grupo": "Finanças",
     "subgrupo": "Transferência - Mesma instituição",
     "tipo": "despesa",
-    "icone": "fa-tag",
+    "icone": "fa-right-left",
     "cor": "#F43F5E",
     "fixa": true
   }
 ];
+
+
+const GENERIC_CATEGORY_ICONS = new Set(['fa-tag', 'tag']);
+const CATEGORY_ICON_RULES = [
+  [/supermerc|alimento|restaurante|delivery|alimenta/i, 'fa-utensils'],
+  [/compras online|eletrônicos/i, 'fa-laptop'], [/pet shop|veterin/i, 'fa-paw'],
+  [/vestuário|roupas/i, 'fa-shirt'], [/livraria|papelaria/i, 'fa-book'],
+  [/artigos esportivos/i, 'fa-futbol'], [/presentes/i, 'fa-gift'],
+  [/táxi|transporte privado|transporte público|ônibus/i, 'fa-bus'],
+  [/postos de gasolina/i, 'fa-gas-pump'], [/estacionamento/i, 'fa-square-parking'],
+  [/pedágios|pagamentos no veículo/i, 'fa-road'], [/manutenção de veículos|serviços automotivos/i, 'fa-wrench'],
+  [/multas de trânsito/i, 'fa-ticket'], [/aluguel de veículos|aluguel de bicicletas/i, 'fa-car'],
+  [/^moradia$|^aluguel$/i, 'fa-house'], [/água/i, 'fa-droplet'], [/eletricidade|utilidade pública/i, 'fa-bolt'],
+  [/gás/i, 'fa-fire-flame-simple'], [/telecomunicação|comunicação|internet/i, 'fa-wifi'],
+  [/celular/i, 'fa-mobile-screen-button'], [/^tv$/i, 'fa-tv'], [/^lazer$|jogos|videogame/i, 'fa-gamepad'],
+  [/viagens|aeroportos|cias\. aéreas/i, 'fa-plane'], [/hospedagem/i, 'fa-bed'],
+  [/programas de milhagem|bilhetes|estádios|museus|pontos turísticos|cinema|teatro|concertos/i, 'fa-ticket'],
+  [/^saúde$|saúde e bem-estar/i, 'fa-heart-pulse'], [/bem-estar|cuidados pessoais/i, 'fa-spa'],
+  [/academia|prática de esportes/i, 'fa-dumbbell'], [/dentista/i, 'fa-tooth'], [/ótica/i, 'fa-glasses'],
+  [/hospitais|clínicas|laboratórios/i, 'fa-hospital'], [/farmácia/i, 'fa-pills'],
+  [/^educação$|universidade|escola/i, 'fa-graduation-cap'], [/cursos online/i, 'fa-laptop'], [/creche/i, 'fa-child'],
+  [/^serviços digitais$|assinaturas/i, 'fa-layer-group'], [/streaming de música/i, 'fa-music'], [/streaming de vídeo/i, 'fa-film'],
+  [/^investimentos$|fundos multimercado/i, 'fa-chart-line'], [/pagamento de cartão/i, 'fa-credit-card'],
+  [/empréstimos|financiamento|dívidas/i, 'fa-hand-holding-dollar'], [/atraso no pagamento|juros/i, 'fa-percent'],
+  [/^seguros$/i, 'fa-shield-halved'], [/impostos|taxas/i, 'fa-file-invoice-dollar'], [/despesas gerais/i, 'fa-receipt'],
+  [/a classificar/i, 'fa-circle-question'], [/estorno/i, 'fa-rotate-left'],
+  [/\bcompras\b/i, 'fa-bag-shopping'], [/\btransporte\b/i, 'fa-car'], [/\bmoradia\b/i, 'fa-house'],
+  [/\beducação\b/i, 'fa-graduation-cap'], [/serviços digitais/i, 'fa-layer-group'], [/investimentos/i, 'fa-chart-line'],
+  [/\bseguros\b/i, 'fa-shield-halved'], [/\brenda\b/i, 'fa-wallet'], [/reserva\/investimento/i, 'fa-piggy-bank'], [/^ajuste/i, 'fa-sliders'], 
+  [/^renda$|salário|rendimentos|vendas|outras receitas|reembolsos/i, 'fa-wallet'], [/freelance/i, 'fa-laptop'],
+  [/não-recorrente/i, 'fa-calendar-days'], [/cashback/i, 'fa-arrow-rotate-left'], [/transferência|transferências/i, 'fa-right-left'],
+  [/^ajuste$/i, 'fa-sliders']
+];
+
+/** Fixed/default records are identified by explicit metadata or the stable seed id.
+ * Name matching is intentionally not used: a user may create a custom category
+ * with the same display name without inheriting default protections. */
+export const isCategoriaPadrao = (category, canonical = null) => {
+  const item = category && typeof category === 'object' ? category : {};
+  if (item.fixa === true) return true;
+  const id = String(item.id ?? '');
+  if (/^cat_padrao(?:_|-)/i.test(id)) return true;
+  return Boolean(canonical?.id && id && String(canonical.id) === id);
+};
+
+export const getCategoriaIcon = (category) => {
+  const item = category && typeof category === 'object' ? category : { nome: category };
+  const stored = String(item.icone || '').trim();
+  if (/^fa-[a-z0-9-]+$/i.test(stored) && !(GENERIC_CATEGORY_ICONS.has(stored.toLowerCase()) && isCategoriaPadrao(item))) return stored;
+  const text = `${item.nome || ''} ${item.subgrupo || ''} ${item.grupo || ''}`;
+  return CATEGORY_ICON_RULES.find(([matcher]) => matcher.test(text))?.[1] || 'fa-tag';
+};

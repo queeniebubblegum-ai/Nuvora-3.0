@@ -22,7 +22,7 @@ export const Classification = {
         if (text.length < 3) return null;
         const rule = rules.find(r => r.words.some(word => text.includes(norm(word))));
         if (!rule) return null;
-        const candidates = categories.filter(c => typeof c !== 'string' && (!rule.tipo || c.tipo === rule.tipo) && (!rule.grupo || c.grupo === rule.grupo));
+        const candidates = categories.filter(c => typeof c !== 'string' && c.ativo !== false && !c.arquivada && (!rule.tipo || c.tipo === rule.tipo) && (!rule.grupo || c.grupo === rule.grupo));
         const category = rule.subgrupo ? candidates.find(c => norm(c.subgrupo || c.nome) === norm(rule.subgrupo)) : candidates[0];
         return { ...rule, category: category || null, confidence: rule.confidence || (rule.subgrupo ? 'alta' : 'média') };
     }

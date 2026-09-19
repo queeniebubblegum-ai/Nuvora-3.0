@@ -1,5 +1,6 @@
 import { Utils } from './utils.js';
 import { Database, db } from './db.js';
+import { getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { CoreComponents } from './cmp-core.js';
 import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, invoiceReconciliationKey } from './reconciliation.js';
 
@@ -139,134 +140,74 @@ export const PageComponents = {
         return `<div>${contatos.length ? listHtml : emptyState}</div>`;
     },
 
-    categoriesPage: (db, state) => {
-        const hoje = new Date();
-        const trMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth()).filter(t => t.tipo === 'despesa' && !t.transferenciaInterna);
-        const gastosPorCat = {};
-        let totalDespesas = 0;
-
-        trMes.forEach(t => { 
-            if(!gastosPorCat[t.categoria]) gastosPorCat[t.categoria] = 0; 
-            gastosPorCat[t.categoria] += t.valor;
-            totalDespesas += t.valor;
-        });
-
-        const mesAnt = hoje.getMonth() === 0 ? 11 : hoje.getMonth() - 1;
-        const anoAnt = hoje.getMonth() === 0 ? hoje.getFullYear() - 1 : hoje.getFullYear();
-        const trMesAnt = Database.getTransacoesPorMes(anoAnt, mesAnt).filter(t => t.tipo === 'despesa' && !t.transferenciaInterna);
-        const gastosMesAnt = {};
-        trMesAnt.forEach(t => { 
-            if(!gastosMesAnt[t.categoria]) gastosMesAnt[t.categoria] = 0; 
-            gastosMesAnt[t.categoria] += t.valor;
-        });
-
-        const sortedCats = Object.entries(gastosPorCat).sort((a,b) => b[1] - a[1]);
-        
-        const progressHtml = sortedCats.length > 0 ? sortedCats.map((c) => {
-            const catName = c[0];
-            const current = c[1];
-            const previous = gastosMesAnt[catName] || 0;
-            const catObj = CoreComponents._getCategoryConfig(catName);
-            
-            const percentage = totalDespesas > 0 ? (current / totalDespesas) * 100 : 0;
-            const variation = previous > 0 ? ((current - previous) / previous) * 100 : 0;
-            
-            let varClass = 'text-text-secondary bg-bg';
-            let varText = '—';
-            if (variation > 0) { varClass = 'text-danger bg-danger/10'; varText = `+${variation.toFixed(0)}%`; }
-            else if (variation < 0) { varClass = 'text-success bg-success/10'; varText = `${variation.toFixed(0)}%`; }
-
-            return `
-            <div class="flex items-center justify-between gap-4 group mb-4 last:mb-0">
-                <div class="flex items-center gap-4 w-[140px] md:w-1/3 shrink-0">
-                    <div class="w-12 h-12 rounded-[14px] flex items-center justify-center text-white text-lg shadow-sm shrink-0 border border-border" style="background-color: ${catObj.cor}">
-                        <i class="fa-solid ${catObj.icone}"></i>
-                    </div>
-                    <span class="text-sm font-bold text-text-primary truncate" title="${Utils.escapeHTML(catName)}">${Utils.escapeHTML(catName)}</span>
-                </div>
-                <div class="w-24 text-right shrink-0">
-                    <span class="text-sm font-bold text-text-primary font-mono">${Utils.formatMoney(current)}</span>
-                </div>
-                <div class="flex-1 h-2 bg-border rounded-full overflow-hidden hidden sm:block">
-                    <div class="h-full rounded-full transition-all duration-1000" style="width: ${percentage}%; background-color: ${catObj.cor}"></div>
-                </div>
-                <div class="w-16 text-right shrink-0">
-                    <span class="text-[10px] font-bold ${varClass} font-mono px-2 py-1 rounded-md border border-border/50">${varText}</span>
-                </div>
-            </div>`;
-        }).join('') : '<p class="text-sm text-text-secondary text-center py-6 border border-dashed border-border rounded-[12px] bg-bg mt-4">Nenhuma despesa registrada neste mês.</p>';
-
-        const grupos = {};
-        db.categorias.forEach(c => {
-            const item = typeof c === 'string' ? { nome: c, grupo: 'Sem grupo', subgrupo: c, fixa: false, icone: 'fa-tag', cor: '#9CA3AF' } : c;
-            const grupo = item.grupo || 'Sem grupo';
-            if (!grupos[grupo]) grupos[grupo] = [];
-            grupos[grupo].push(item);
-        });
-        const catList = Object.entries(grupos).map(([grupo, itens]) => {
-            const base = itens[0];
-            const subitens = itens.filter(c => String(c.subgrupo || c.nome) !== String(grupo));
-            const linhas = subitens.map(c => `
-                <div class="flex items-center gap-2 py-2 px-2 border-t border-border/60 group/sub">
-                    <i class="fa-solid ${Utils.escapeHTML(c.icone || 'fa-tag')} text-xs" style="color:${c.cor || '#9CA3AF'}"></i>
-                    <span class="flex-1 min-w-0 text-xs text-text-primary truncate">${Utils.escapeHTML(c.subgrupo || c.nome)}</span>
-                    <button data-action="renameCategory" data-id="${c.id}" data-name="${Utils.escapeHTML(c.nome)}" class="opacity-0 group-hover/sub:opacity-100 text-text-secondary hover:text-brand-medium w-7 h-7 rounded" title="Renomear"><i class="fa-solid fa-pen text-[10px]"></i></button>
-                    ${c.fixa ? '' : `<button data-action="delete" data-col="categorias" data-id="${c.id}" class="opacity-0 group-hover/sub:opacity-100 text-text-secondary hover:text-danger w-7 h-7 rounded" title="Excluir"><i class="fa-solid fa-trash-can text-[10px]"></i></button>`}
-                </div>`).join('');
-            return `<details class="bg-bg border border-border rounded-xl mb-2 overflow-hidden group" open>
-                <summary class="list-none cursor-pointer flex items-center gap-3 px-3 py-3 hover:bg-surface">
-                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style="background-color:${base.cor || '#8B5CF6'}"><i class="fa-solid ${Utils.escapeHTML(base.icone || 'fa-tag')}"></i></div>
-                    <span class="flex-1 font-bold text-sm text-text-primary">${Utils.escapeHTML(grupo)}</span>
-                    <span class="text-[10px] text-text-secondary">${subitens.length} subgrupo${subitens.length === 1 ? '' : 's'}</span>
-                    <i class="fa-solid fa-chevron-down text-xs text-text-secondary group-open:rotate-180"></i>
-                </summary>
-                <div class="px-3 pb-2">${linhas}</div>
-            </details>`;
+    categoriesPage: (db) => {
+        // Category management is intentionally separate from reports/analytics.  Normalize
+        // legacy records at the rendering boundary and never mutate persisted data here.
+        const source = Array.isArray(db?.categorias) ? db.categorias : [];
+        const normalize = (raw, index) => {
+            const item = typeof raw === 'string' ? { nome: raw } : (raw && typeof raw === 'object' ? raw : {});
+            const nome = String(item.nome || item.name || `Categoria ${index + 1}`).trim() || `Categoria ${index + 1}`;
+            const grupoRaw = String(item.grupo || item.group || '').trim();
+            const grupo = grupoRaw || nome;
+            const subgrupo = String(item.subgrupo || item.subGroup || nome).trim() || nome;
+            const tipoRaw = String(item.tipo || item.type || '').trim().toLowerCase();
+            const legacyMovement = tipoRaw === 'movimentação' || tipoRaw === 'movimentacao' || tipoRaw === 'transferencia';
+            const isReceita = tipoRaw === 'receita' || tipoRaw === 'income' || (!tipoRaw && grupo.toLocaleLowerCase('pt-BR') === 'renda');
+            const tipo = legacyMovement ? 'movimentação' : (isReceita ? 'receita' : 'despesa');
+            const fixa = isCategoriaPadrao({ ...item, nome, grupo, subgrupo }, null);
+            const icon = getCategoriaIcon({ ...item, nome, grupo, subgrupo, fixa });
+            const color = /^#[0-9a-f]{3,8}$/i.test(String(item.cor || '')) ? String(item.cor) : 'var(--c-brand-medium)';
+            const archived = item.ativo === false || item.arquivada === true;
+            const principal = !legacyMovement && (item.tipoCategoria === 'principal' || !grupoRaw || (grupo === nome && subgrupo === nome));
+            return {
+                raw, id: item.id, nome, grupo, subgrupo, tipo,
+                tipoLabel: legacyMovement ? 'Legado · movimentação' : (isReceita ? 'Receita' : 'Despesa'),
+                icon, color, fixa, archived, principal, legacyMovement,
+                statusLabel: archived ? 'Arquivada' : (fixa ? 'Padrão' : 'Personalizada')
+            };
+        };
+        const all = source.map(normalize);
+        const legacy = all.filter(item => item.legacyMovement);
+        const categories = all.filter(item => !item.legacyMovement);
+        const receitas = categories.filter(item => item.tipo === 'receita');
+        const despesas = categories.filter(item => item.tipo === 'despesa');
+        const padrao = categories.filter(item => item.fixa);
+        const personalizadas = categories.filter(item => !item.fixa);
+        const groupBy = (items) => {
+            const grouped = new Map();
+            items.forEach(item => {
+                if (!grouped.has(item.grupo)) grouped.set(item.grupo, []);
+                grouped.get(item.grupo).push(item);
+            });
+            return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+        };
+        const escape = value => Utils.escapeHTML(String(value ?? ''));
+        const actionMenu = (item) => {
+            if (item.id === undefined || item.id === null || item.id === '') return '';
+            if (item.fixa) return `<details class="nv-category-actions-menu"><summary title="Ver ações de ${escape(item.nome)}" aria-label="Ver ações de ${escape(item.nome)}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></summary><div class="nv-category-actions-popover"><button type="button" data-action="viewCategory" data-id="${escape(item.id)}"> <i class="fa-regular fa-eye" aria-hidden="true"></i>Ver</button></div></details>`;
+            const manage = item.archived
+                ? `<button type="button" data-action="editCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i>Editar</button><button type="button" data-action="restoreCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Restaurar</button>`
+                : `<button type="button" data-action="editCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i>Editar</button><button type="button" data-action="archiveCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Arquivar</button>`;
+            return `<details class="nv-category-actions-menu"><summary title="Ações de ${escape(item.nome)}" aria-label="Ações de ${escape(item.nome)}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></summary><div class="nv-category-actions-popover">${manage}<button type="button" data-action="deleteCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i>Excluir</button></div></details>`;
+        };
+        const groupCards = (items) => groupBy(items).map(([group, entries]) => {
+            const base = entries.find(item => item.principal) || entries[0];
+            const searchText = entries.map(item => `${item.nome} ${item.grupo} ${item.subgrupo} ${item.tipoLabel} ${item.statusLabel} ${item.principal ? 'categoria principal grupo' : 'subcategoria'}`).join(' ');
+            const rows = entries.map(item => {
+                const rowLabel = item.principal ? item.nome : item.subgrupo || item.nome;
+                const hierarchy = item.principal ? 'Categoria principal · grupo' : `Subcategoria · ${item.grupo}`;
+                const rowSearch = `${item.nome} ${item.grupo} ${item.subgrupo} ${item.tipoLabel} ${item.statusLabel} ${hierarchy}`;
+                return `<div class="nv-category-subrow ${item.archived ? 'is-archived' : ''}" data-category-row data-category-id="${escape(item.id)}" data-search="${escape(rowSearch.toLocaleLowerCase('pt-BR'))}" data-category-status="${item.archived ? 'archived' : 'active'}"><span class="nv-category-row-icon" style="background:${escape(item.color)}" title="${escape(item.nome)}"><i class="fa-solid ${escape(item.icon)}" aria-hidden="true"></i></span><span class="nv-category-subrow__name"><strong>${escape(rowLabel)}</strong><small>${escape(hierarchy)}</small></span><span class="nv-category-type nv-category-type--${item.tipo === 'receita' ? 'income' : 'expense'}">${escape(item.tipoLabel)}</span><span class="nv-category-status ${item.archived ? 'is-archived' : item.fixa ? 'is-fixed' : 'is-custom'}">${escape(item.statusLabel)}</span>${actionMenu(item)}</div>`;
+            }).join('');
+            return `<details class="nv-category-card" data-category-type="${base.tipo}" data-category-count="${entries.length}" data-group-count="1" data-search="${escape(searchText.toLocaleLowerCase('pt-BR'))}" open><summary class="nv-category-card__summary"><span class="nv-category-card__icon" style="background:${escape(base.color)}"><i class="fa-solid ${escape(base.icon)}" aria-hidden="true"></i></span><span class="nv-category-card__main"><strong>${escape(group)}</strong><span>Grupo · ${entries.length} ${entries.length === 1 ? 'categoria' : 'categorias'}</span></span><span class="nv-category-card__type">${escape(base.tipoLabel)}</span><span class="nv-category-card__count">${entries.length} ${entries.length === 1 ? 'registro' : 'registros'}</span><i class="fa-solid fa-chevron-down nv-category-card__chevron" aria-hidden="true"></i></summary><div class="nv-category-subrows">${rows}</div></details>`;
         }).join('');
-
-        return `
-        <div class="flex flex-col lg:flex-row gap-8 mb-8 items-start">
-            <div class="w-full lg:w-3/5 xl:w-2/3 bg-surface p-6 md:p-8 rounded-[24px] border border-border shadow-soft flex flex-col overflow-hidden">
-                <h3 class="text-xl font-bold text-text-primary mb-8 font-primary">Despesas por Categoria</h3>
-                <div class="flex flex-col xl:flex-row items-center gap-10 mb-10">
-                    <div class="relative w-56 h-56 shrink-0 flex items-center justify-center">
-                        <canvas id="categoriasPageChart"></canvas>
-                    </div>
-                    <div class="flex-1 w-full space-y-4 overflow-hidden">
-                        ${sortedCats.slice(0, 5).map(c => {
-                            const pct = totalDespesas > 0 ? (c[1] / totalDespesas) * 100 : 0;
-                            const catObj = CoreComponents._getCategoryConfig(c[0]);
-                            return `
-                            <div class="flex items-center gap-4 p-4 bg-bg rounded-[16px] border border-border shadow-sm">
-                                <div class="w-5 h-5 rounded-full shadow-sm shrink-0 border border-white/20" style="background-color: ${catObj.cor}"></div>
-                                <span class="text-[15px] font-bold text-text-primary flex-1 truncate">${Utils.escapeHTML(c[0])}</span>
-                                <span class="text-sm font-bold text-text-secondary font-mono shrink-0 bg-surface px-3 py-1 rounded-lg border border-border">${pct.toFixed(1)}%</span>
-                            </div>`;
-                        }).join('')}
-                        ${sortedCats.length === 0 ? '<p class="text-sm text-text-secondary text-center py-4 bg-bg rounded-[16px] border border-dashed border-border">Sem dados no período.</p>' : ''}
-                    </div>
-                </div>
-                
-                <div class="border-t border-border pt-8 mt-auto">
-                    <h4 class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-6">Progresso do Mês Atual</h4>
-                    <div class="max-h-[400px] overflow-y-auto pr-4 scrollbar-hide">
-                        ${progressHtml}
-                    </div>
-                </div>
-            </div>
-
-            <div class="w-full lg:w-2/5 xl:w-1/3 bg-surface p-6 md:p-8 rounded-[24px] border border-border shadow-soft flex flex-col overflow-hidden">
-                <div class="flex justify-between items-center mb-8">
-                    <h3 class="text-xl font-bold text-text-primary font-primary">Categorias Ativas</h3>
-                    <button data-action="openModal" data-modal="modal-categoria" class="bg-brand-medium text-white px-4 py-2 rounded-[10px] text-sm font-bold hover:bg-brand-dark transition-colors shadow-soft flex items-center gap-2"><i class="fa-solid fa-plus"></i> Nova</button>
-                </div>
-                
-                <div class="flex-1">
-                    <div class="max-h-[700px] overflow-y-auto pr-2 scrollbar-hide">
-                        ${catList || '<p class="text-center py-6 text-sm text-text-secondary">Nenhuma categoria registrada.</p>'}
-                    </div>
-                </div>
-            </div>
+        const section = (type, title, icon, items, emptyText) => `<section class="nv-category-section" data-category-section="${type}" aria-labelledby="nv-category-${type}-title"><div class="nv-category-section__heading"><div><p class="nv-category-eyebrow">Organização</p><h3 id="nv-category-${type}-title"><i class="fa-solid ${icon}" aria-hidden="true"></i>${title}</h3></div><span class="nv-category-section__count" data-section-count>${items.length} ${items.length === 1 ? 'categorias' : 'categorias'} · ${groupBy(items).length} ${groupBy(items).length === 1 ? 'grupo' : 'grupos'}</span></div><div class="nv-category-list">${groupCards(items) || `<div class="nv-category-empty"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>${emptyText}</span></div>`}</div></section>`;
+        const card = (value, label, icon, extra = '') => `<div class="nv-category-summary-card ${extra}"><span class="nv-category-summary-card__icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></span><span><strong>${value}</strong><small>${label}</small></span></div>`;
+        const total = categories.length;
+        return `<div class="nv-categories-page" data-category-management data-category-type="all" data-category-status="active">
+            <div class="nv-category-summary" aria-label="Resumo das categorias">${card(despesas.length, 'Despesas', 'fa-arrow-trend-down', 'is-expense')}${card(receitas.length, 'Receitas', 'fa-arrow-trend-up', 'is-income')}${card(padrao.length, 'Padrão', 'fa-lock')}${card(personalizadas.length, 'Personalizadas', 'fa-sliders')}</div>
+            <div class="nv-category-toolbar"><label class="nv-category-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Buscar categoria</span><input type="search" data-input="categorySearch" placeholder="Buscar por nome, grupo, subcategoria, tipo ou status" autocomplete="off"></label><div class="nv-category-filters" role="group" aria-label="Filtrar por tipo"><button type="button" class="nv-category-filter is-active" data-action="setCategoryType" data-payload="all" aria-pressed="true">Todas</button><button type="button" class="nv-category-filter" data-action="setCategoryType" data-payload="despesa" aria-pressed="false">Despesas</button><button type="button" class="nv-category-filter" data-action="setCategoryType" data-payload="receita" aria-pressed="false">Receitas</button></div><div class="nv-category-filters" role="group" aria-label="Filtrar por status"><button type="button" class="nv-category-filter is-active" data-action="setCategoryStatus" data-payload="active" aria-pressed="true">Ativas</button><button type="button" class="nv-category-filter" data-action="setCategoryStatus" data-payload="archived" aria-pressed="false">Arquivadas</button><button type="button" class="nv-category-filter" data-action="setCategoryStatus" data-payload="all" aria-pressed="false">Todos os status</button></div><span class="nv-category-results-count" aria-live="polite">${total} ${total === 1 ? 'categoria' : 'categorias'} · ${groupBy(categories).length} ${groupBy(categories).length === 1 ? 'grupo' : 'grupos'}</span></div>
+            <div class="nv-category-sections">${section('despesa', 'Despesas', 'fa-arrow-trend-down', despesas, 'Nenhuma categoria de despesa cadastrada.')}${section('receita', 'Receitas', 'fa-arrow-trend-up', receitas, 'Nenhuma categoria de receita cadastrada.')}</div>${legacy.length ? `<p class="nv-category-legacy-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>${legacy.length} registro(s) legado(s) de movimentação permanecem apenas para compatibilidade histórica; transferências continuam fora das categorias.</p>` : ''}<div class="nv-category-filter-empty" hidden><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><strong>Nenhuma categoria encontrada</strong><span>Tente outro nome ou escolha outro filtro.</span></div>
         </div>`;
     },
 
@@ -284,9 +225,10 @@ export const PageComponents = {
         let contas = '<option value="">Todas as contas</option>';
         if (bancos?.length) contas += '<optgroup label="Contas bancárias">' + bancos.map(b => `<option value="banco_${Utils.escapeHTML(String(b.id))}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${Utils.escapeHTML(b.instituicao && b.instituicao !== 'Outro' ? b.instituicao + ' (' + b.nome + ')' : b.nome)}</option>`).join('') + '</optgroup>';
         if (cartoes?.length) contas += '<optgroup label="Cartões">' + cartoes.map(c => `<option value="cartao_${Utils.escapeHTML(String(c.id))}" ${f.bancoId === 'cartao_'+c.id ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('') + '</optgroup>';
-        const cats = categorias.map(c => {
+        const cats = categorias.filter(c => typeof c === 'string' || (c.ativo !== false && !c.arquivada) || (f.categoria && c.nome === f.categoria)).map(c => {
             const nome = typeof c === 'string' ? c : c.nome;
-            return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`;
+            const archived = typeof c !== 'string' && (c.ativo === false || c.arquivada === true);
+            return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}${archived ? ' (arquivada · histórico)' : ''}</option>`;
         }).join('');
 
         return `<div class="nv-tx-filters">

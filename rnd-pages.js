@@ -362,17 +362,9 @@ export const PageRenderers = {
     },
 
     Relatorios: (appState) => {
-        const h = new Date();
-        const firstDay = `01/${h.getMonth() < 9 ? '0'+(h.getMonth()+1) : h.getMonth()+1}`;
-        const lastDay = new Date(h.getFullYear(), h.getMonth() + 1, 0).getDate();
-        const lastDayStr = `${lastDay}/${h.getMonth() < 9 ? '0'+(h.getMonth()+1) : h.getMonth()+1}/${h.getFullYear()}`;
-
         const actionsHtml = `
-            <button class="bg-surface border border-border text-text-primary px-4 py-2.5 rounded-[12px] text-sm font-bold shadow-soft flex items-center gap-2 hover:bg-bg">
-                <i class="fa-regular fa-calendar"></i> ${firstDay} - ${lastDayStr}
-            </button>
-            <button data-action="exportPDF" class="bg-brand-deep text-white px-5 py-2.5 rounded-[12px] text-sm font-bold shadow-soft flex items-center gap-2 hover:bg-brand-dark transition-transform hover:-translate-y-0.5">
-                <i class="fa-solid fa-download"></i> Exportar PDF
+            <button data-action="exportPDF" class="nv-reports-export-button">
+                <i class="fa-solid fa-download"></i><span>Exportar PDF</span>
             </button>
         `;
 
@@ -389,17 +381,44 @@ export const PageRenderers = {
             return `<div title="Dia ${d.dia}: ${Utils.formatMoney(d.valor)}" class="h-7 rounded-md border border-border" style="background-color: rgba(108,59,182,${intensidade / 100})"></div>`;
         }).join('');
         const variationText = value => value === null ? 'sem base anterior' : `${value >= 0 ? '+' : ''}${value.toFixed(0)}%`;
+        const resultadoAtual = comparacao.atual.receitas - comparacao.atual.despesas;
+        const resultadoAnterior = comparacao.anterior.receitas - comparacao.anterior.despesas;
+        const variacaoResultado = resultadoAnterior === 0
+            ? (resultadoAtual === 0 ? 0 : null)
+            : ((resultadoAtual - resultadoAnterior) / Math.abs(resultadoAnterior)) * 100;
+        const pagamentosFatura = comparacao.atual.pagamentosFatura;
+        const statusFaturas = pagamentosFatura > 0 ? 'Separadas' : 'Sem pagamentos';
+        const statusFaturasMeta = pagamentosFatura > 0
+            ? `${Utils.formatMoney(pagamentosFatura)} fora das despesas`
+            : 'sem pagamentos para separar';
         const categoriasComparadas = FinancialAnalytics.categoryComparison(db.transacoes, { year: anoAtual, month: mesAtual }, { year: anoAnterior, month: mesAnterior }).slice(0, 5);
         const comparacaoCategoriasHtml = categoriasComparadas.length ? categoriasComparadas.map(item => `<div class="flex items-center justify-between gap-3 py-2 border-b border-border last:border-0"><span class="text-xs text-text-primary truncate">${Utils.escapeHTML(item.categoria)}</span><span class="text-xs font-bold ${item.diferenca > 0 ? 'text-danger' : item.diferenca < 0 ? 'text-success' : 'text-text-secondary'} font-mono">${item.diferenca > 0 ? '+' : ''}${Utils.formatMoney(item.diferenca)}</span></div>`).join('') : '<p class="text-xs text-text-secondary">Sem dados suficientes para comparar.</p>';
         const insightsHtml = FinancialAnalytics.insights(db.transacoes, anoAtual, mesAtual).map(insight => `<div class="flex gap-2 items-start py-2 border-b border-border last:border-0"><i class="fa-solid fa-lightbulb text-warning mt-0.5"></i><span class="text-xs text-text-primary">${Utils.escapeHTML(insight)}</span></div>`).join('') || '<p class="text-xs text-text-secondary">Ainda não há dados suficientes para gerar insights.</p>';
         const analysisHtml = `
-            <details class="bg-surface border border-border rounded-[16px] shadow-soft mb-6 group">
-                <summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-chart-line text-brand-medium mr-2"></i>Análises financeiras</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary>
-                <div class="px-5 pb-5">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
-                        <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Receitas no mês</p><p class="text-lg font-bold text-success font-mono mt-1">${Utils.formatMoney(comparacao.atual.receitas)}</p><p class="text-[10px] text-text-secondary mt-1">${variationText(comparacao.variacaoReceitas)} vs. mês anterior</p></div>
-                        <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Despesas reais</p><p class="text-lg font-bold text-danger font-mono mt-1">${Utils.formatMoney(comparacao.atual.despesas)}</p><p class="text-[10px] text-text-secondary mt-1">${variationText(comparacao.variacaoDespesas)} vs. mês anterior</p></div>
-                        <div class="bg-bg border border-border rounded-xl p-4"><p class="text-[10px] uppercase font-bold text-text-secondary">Resultado do mês</p><p class="text-lg font-bold ${comparacao.atual.receitas - comparacao.atual.despesas >= 0 ? 'text-success' : 'text-danger'} font-mono mt-1">${Utils.formatMoney(comparacao.atual.receitas - comparacao.atual.despesas)}</p><p class="text-[10px] text-text-secondary mt-1">Faturas não duplicadas</p></div>
+            <details class="nv-analysis-summary bg-surface border border-border rounded-[16px] shadow-soft mb-6 group">
+                <summary class="cursor-pointer list-none font-bold text-text-primary"><span><i class="fa-solid fa-chart-line text-brand-medium mr-2"></i>Análises financeiras <small>Contexto mensal e insights</small></span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary>
+                <div class="nv-analysis-summary__body">
+                    <div class="nv-analysis-metrics" role="list" aria-label="Indicadores financeiros do mês">
+                        <article class="nv-analysis-metric nv-analysis-metric--income" role="listitem">
+                            <p class="nv-analysis-metric__label">Receitas no mês</p>
+                            <strong class="nv-analysis-metric__value">${Utils.formatMoney(comparacao.atual.receitas)}</strong>
+                            <span class="nv-analysis-metric__meta">${variationText(comparacao.variacaoReceitas)} vs. mês ant.</span>
+                        </article>
+                        <article class="nv-analysis-metric nv-analysis-metric--expense" role="listitem">
+                            <p class="nv-analysis-metric__label">Despesas reais</p>
+                            <strong class="nv-analysis-metric__value">${Utils.formatMoney(comparacao.atual.despesas)}</strong>
+                            <span class="nv-analysis-metric__meta">${variationText(comparacao.variacaoDespesas)} vs. mês ant.</span>
+                        </article>
+                        <article class="nv-analysis-metric ${resultadoAtual >= 0 ? 'nv-analysis-metric--positive' : 'nv-analysis-metric--negative'}" role="listitem">
+                            <p class="nv-analysis-metric__label">Resultado do mês</p>
+                            <strong class="nv-analysis-metric__value">${Utils.formatMoney(resultadoAtual)}</strong>
+                            <span class="nv-analysis-metric__meta">${variationText(variacaoResultado)} vs. mês ant.</span>
+                        </article>
+                        <article class="nv-analysis-metric nv-analysis-metric--invoice" role="listitem">
+                            <p class="nv-analysis-metric__label">Faturas não duplicadas</p>
+                            <strong class="nv-analysis-metric__value ${pagamentosFatura > 0 ? 'is-positive' : 'is-neutral'}">${statusFaturas}</strong>
+                            <span class="nv-analysis-metric__meta">${statusFaturasMeta}</span>
+                        </article>
                     </div>
                     <div class="mb-5"><p class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Insights</p>${insightsHtml}</div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5"><div><p class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Maiores variações por categoria</p>${comparacaoCategoriasHtml}</div><div><p class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Mapa diário de despesas</p><div class="grid grid-cols-7 sm:grid-cols-10 lg:grid-cols-12 gap-1">${heatmapHtml}</div></div></div>
@@ -408,27 +427,19 @@ export const PageRenderers = {
         `;
 
         UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Relatórios</h2>
-                    <p class="text-text-secondary text-sm">Análises detalhadas da sua inteligência financeira.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
-            ${analysisHtml}
-            ${Components.reportsPage(db, appState)}
+            ${Components.reportsPage(db, appState, actionsHtml, analysisHtml)}
         `);
     },
 
     Categorias: (appState) => {
         UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div class="nv-category-page-header">
                 <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Categorias</h2>
-                    <p class="text-text-secondary text-sm">Analise o progresso e personalize as categorias do seu sistema.</p>
+                    <p class="nv-category-eyebrow">Cadastros</p>
+                    <h2>Categorias</h2>
+                    <p>Organize grupos e subcategorias para manter seus lançamentos consistentes.</p>
                 </div>
+                <button type="button" data-action="openModal" data-modal="modal-categoria" class="nv-category-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i> Nova categoria</button>
             </div>
             ${Components.categoriesPage(db, appState)}
         `);
@@ -443,10 +454,6 @@ export const PageRenderers = {
                 </div>
             </div>
             ${Components.settingsPage(db)}
-            <div class="mt-6 space-y-3">
-                <details class="bg-surface border border-border rounded-[14px] shadow-soft group"><summary class="cursor-pointer list-none p-4 flex items-center justify-between font-bold text-sm text-text-primary"><span><i class="fa-solid fa-tags text-brand-medium mr-2"></i>Categorias</span><i class="fa-solid fa-chevron-down text-xs text-text-secondary group-open:rotate-180 transition-transform"></i></summary><div class="p-4">${Components.categoriesPage(db, appState)}</div></details>
-                <details class="bg-surface border border-border rounded-[14px] shadow-soft group"><summary class="cursor-pointer list-none p-4 flex items-center justify-between font-bold text-sm text-text-primary"><span><i class="fa-solid fa-address-book text-brand-medium mr-2"></i>Contatos</span><i class="fa-solid fa-chevron-down text-xs text-text-secondary group-open:rotate-180 transition-transform"></i></summary><div class="p-4"><div class="flex justify-end mb-3"><button data-action="openModal" data-modal="modal-contato" class="px-3 py-1.5 rounded-lg bg-brand-medium text-white text-xs font-bold"><i class="fa-solid fa-plus mr-1"></i>Novo contato</button></div>${Components.contatosPage(db.contatos)}</div></details>
-            </div>
         `);
     },
 

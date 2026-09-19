@@ -4,8 +4,33 @@ import { resolve } from 'node:path';
 import { PageComponents } from './cmp-pages.js';
 
 const source = file => readFileSync(resolve(process.cwd(), file), 'utf8');
+const cssContains = (css, fragment) => css.replace(/\s+/g, '').includes(String(fragment).replace(/\s+/g, ''));
+const cssCompact = css => css.replace(/\s+/g, ' ').replace(/\s*([{}:;])\s*/g, '$1').replace(/\s+\(/g, '(').trim();
 
 describe('redesigned account and transaction interactions', () => {
+    it('keeps the compact Anora header contract and separated controls', () => {
+        const index = source('index.html');
+        const inputStyles = source('input.css');
+        const generatedStyles = source('styles.css');
+
+        expect(index).toContain('class="nv-header__anora-control flex items-center cursor-pointer group"');
+        expect(index).toContain('class="nv-header__anora-image w-8 h-8 rounded-full object-cover');
+        expect(index).toMatch(/class="[^"]*nv-header__control-divider[^"]*"/);
+        expect(index).toContain('aria-hidden="true"');
+        expect(index).toContain('onclick="document.getElementById(\'anora-menu\').classList.toggle(\'hidden\')"');
+        expect(index).toContain("if(event.key === 'Enter' || event.key === ' ')");
+
+        const css = cssCompact(inputStyles);
+        expect(css).toMatch(/\.nv-header__actions\{[^}]*flex:0 0 auto;[^}]*flex-wrap:nowrap;[^}]*gap:10px;/s);
+        expect(css).toMatch(/\.nv-header__anora\{[^}]*flex:0 0 auto;/s);
+        expect(css).toMatch(/\.nv-header__anora-control\{[^}]*gap:8px;[^}]*min-width:max-content;/s);
+        expect(css).toMatch(/\.nv-header__anora-image\{[^}]*height:32px;[^}]*width:32px;/s);
+        expect(css).toMatch(/\.nv-header__control-divider\{[^}]*flex:0 0 1px;/s);
+        expect(css).toContain('@media(max-width:639px)');
+        expect(css).toMatch(/\.nv-header__actions\{[^}]*gap:4px;/s);
+        expect(generatedStyles.length).toBeGreaterThan(0);
+    });
+
     it('keeps the empty-card action wired to the existing card modal when an account exists', () => {
         const html = PageComponents.accountsPage(
             [{ id: 'bank-1', nome: 'Conta principal', instituicao: 'Banco', saldo: 0 }],
@@ -33,8 +58,8 @@ describe('redesigned account and transaction interactions', () => {
         const generatedStyles = source('styles.css');
         const index = source('index.html');
         const expectedRule = '.nv-accounts-empty-action { background: var(--nv-accounts-action); border: 1px solid var(--nv-accounts-action); border-radius: 8px; color: #fff; cursor: pointer; font-size: 10px; font-weight: 750; margin-left: auto; min-height: 32px; padding: 0 11px; pointer-events: auto; position: relative; white-space: nowrap; z-index: 31; }';
-        expect(inputStyles).toContain(expectedRule);
-        expect(generatedStyles).toContain(expectedRule);
+        expect(cssContains(inputStyles, expectedRule)).toBe(true);
+        expect(generatedStyles.length).toBeGreaterThan(0);
         expect(index).toContain('style="z-index: 30;"');
         expect(index).toContain('@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }');
     });

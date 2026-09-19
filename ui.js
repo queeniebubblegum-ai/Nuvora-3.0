@@ -9,6 +9,20 @@ export const UI = {
         if (!modal) return;
         UI.modalSnapshots[id] = [...modal.querySelectorAll('input, textarea, select')].map(el => [el.id || el.name || el.type, el.value]);
     },
+    resetCategoryModal: () => {
+        const modal = document.getElementById('modal-categoria');
+        if (!modal) return;
+        modal.querySelector('form')?.reset();
+        const title = document.getElementById('nova-categoria-titulo');
+        const submit = document.getElementById('nova-categoria-submit');
+        const wrap = document.getElementById('nova-categoria-grupo-wrap');
+        const parent = document.getElementById('nova-categoria-grupo');
+        if (title) title.textContent = 'Nova categoria';
+        if (submit) submit.textContent = 'Criar categoria';
+        wrap?.classList.add('hidden');
+        if (parent) { parent.disabled = true; parent.required = false; parent.value = ''; }
+        modal.querySelectorAll('[aria-invalid="true"]').forEach(el => el.removeAttribute('aria-invalid'));
+    },
     switchToTransferMode: () => {
         document.querySelector('[data-submit="transacao"]')?.classList.add('hidden');
         document.getElementById('inline-transferencia')?.classList.remove('hidden');
@@ -107,6 +121,8 @@ export const UI = {
             modal.classList.remove('flex', 'animate-fade-in-up');
             // Só a camada encerrada é resetada; não destrói o estado da fatura subjacente.
             modal.querySelectorAll('form').forEach(form => form.reset());
+            if (modalId === 'modal-categoria') UI.resetCategoryModal();
+            delete UI.modalSnapshots[modal.id];
             if (modalId === 'modal-fatura-detalhes') {
                 viewState.selectedTransactions = [];
                 viewState.activeCardId = null;
@@ -137,6 +153,8 @@ export const UI = {
         });
         
         document.querySelectorAll('form').forEach(form => form.reset());
+        UI.resetCategoryModal();
+        UI.modalSnapshots = {};
         
         const hoje = Utils.localISODate();
         ['input-data-trans', 'dc-data', 'simulador-data', 'agendamento-data', 'edit-data', 'transfer-data'].forEach(id => {
@@ -188,7 +206,13 @@ export const UI = {
         document.getElementById('edit-data').value = t.data || new Date(t.id).toISOString().split('T')[0];
         
         const catSelect = document.getElementById('edit-categoria');
-        catSelect.innerHTML = db.categorias.map(c => `<option value="${Utils.escapeHTML(c.nome)}" ${t.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('');
+        // Keep archived historical value, but only offer active categories
+        // compatible with the transaction's income/expense type.
+        const categories = db.categorias.filter(c =>
+            (c.nome === t.categoria) ||
+            (c.ativo !== false && !c.arquivada && (!c.tipo || c.tipo === t.tipo))
+        );
+        catSelect.innerHTML = categories.map(c => { const archived = c.ativo === false || c.arquivada === true; return `<option value="${Utils.escapeHTML(c.nome)}" ${t.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}${archived ? ' (arquivada · histórico)' : ''}</option>`; }).join('');
         
         const contSelect = document.getElementById('edit-contato');
         if(contSelect) {

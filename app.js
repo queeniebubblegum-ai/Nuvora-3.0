@@ -10,6 +10,7 @@ import { UI } from './ui.js';
 import { OFXManager } from './ofx.js';
 import { CSVManager } from './csv-manager.js';
 import { Classification } from './classification.js';
+import { isCategoriaPadrao } from './categorias-padrao.js';
 
 // --- ENGENHARIA DE UX: Assistente de Fechamento de Mês ---
 const FechamentoManager = {
@@ -210,6 +211,7 @@ export const App = {
         notifTab: 'alertas',
         dashboardPeriod: 'este_mes',
         reportPeriod: 6,
+        reportCashflowPeriod: 1,
         selectedTransactions: [],
         ofxPendente: null,
         ofxPendenteSaldoFinal: null, 
@@ -409,16 +411,11 @@ export const App = {
         if (App.renderQueue) cancelAnimationFrame(App.renderQueue);
         App.renderQueue = requestAnimationFrame(() => {
             Renderer.render(App.viewState, App.currentPage);
+            if (App.currentPage === 'Categorias') App.filterCategoriesDOM('');
             App.updateSidebarProfile();
             
             if (App.currentPage === 'Relatorios') {
                 requestAnimationFrame(() => { ChartManager.renderAll(App.viewState, db); });
-            } else if (App.currentPage === 'Categorias') {
-                requestAnimationFrame(() => {
-                    if (typeof ChartManager !== 'undefined' && ChartManager.renderCategoriasPageChart) {
-                        ChartManager.renderCategoriasPageChart(db);
-                    }
-                });
             }
             App.renderQueue = null;
         });
@@ -759,7 +756,167 @@ export const App = {
     
     setDashboardPeriod: (period) => { App.viewState.dashboardPeriod = period; },
     setReportPeriod: (months) => { App.viewState.reportPeriod = parseInt(months); },
+    setReportCashflowPeriod: (months) => { App.viewState.reportCashflowPeriod = parseInt(months); },
     setReportTab: (tab) => { App.viewState.reportTab = tab; },
+
+    prepareCategoryParents: (preferred = null) => {
+        const type = ['despesa', 'receita'].includes(document.getElementById('nova-categoria-tipo')?.value)
+            ? document.getElementById('nova-categoria-tipo').value : 'despesa';
+        const select = document.getElementById('nova-categoria-grupo');
+        if (!select) return;
+        const isPrincipal = c => {
+            const group = String(c?.grupo || '').trim();
+            const name = String(c?.nome || '').trim();
+            return c?.tipoCategoria === 'principal' || !group || (group === name && String(c?.subgrupo || name) === name);
+        };
+        const isArchived = c => c && (c.ativo === false || c.arquivada === true);
+        const parents = (db.categorias || []).filter(c => c && !isArchived(c) && (!c.tipo || c.tipo === type) && isPrincipal(c));
+        const unique = new Map();
+        parents.forEach(c => {
+            const group = String(c.grupo || c.nome).trim();
+            if (group && !unique.has(group.toLocaleLowerCase('pt-BR'))) unique.set(group.toLocaleLowerCase('pt-BR'), { name: group, category: c });
+        });
+        const current = preferred ?? select.value;
+        select.innerHTML = '<option value="">Selecione uma categoria principal</option>' + Array.from(unique.values())
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+            .map(({ name }) => `<option value="${Utils.escapeHTML(name)}">${Utils.escapeHTML(name)}</option>`).join('');
+        // An archived category can still be edited for historical consistency. It is
+        // shown only as the current value and never becomes a new-choice option.
+        if (current && !Array.from(select.options).some(o => o.value === current)) {
+            const legacy = (db.categorias || []).find(c => String(c.grupo || c.nome) === String(current) && (!c.tipo || c.tipo === type) && isPrincipal(c));
+            if (legacy) select.insertAdjacentHTML('beforeend', `<option value="${Utils.escapeHTML(current)}">${Utils.escapeHTML(current)} (histórico)</option>`);
+        }
+        if (current) select.value = current;
+    },
+    toggleCategoryLevel: (level = null) => {
+        const selected = level || document.getElementById('nova-categoria-nivel')?.value || 'principal';
+        const wrap = document.getElementById('nova-categoria-grupo-wrap');
+        const parent = document.getElementById('nova-categoria-grupo');
+        const isSubcategory = selected === 'subcategoria';
+        wrap?.classList.toggle('hidden', !isSubcategory);
+        if (parent) {
+            parent.disabled = !isSubcategory;
+            parent.required = isSubcategory;
+            if (!isSubcategory) parent.value = '';
+        }
+        if (isSubcategory) App.prepareCategoryParents();
+    },
+    prepareCategoryModal: (categoryId = null) => {
+        const item = categoryId ? (db.categorias || []).find(c => String(c.id) === String(categoryId)) : null;
+        const id = document.getElementById('nova-categoria-id');
+        const name = document.getElementById('nova-categoria-nome');
+        const type = document.getElementById('nova-categoria-tipo');
+        const level = document.getElementById('nova-categoria-nivel');
+        const parent = document.getElementById('nova-categoria-grupo');
+        const title = document.getElementById('nova-categoria-titulo');
+        const submit = document.getElementById('nova-categoria-submit');
+        const isSubcategory = !!item && (item.tipoCategoria === 'subcategoria' || (item.grupo && item.grupo !== item.nome));
+        if (id) id.value = item?.id || '';
+        if (name) name.value = item?.nome || '';
+        if (type) type.value = item?.tipo === 'receita' ? 'receita' : 'despesa';
+        if (level) level.value = isSubcategory ? 'subcategoria' : 'principal';
+        const icon = document.getElementById('nova-categoria-icone');
+        const color = document.getElementById('nova-categoria-cor');
+        if (icon) icon.value = item?.icone || 'fa-tag';
+        if (color) color.value = item?.cor || '#3B82F6';
+        if (title) title.textContent = item ? 'Editar categoria' : 'Nova categoria';
+        if (submit) submit.textContent = item ? 'Salvar alterações' : 'Criar categoria';
+        App.toggleCategoryLevel(isSubcategory ? 'subcategoria' : 'principal');
+        if (isSubcategory) {
+            App.prepareCategoryParents(item.grupo || '');
+            if (parent && item.grupo && !Array.from(parent.options).some(o => o.value === item.grupo)) {
+                parent.insertAdjacentHTML('beforeend', `<option value="${Utils.escapeHTML(item.grupo)}">${Utils.escapeHTML(item.grupo)} (histórico)</option>`);
+            }
+            if (parent) parent.value = item.grupo || '';
+        } else if (parent) {
+            parent.value = '';
+        }
+    },
+    openCategoryEditor: (id) => {
+        App.openModal('modal-categoria', null, id);
+    },
+    archiveCategory: (id) => {
+        const item = (db.categorias || []).find(c => String(c.id) === String(id));
+        if (!item || isCategoriaPadrao(item)) { Utils.showToast('Categorias padrão não podem ser arquivadas.', 'error'); return; }
+        if (!confirm(`Arquivar “${item.nome}”? Ela ficará no histórico, mas não aparecerá em novos lançamentos.`)) return;
+        if (Database.archiveCategory(id)) {
+            Utils.showToast('Categoria arquivada. O histórico foi preservado.', 'success');
+            App.updateCategorySelects(); App.scheduleRender();
+        } else {
+            Utils.showToast(Database.getCategoryError?.() || 'Não foi possível arquivar a categoria.', 'error');
+        }
+    },
+    restoreCategory: (id) => {
+        if (Database.restoreCategory(id)) { Utils.showToast('Categoria restaurada e disponível para novos lançamentos.', 'success'); App.updateCategorySelects(); App.scheduleRender(); }
+    },
+    deleteCategory: (id) => {
+        const item = (db.categorias || []).find(c => String(c.id) === String(id));
+        if (!item) return;
+        if (isCategoriaPadrao(item)) { Utils.showToast('Categorias padrão não podem ser excluídas.', 'error'); return; }
+        const usage = Database.getCategoryUsage(id);
+        if (usage.count) { Utils.showToast(`Não é possível excluir: ${usage.references.join(', ')}. Arquive a categoria para preservar o histórico.`, 'error'); return; }
+        if (!confirm(`Excluir “${item.nome}”? Esta categoria não tem referências e será removida permanentemente.`)) return;
+        if (Database.remove('categorias', id) !== false) { Utils.showToast('Categoria excluída.', 'success'); App.updateCategorySelects(); App.scheduleRender(); }
+    },
+    setCategoryType: (type) => {
+        const root = document.querySelector('[data-category-management]');
+        if (!root) return;
+        const selected = ['all', 'despesa', 'receita'].includes(type) ? type : 'all';
+        root.dataset.categoryType = selected;
+        root.querySelectorAll('[data-action="setCategoryType"]').forEach(button => {
+            const active = button.getAttribute('data-payload') === selected;
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        App.filterCategoriesDOM(root.querySelector('[data-input="categorySearch"]')?.value || '');
+    },
+
+    setCategoryStatus: (status) => {
+        const root = document.querySelector('[data-category-management]');
+        if (!root) return;
+        const selected = ['all', 'active', 'archived'].includes(status) ? status : 'active';
+        root.dataset.categoryStatus = selected;
+        root.querySelectorAll('[data-action="setCategoryStatus"]').forEach(button => {
+            const active = button.getAttribute('data-payload') === selected;
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        App.filterCategoriesDOM(root.querySelector('[data-input="categorySearch"]')?.value || '');
+    },
+    filterCategoriesDOM: (query) => {
+        const root = document.querySelector('[data-category-management]');
+        if (!root) return;
+        const normalizedQuery = String(query || '').trim().toLocaleLowerCase('pt-BR');
+        const selectedType = root.dataset.categoryType || 'all';
+        const selectedStatus = root.dataset.categoryStatus || 'active';
+        let visibleCategoryCount = 0;
+        let visibleGroupCount = 0;
+        root.querySelectorAll('[data-category-section]').forEach(section => {
+            const sectionType = section.getAttribute('data-category-section');
+            const typeMatches = selectedType === 'all' || selectedType === sectionType;
+            let visibleCards = 0;
+            section.querySelectorAll('.nv-category-card').forEach(card => {
+                let visibleRows = 0;
+                card.querySelectorAll('[data-category-row]').forEach(row => {
+                    const statusMatches = selectedStatus === 'all' || row.dataset.categoryStatus === selectedStatus;
+                    const textMatches = !normalizedQuery || String(row.dataset.search || '').includes(normalizedQuery);
+                    const visible = typeMatches && statusMatches && textMatches;
+                    row.hidden = !visible;
+                    if (visible) { visibleRows += 1; visibleCategoryCount += 1; }
+                });
+                const visible = typeMatches && visibleRows > 0;
+                card.hidden = !visible;
+                if (visible) visibleCards += 1;
+            });
+            visibleGroupCount += visibleCards;
+            const hasCards = section.querySelectorAll('.nv-category-card').length > 0;
+            section.hidden = !typeMatches || !visibleCards || !hasCards;
+        });
+        const empty = root.querySelector('.nv-category-filter-empty');
+        if (empty) empty.hidden = visibleCategoryCount !== 0;
+        const result = root.querySelector('.nv-category-results-count');
+        if (result) result.textContent = `${visibleCategoryCount} ${visibleCategoryCount === 1 ? 'categoria' : 'categorias'} · ${visibleGroupCount} ${visibleGroupCount === 1 ? 'grupo' : 'grupos'}`;
+    },
     
     setTxPage: (page) => {
         App.viewState.txPage = parseInt(page);
@@ -870,7 +1027,12 @@ export const App = {
     },
 
     setTransactionType: (tipo) => UI.setTransactionType(tipo),
-    openModal: (id, transType = null) => UI.openModal(id, transType),
+    openModal: (id, transType = null, categoryId = null) => {
+        // Prepare category state before capturing the modal snapshot. Otherwise a
+        // previous edit is treated as unsaved data when opening a new category.
+        if (id === 'modal-categoria') App.prepareCategoryModal(categoryId);
+        UI.openModal(id, transType);
+    },
     switchToTransferMode: () => UI.switchToTransferMode(),
     captureModalState: (id) => UI.captureModalState(id),
     renameCategory: (id, nome) => Database.renameCategory(id, nome),
@@ -978,7 +1140,7 @@ export const App = {
         const groupSelect = document.getElementById('invoice-classification-group');
         const subgroupSelect = document.getElementById('invoice-classification-subgroup');
         if (!modal || !groupSelect || !subgroupSelect || !selected.length) return;
-        const categories = (db.categorias || []).filter(c => c && (!c.tipo || c.tipo === 'despesa'));
+        const categories = (db.categorias || []).filter(c => c && c.ativo !== false && !c.arquivada && (!c.tipo || c.tipo === 'despesa'));
         const groups = [...new Set(categories.map(c => c.grupo || c.nome).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
         groupSelect.innerHTML = '<option value="" disabled selected>Selecione um grupo</option>' + groups.map(g => `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}</option>`).join('');
         subgroupSelect.innerHTML = '<option value="" disabled selected>Selecione uma categoria</option>';

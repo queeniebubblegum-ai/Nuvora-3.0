@@ -16,6 +16,7 @@
   --c-brand-deep: #4C3C70;
   --c-brand-dark: #62518C;
   --c-brand-medium: #8170B5;
+  --c-action-purple: #5B3AA2;
   --c-brand-soft: #DCD8EE;
   --c-success: #4E8065;
   --c-success-soft: #E7F1EA;
@@ -46,6 +47,7 @@
   --c-brand-deep: #D1C6ED;
   --c-brand-dark: #BBADE0;
   --c-brand-medium: #9A78E8;
+  --c-action-purple: #805BD1;
   --c-brand-soft: #5B477F;
   --c-success: #8EBA9D;
   --c-success-soft: #354B3D;
@@ -547,6 +549,169 @@ body {
 }
 
 /* --------------------------------------------------------------------------
+   Avenera global header actions
+   The header owns account, data, notification, assistant, and theme controls;
+   keeping this layer scoped avoids changing page-level button treatments.
+---------------------------------------------------------------------------- */
+.nv-header {
+  min-width: 0;
+}
+
+.nv-header__brand,
+.nv-header__actions,
+.nv-header__data-tools,
+.nv-header__anora {
+  min-width: 0;
+}
+
+.nv-header__actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 10px;
+  min-width: max-content;
+}
+
+.nv-header__data-tools {
+  flex: 0 0 auto;
+}
+
+.nv-header__control-divider {
+  flex: 0 0 1px;
+}
+
+.nv-header__action,
+.nv-header__profile {
+  border: 1px solid transparent;
+  color: var(--c-text-secondary);
+  flex: 0 0 auto;
+}
+
+.nv-header__action:hover,
+.nv-header__profile:hover,
+.nv-header__anora:hover {
+  background: var(--c-surface-soft);
+  color: var(--c-text-primary);
+}
+
+.nv-header__action:focus-visible,
+.nv-header__profile:focus-visible,
+.nv-header__anora:focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring);
+}
+
+.nv-header__data-action:first-child:hover {
+  color: var(--c-success);
+}
+
+.nv-header__data-action:last-child:hover {
+  color: var(--c-brand-medium);
+}
+
+.nv-header__profile {
+  font-family: var(--font-ui);
+  text-align: left;
+}
+
+.nv-header__profile-image {
+  border-color: var(--c-border);
+  flex: 0 0 auto;
+}
+
+.nv-header__profile:hover .nv-header__profile-image {
+  border-color: var(--c-brand-medium);
+}
+
+.nv-header__anora {
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  flex: 0 0 auto;
+  padding: 2px;
+}
+
+.nv-header__anora-control {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+  min-width: max-content;
+  white-space: nowrap;
+}
+
+.nv-header__anora-image {
+  flex: 0 0 32px;
+  height: 32px;
+  width: 32px;
+}
+
+.nv-header__anora-chevron {
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+
+.nv-header__profile-copy {
+  line-height: 1.15;
+}
+
+@media (max-width: 639px) {
+  .nv-header {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .nv-header__brand {
+    gap: 0;
+  }
+
+  .nv-header__brand > button {
+    margin-left: -6px;
+    margin-right: -2px;
+  }
+
+  .nv-header__actions {
+    gap: 4px;
+  }
+
+  .nv-header__action,
+  .nv-header__profile {
+    height: 32px;
+    width: 32px;
+  }
+
+  .nv-header__data-action {
+    height: 32px;
+    width: 30px;
+  }
+
+  .nv-header__anora {
+    padding: 1px;
+  }
+
+  .nv-header__anora-control {
+    gap: 4px;
+  }
+
+  .nv-header__anora-image {
+    flex-basis: 30px;
+    height: 30px;
+    width: 30px;
+  }
+
+  .nv-header__control-divider {
+    height: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-header__action,
+  .nv-header__profile,
+  .nv-header__anora {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
    Avenera navigation shell
    Scoped to the existing sidebar so the page renderers and modal surfaces keep
    their current layout and semantic tokens.
@@ -623,10 +788,7 @@ body {
   color: var(--nv-sidebar-active-text) !important;
 }
 
-.nv-sidebar__item:focus-visible,
-.nv-sidebar__profile:focus-visible,
-.nv-sidebar__tool:focus-visible,
-.nv-sidebar__theme-toggle:focus-visible {
+.nv-sidebar__item:focus-visible {
   outline: 0;
   box-shadow: var(--focus-ring);
 }
@@ -649,59 +811,6 @@ body {
 .nv-sidebar__footer {
   border-color: var(--nv-sidebar-border) !important;
   padding: 18px 14px 20px;
-}
-
-.nv-sidebar__tools {
-  justify-content: flex-start;
-  gap: 4px;
-}
-
-.nv-sidebar__tool,
-.nv-sidebar__theme-toggle {
-  color: var(--nv-sidebar-icon) !important;
-}
-
-.nv-sidebar__tool:hover,
-.nv-sidebar__theme-toggle:hover {
-  background: var(--nv-sidebar-hover) !important;
-  color: var(--nv-sidebar-active-text) !important;
-}
-
-.nv-sidebar__profile-wrap {
-  border-color: var(--nv-sidebar-border) !important;
-  padding-top: 16px;
-}
-
-.nv-sidebar__profile {
-  min-width: 0;
-  padding: 9px 10px;
-  transition: background-color .16s ease, box-shadow .16s ease;
-}
-
-.nv-sidebar__profile:hover {
-  background: var(--nv-sidebar-hover) !important;
-}
-
-.nv-sidebar__profile-image {
-  border-color: var(--nv-sidebar-border) !important;
-  flex: 0 0 40px;
-}
-
-.nv-sidebar__profile span.text-sm {
-  color: var(--c-text-primary) !important;
-  font-size: 12px;
-}
-
-.nv-sidebar__profile span.text-\[10px\] {
-  color: var(--nv-sidebar-muted) !important;
-}
-
-.nv-sidebar__profile-icon {
-  color: var(--nv-sidebar-icon) !important;
-}
-
-.nv-sidebar__profile:hover .nv-sidebar__profile-icon {
-  color: var(--nv-sidebar-active-text) !important;
 }
 
 .nv-sidebar-overlay {
@@ -745,10 +854,7 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   .nv-sidebar,
-  .nv-sidebar__item,
-  .nv-sidebar__profile,
-  .nv-sidebar__tool,
-  .nv-sidebar__theme-toggle {
+  .nv-sidebar__item {
     transition: none;
   }
 }
@@ -1024,7 +1130,7 @@ body {
    Accounts and cards — Avenera redesign. Scoped to the Contas page so legacy
    dashboard and invoice surfaces keep their existing hooks and calculations.
 ---------------------------------------------------------------------------- */
-.nv-accounts-page { --nv-accounts-action: #5b3aa2; --nv-accounts-muted: color-mix(in srgb, var(--c-text-secondary) 80%, transparent); margin: 0 auto; max-width: 1240px; padding: 4px 0 38px; }
+.nv-accounts-page { --nv-accounts-action: var(--c-action-purple); --nv-accounts-muted: color-mix(in srgb, var(--c-text-secondary) 80%, transparent); margin: 0 auto; max-width: 1240px; padding: 4px 0 38px; }
 .nv-accounts-header { align-items: flex-end; display: flex; gap: 24px; justify-content: space-between; margin-bottom: 24px; }
 .nv-accounts-eyebrow { color: var(--c-brand-medium); font-size: 10px; font-weight: 800; letter-spacing: .13em; margin: 0 0 5px; text-transform: uppercase; }
 .nv-accounts-header h1, .nv-accounts-section-heading h2, .nv-accounts-card h3 { color: var(--c-text-primary); letter-spacing: -.035em; margin: 0; }
@@ -1116,8 +1222,207 @@ body {
 .nv-accounts-empty-action { background: var(--nv-accounts-action); border: 1px solid var(--nv-accounts-action); border-radius: 8px; color: #fff; cursor: pointer; font-size: 10px; font-weight: 750; margin-left: auto; min-height: 32px; padding: 0 11px; pointer-events: auto; position: relative; white-space: nowrap; z-index: 31; }
 .nv-accounts-empty-action:hover:not(:disabled) { background: color-mix(in srgb, var(--nv-accounts-action) 82%, #000); }
 .nv-accounts-empty-action:disabled { cursor: not-allowed; opacity: .45; }
-.dark .nv-accounts-page { --nv-accounts-action: #805bd1; }
+.dark .nv-accounts-page { --nv-accounts-action: var(--c-action-purple); }
 @media (max-width: 900px) { .nv-accounts-grid { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .nv-accounts-header { align-items: stretch; flex-direction: column; gap: 15px; } .nv-accounts-header-actions { justify-content: flex-start; } .nv-accounts-summary-grid { grid-template-columns: 1fr; } .nv-accounts-secondary-action { flex: 1; } .nv-accounts-primary-action { margin-left: auto; } }
 @media (max-width: 480px) { .nv-accounts-page { padding-bottom: 24px; } .nv-accounts-overview, .nv-accounts-section { padding-left: 0; padding-right: 0; } .nv-accounts-overview { background: transparent; border: 0; box-shadow: none; padding-top: 0; } .nv-accounts-summary-card { padding: 14px; } .nv-accounts-card { border-radius: 14px; padding: 15px; } .nv-credit-card-top { margin: -15px -15px 0; padding: 16px; } .nv-accounts-card-actions { gap: 5px; } .nv-accounts-action { flex: 1; padding-left: 6px; padding-right: 6px; } .nv-accounts-action span { font-size: 9px; } .nv-accounts-empty { align-items: flex-start; flex-wrap: wrap; } .nv-accounts-empty > div:nth-child(2) { flex: 1 1 calc(100% - 50px); } .nv-accounts-empty-action { margin-left: 49px; } }
 @media (prefers-reduced-motion: reduce) { .nv-accounts-card, .nv-accounts-secondary-action, .nv-accounts-primary-action { transition: none; } }
+
+/* Avenera reports hierarchy — selected context, analysis, then generic navigation card. */
+.nv-analysis-summary { border-radius: 12px !important; box-shadow: var(--shadow-sm) !important; overflow: hidden; }
+.nv-analysis-summary summary { align-items: center; color: var(--c-text-primary); display: flex; font-size: 12px; gap: 12px; justify-content: space-between; padding: 12px 14px; }
+.nv-analysis-summary summary::-webkit-details-marker { display: none; }
+.nv-analysis-summary summary > span { min-width: 0; }
+.nv-analysis-summary summary > i { flex: 0 0 auto; }
+.nv-analysis-summary summary small { color: var(--c-text-secondary); font-size: 10px; font-weight: 500; margin-left: 8px; }
+.nv-analysis-summary__body { padding: 0 12px 12px; }
+.nv-analysis-metrics { display: grid; gap: 8px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0 0 14px; }
+.nv-analysis-metric { background: var(--c-bg); border: 1px solid var(--c-border); border-radius: 10px; display: flex; flex-direction: column; justify-content: space-between; min-height: 78px; min-width: 0; padding: 9px 10px 8px; }
+.nv-analysis-metric--income { border-top: 2px solid var(--c-success); }
+.nv-analysis-metric--expense { border-top: 2px solid var(--c-danger); }
+.nv-analysis-metric--positive { border-top: 2px solid var(--c-success); }
+.nv-analysis-metric--negative { border-top: 2px solid var(--c-danger); }
+.nv-analysis-metric--invoice { border-top: 2px solid var(--c-brand-medium); }
+.nv-analysis-metric__label { color: var(--c-text-secondary); font-size: 9px; font-weight: 750; letter-spacing: .06em; line-height: 1.2; margin: 0; min-height: 2.4em; text-transform: uppercase; }
+.nv-analysis-metric__value { color: var(--c-text-primary); display: block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: clamp(15px, 1.7vw, 20px); font-variant-numeric: tabular-nums; font-weight: 750; letter-spacing: -.035em; line-height: 1.15; margin-top: 3px; overflow-wrap: anywhere; }
+.nv-analysis-metric--income .nv-analysis-metric__value { color: var(--c-success); }
+.nv-analysis-metric--expense .nv-analysis-metric__value { color: var(--c-danger); }
+.nv-analysis-metric--positive .nv-analysis-metric__value, .nv-analysis-metric__value.is-positive { color: var(--c-success); }
+.nv-analysis-metric--negative .nv-analysis-metric__value { color: var(--c-danger); }
+.nv-analysis-metric--invoice .nv-analysis-metric__value { color: var(--c-brand-deep); font-family: var(--font-ui); font-size: 14px; letter-spacing: -.015em; }
+.nv-analysis-metric--invoice .nv-analysis-metric__value.is-positive { color: var(--c-success); }
+.nv-analysis-metric__value.is-neutral { color: var(--c-text-secondary); }
+.nv-analysis-metric__meta { color: var(--c-text-secondary); display: block; font-size: 9px; line-height: 1.25; margin-top: 4px; min-height: 1.25em; overflow-wrap: anywhere; }
+@media (max-width: 720px) {
+  .nv-analysis-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 380px) {
+  .nv-analysis-metrics { grid-template-columns: 1fr; }
+}
+
+.nv-reports-workspace { color: var(--c-text-primary); margin: 0 auto; max-width: 1240px; }
+.nv-reports-navigation { background: var(--c-surface-soft); border: 1px solid var(--c-border); border-radius: 14px; box-shadow: var(--shadow-sm); margin: 0 0 18px; padding: 16px 18px 0; }
+/* The generic report switcher is the primary wayfinding surface: give it a
+   quiet, saturated Avenera-purple signal without pulling the selected report
+   heading or analysis summary into the card. */
+.nv-reports-navigation.nv-reports-context-card { background: color-mix(in srgb, var(--c-surface) 91%, var(--c-action-purple)); border-color: color-mix(in srgb, var(--c-action-purple) 38%, var(--c-border)); box-shadow: 0 10px 28px color-mix(in srgb, var(--c-action-purple) 13%, transparent), inset 0 1px 0 color-mix(in srgb, white 24%, transparent); overflow: hidden; position: relative; }
+.nv-reports-navigation.nv-reports-context-card::before { background: linear-gradient(90deg, var(--c-action-purple), color-mix(in srgb, var(--c-action-purple) 45%, var(--c-brand-medium))); content: ""; height: 3px; left: 0; position: absolute; right: 0; top: 0; }
+.nv-reports-selected-heading { align-items: center; display: flex; gap: 11px; margin: 0 0 18px; min-width: 0; padding: 2px 0 0; }
+.nv-reports-selected-icon { align-items: center; background: var(--c-brand-soft); border-radius: 10px; color: var(--c-brand-deep); display: inline-flex; flex: 0 0 34px; height: 34px; justify-content: center; }
+.nv-reports-selected-copy { min-width: 0; }
+.nv-reports-selected-heading p { color: var(--c-brand-medium); font-size: 9px; font-weight: 800; letter-spacing: .1em; margin: 0; text-transform: uppercase; }
+.nv-reports-selected-heading h1 { color: var(--c-text-primary); font-size: 21px; font-weight: 750; letter-spacing: -.035em; line-height: 1.1; margin: 2px 0 3px; }
+.nv-reports-selected-heading span { color: var(--c-text-secondary); display: block; font-size: 11px; }
+.nv-reports-actions { align-items: center; display: flex; flex: 0 0 auto; margin-left: auto; }
+.nv-reports-actions > .flex { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: flex-end; }
+.nv-reports-export-button { align-items: center; background: var(--c-action-purple); border: 1px solid var(--c-action-purple); border-radius: 8px; box-shadow: var(--shadow-sm); color: #fff !important; cursor: pointer; display: inline-flex; font: inherit; font-size: 10px; font-weight: 750; gap: 6px; min-height: 30px; padding: 0 10px; transition: background .16s ease, border-color .16s ease, transform .16s ease; white-space: nowrap; }
+.nv-reports-actions .nv-reports-export-button, .nv-reports-actions .nv-reports-export-button span, .nv-reports-actions .nv-reports-export-button i { color: #fff !important; }
+.nv-reports-export-button:hover { background: color-mix(in srgb, var(--c-action-purple) 82%, #000); border-color: color-mix(in srgb, var(--c-action-purple) 82%, #000); transform: translateY(-1px); }
+.nv-reports-navigation-copy { min-width: 0; padding-top: 0; position: relative; }
+.nv-reports-eyebrow, .nv-report-filter-label { color: var(--c-brand-medium); font-size: 9px; font-weight: 800; letter-spacing: .11em; margin: 0; text-transform: uppercase; }
+.nv-reports-navigation-copy h2 { color: var(--c-text-primary); font-size: 15px; font-weight: 800; letter-spacing: -.025em; line-height: 1.2; margin: 0 0 3px; }
+.nv-reports-navigation-copy > p { color: var(--c-text-secondary); font-size: 10px; line-height: 1.45; margin: 0; }
+.nv-reports-tabs { align-items: center; border-top: 1px solid color-mix(in srgb, var(--c-action-purple) 20%, var(--c-border)); display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-start; margin-top: 13px; overflow-x: auto; padding: 10px 0 5px; scrollbar-width: thin; }
+.nv-reports-tab { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 9px; color: var(--c-text-secondary); cursor: pointer; display: inline-flex; flex: 0 0 auto; font: inherit; font-size: 11px; font-weight: 750; gap: 7px; min-height: 36px; padding: 0 11px; position: relative; transition: background .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; white-space: nowrap; }
+.nv-reports-tab:hover { background: color-mix(in srgb, var(--c-action-purple) 7%, var(--c-surface)); border-color: color-mix(in srgb, var(--c-action-purple) 17%, transparent); color: var(--c-text-primary); }
+.nv-reports-tab:focus-visible { box-shadow: var(--focus-ring); outline: 0; }
+.nv-reports-tab.is-active { background: color-mix(in srgb, var(--c-action-purple) 15%, var(--c-surface)); border-color: color-mix(in srgb, var(--c-action-purple) 52%, var(--c-border)); box-shadow: 0 4px 12px color-mix(in srgb, var(--c-action-purple) 15%, transparent); color: var(--c-brand-deep); }
+.nv-reports-tab.is-active::after { background: var(--c-action-purple); border-radius: 99px; bottom: -1px; content: ""; height: 2px; left: 10px; position: absolute; right: 10px; }
+.nv-reports-tab.is-active i { color: var(--c-action-purple); }
+.nv-report-export { min-width: 0; }
+.nv-report-toolbar { align-items: center; background: var(--c-surface-soft); border: 1px solid var(--c-border); border-radius: 11px; display: flex; gap: 14px; justify-content: space-between; margin-bottom: 16px; padding: 9px 11px; }
+.nv-report-filter-context { color: var(--c-text-secondary); display: block; font-size: 10px; margin-top: 3px; }
+.nv-report-select-wrap { display: inline-flex; }
+.nv-report-select { appearance: auto; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; color: var(--c-text-primary); font: inherit; font-size: 11px; min-height: 34px; outline: 0; padding: 0 10px; }
+.nv-report-select:focus { border-color: var(--c-brand-medium); box-shadow: var(--focus-ring); }
+.nv-report-metrics { gap: 12px; }
+.nv-report-metric { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; box-shadow: var(--shadow-sm); min-width: 0; padding: 16px 17px; }
+.nv-report-metric.is-income { border-top: 2px solid var(--c-success); }
+.nv-report-metric.is-expense { border-top: 2px solid var(--c-danger); }
+.nv-report-metric.is-net { border-top: 2px solid var(--c-brand-medium); }
+.nv-report-metric p { color: var(--c-text-secondary); font-size: 10px; font-weight: 750; letter-spacing: .07em; margin: 0 0 8px; text-transform: uppercase; }
+.nv-report-metric p i { margin-right: 5px; }
+.nv-report-metric.is-income p i { color: var(--c-success); }
+.nv-report-metric.is-expense p i { color: var(--c-danger); }
+.nv-report-metric.is-net p i { color: var(--c-brand-medium); }
+.nv-report-metric h3 { color: var(--c-text-primary); font-size: clamp(19px, 2.5vw, 25px); font-weight: 750; letter-spacing: -.04em; margin: 0; overflow-wrap: anywhere; }
+.nv-report-panel { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 13px; box-shadow: var(--shadow-sm); padding: 18px; }
+.nv-report-panel-heading { align-items: baseline; display: flex; justify-content: space-between; margin-bottom: 16px; }
+.nv-report-panel-heading h4 { color: var(--c-text-primary); font-size: 13px; font-weight: 750; letter-spacing: -.01em; margin: 0; }
+.nv-report-panel-heading p { color: var(--c-text-secondary); font-size: 10px; margin: 4px 0 0; }
+.nv-report-table-header, .nv-report-table-row { align-items: center; display: grid; gap: 10px; grid-template-columns: minmax(100px, 1fr) repeat(3, minmax(100px, 1fr)); }
+.nv-report-table-header { border-bottom: 1px solid var(--c-border); color: var(--c-text-secondary); font-size: 9px; font-weight: 800; letter-spacing: .08em; padding: 0 12px 9px; text-transform: uppercase; }
+.nv-report-table-header > :not(:first-child), .nv-report-table-row > :not(:first-child) { text-align: right; }
+.nv-report-table-row { border-bottom: 1px solid var(--c-border); color: var(--c-text-primary); font-size: 11px; padding: 13px 12px; }
+.nv-report-table-row:last-child { border-bottom: 0; }
+.nv-report-table-row > :first-child { font-weight: 700; }
+.nv-report-table-row > :not(:first-child) { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 700; }
+.nv-report-table-row .is-income { color: var(--c-success); }
+.nv-report-table-row .is-expense { color: var(--c-danger); }
+.nv-report-empty { align-items: center; color: var(--c-text-secondary); display: flex; gap: 12px; justify-content: center; min-height: 104px; padding: 16px; text-align: left; }
+.nv-report-empty > i { color: var(--c-brand-medium); font-size: 18px; }
+.nv-report-empty strong, .nv-report-empty span { display: block; }
+.nv-report-empty strong { color: var(--c-text-primary); font-size: 11px; margin-bottom: 3px; }
+.nv-report-empty span { font-size: 10px; line-height: 1.45; max-width: 470px; }
+@media (max-width: 800px) { .nv-reports-navigation { padding-left: 14px; padding-right: 14px; } .nv-reports-tabs { flex-wrap: nowrap; } }
+@media (max-width: 560px) { .nv-reports-navigation { padding: 12px 11px 0; } .nv-reports-tab { flex: 0 0 auto; } .nv-reports-selected-heading { align-items: flex-start; flex-wrap: wrap; } .nv-reports-selected-heading h1 { font-size: 19px; } .nv-reports-actions { margin-left: auto; } .nv-reports-actions > .flex { justify-content: flex-start; } .nv-report-toolbar { align-items: stretch; flex-direction: column; } .nv-report-select-wrap, .nv-report-select { width: 100%; } .nv-report-table-header, .nv-report-table-row { gap: 5px; grid-template-columns: minmax(70px, 1fr) repeat(3, minmax(72px, 1fr)); padding-left: 5px; padding-right: 5px; } .nv-report-table-header { font-size: 8px; } .nv-report-table-row { font-size: 10px; } }
+.nv-report-panel > .relative > .nv-report-empty { min-height: 264px; }
+
+/* Avenera category management */
+.nv-category-page-header { align-items: flex-end; display: flex; gap: 24px; justify-content: space-between; margin: 0 auto 22px; max-width: 1240px; }
+.nv-category-page-header h2 { color: var(--c-text-primary); font-size: clamp(25px, 3vw, 34px); font-weight: 750; letter-spacing: -.04em; line-height: 1.1; margin: 2px 0 5px; }
+.nv-category-page-header > div > p:last-child { color: var(--c-text-secondary); font-size: 12px; line-height: 1.45; margin: 0; }
+.nv-category-eyebrow { color: var(--c-brand-medium); font-size: 9px; font-weight: 800; letter-spacing: .11em; margin: 0; text-transform: uppercase; }
+.nv-category-primary-action { align-items: center; background: var(--c-action-purple); border: 1px solid var(--c-action-purple); border-radius: 10px; box-shadow: var(--shadow-sm); color: #fff; cursor: pointer; display: inline-flex; font: inherit; font-size: 11px; font-weight: 750; gap: 7px; min-height: 38px; padding: 0 15px; transition: background .16s ease, transform .16s ease; white-space: nowrap; }
+.nv-category-primary-action:hover { background: color-mix(in srgb, var(--c-action-purple) 82%, #000); transform: translateY(-1px); }
+.nv-categories-page { margin: 0 auto; max-width: 1240px; padding-bottom: 38px; }
+.nv-category-summary { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
+.nv-category-summary-card { align-items: center; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; box-shadow: var(--shadow-sm); display: flex; gap: 10px; min-width: 0; padding: 13px 15px; }
+.nv-category-summary-card > span:last-child { display: flex; flex-direction: column; min-width: 0; }
+.nv-category-summary-card strong { color: var(--c-text-primary); font-size: 20px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.nv-category-summary-card small { color: var(--c-text-secondary); font-size: 10px; margin-top: 4px; }
+.nv-category-summary-card__icon { align-items: center; background: color-mix(in srgb, var(--c-action-purple) 12%, var(--c-surface)); border-radius: 9px; color: var(--c-action-purple); display: inline-flex; flex: 0 0 31px; height: 31px; justify-content: center; }
+.nv-category-summary-card__icon.is-expense { background: color-mix(in srgb, var(--c-danger) 11%, var(--c-surface)); color: var(--c-danger); }
+.nv-category-summary-card__icon.is-income { background: color-mix(in srgb, var(--c-success) 11%, var(--c-surface)); color: var(--c-success); }
+.nv-category-toolbar { align-items: center; background: var(--c-surface-soft); border: 1px solid var(--c-border); border-radius: 12px; display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; padding: 10px; }
+.nv-category-search { align-items: center; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 9px; color: var(--c-text-secondary); display: flex; flex: 1 1 260px; gap: 8px; min-height: 36px; padding: 0 11px; }
+.nv-category-search:focus-within { border-color: var(--c-brand-medium); box-shadow: var(--focus-ring); }
+.nv-category-search input { background: transparent; border: 0; color: var(--c-text-primary); flex: 1; font: inherit; font-size: 11px; min-width: 0; outline: 0; }
+.nv-category-search input::placeholder { color: var(--c-text-secondary); opacity: .8; }
+.nv-category-filters { display: flex; gap: 4px; overflow-x: auto; }
+.nv-category-filter { background: transparent; border: 1px solid transparent; border-radius: 8px; color: var(--c-text-secondary); cursor: pointer; font: inherit; font-size: 10px; font-weight: 750; min-height: 34px; padding: 0 12px; white-space: nowrap; }
+.nv-category-filter:hover { background: color-mix(in srgb, var(--c-action-purple) 8%, var(--c-surface)); color: var(--c-text-primary); }
+.nv-category-filter.is-active { background: color-mix(in srgb, var(--c-action-purple) 14%, var(--c-surface)); border-color: color-mix(in srgb, var(--c-action-purple) 40%, var(--c-border)); color: var(--c-brand-deep); }
+.nv-category-results-count { color: var(--c-text-secondary); font-size: 10px; margin-left: auto; white-space: nowrap; }
+.nv-category-sections { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nv-category-section { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 13px; box-shadow: var(--shadow-sm); min-width: 0; overflow: hidden; }
+.nv-category-section__heading { align-items: center; border-bottom: 1px solid var(--c-border); display: flex; justify-content: space-between; padding: 14px 16px 12px; }
+.nv-category-section__heading h3 { color: var(--c-text-primary); font-size: 14px; font-weight: 800; letter-spacing: -.015em; margin: 3px 0 0; }
+.nv-category-section__heading h3 i { margin-right: 7px; }
+.nv-category-section[data-category-section="despesa"] .nv-category-section__heading h3 i { color: var(--c-danger); }
+.nv-category-section[data-category-section="receita"] .nv-category-section__heading h3 i { color: var(--c-success); }
+.nv-category-section__count { color: var(--c-text-secondary); font-size: 10px; }
+.nv-category-list { padding: 8px; }
+.nv-category-card { border: 1px solid var(--c-border); border-radius: 10px; margin-bottom: 7px; overflow: hidden; }
+.nv-category-card:last-child { margin-bottom: 0; }
+.nv-category-card__summary { align-items: center; cursor: pointer; display: flex; gap: 9px; list-style: none; min-height: 53px; padding: 8px 10px; }
+.nv-category-card__summary::-webkit-details-marker { display: none; }
+.nv-category-card__summary:hover { background: var(--c-surface-soft); }
+.nv-category-card__icon { align-items: center; border-radius: 8px; color: #fff; display: inline-flex; flex: 0 0 30px; height: 30px; justify-content: center; }
+.nv-category-card__icon i { font-size: 12px; }
+.nv-category-card__main { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.nv-category-card__main strong { color: var(--c-text-primary); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-category-card__main span { color: var(--c-text-secondary); font-size: 9px; margin-top: 2px; }
+.nv-category-card__type, .nv-category-card__count { color: var(--c-text-secondary); font-size: 9px; white-space: nowrap; }
+.nv-category-card__count { background: var(--c-surface-soft); border: 1px solid var(--c-border); border-radius: 5px; padding: 4px 6px; }
+.nv-category-card__chevron { color: var(--c-text-secondary); font-size: 10px; transition: transform .16s ease; }
+.nv-category-card[open] .nv-category-card__chevron { transform: rotate(180deg); }
+.nv-category-subrows { border-top: 1px solid var(--c-border); padding: 2px 10px 4px 48px; }
+.nv-category-subrow { align-items: center; border-bottom: 1px solid color-mix(in srgb, var(--c-border) 70%, transparent); display: flex; gap: 7px; min-height: 36px; }
+.nv-category-subrow:last-child { border-bottom: 0; }
+.nv-category-subrow__marker { background: var(--c-border); border-radius: 99px; flex: 0 0 5px; height: 5px; }
+.nv-category-subrow__name { color: var(--c-text-primary); flex: 1; font-size: 10px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-category-type, .nv-category-status { border-radius: 5px; font-size: 8px; font-weight: 750; padding: 3px 5px; white-space: nowrap; }
+.nv-category-type--income { background: color-mix(in srgb, var(--c-success) 10%, var(--c-surface)); color: var(--c-success); }
+.nv-category-type--expense { background: color-mix(in srgb, var(--c-danger) 9%, var(--c-surface)); color: var(--c-danger); }
+.nv-category-status { background: var(--c-surface-soft); color: var(--c-text-secondary); }
+.nv-category-status.is-fixed { color: var(--c-brand-medium); }
+.nv-category-status.is-custom { color: var(--c-text-secondary); }
+.nv-category-status.is-archived { color: var(--c-danger); }
+/* The creation form keeps the name free-form; group is only optional metadata. */
+#modal-categoria #nova-categoria-nome { min-height: 42px; }
+#modal-categoria #nova-categoria-grupo:invalid { color: var(--c-text-secondary); }
+.nv-category-row-actions { display: inline-flex; gap: 2px; margin-left: 3px; opacity: .7; }
+.nv-category-row-actions button { align-items: center; background: transparent; border: 0; border-radius: 5px; color: var(--c-text-secondary); cursor: pointer; display: inline-flex; height: 25px; justify-content: center; width: 25px; }
+.nv-category-row-actions button:hover { background: var(--c-surface-soft); color: var(--c-brand-medium); }
+.nv-category-row-actions button[data-action="delete"]:hover { color: var(--c-danger); }
+.nv-category-empty, .nv-category-filter-empty { align-items: center; color: var(--c-text-secondary); display: flex; flex-direction: column; gap: 5px; justify-content: center; min-height: 100px; padding: 18px; text-align: center; }
+.nv-category-empty i, .nv-category-filter-empty i { color: var(--c-brand-medium); font-size: 18px; }
+.nv-category-empty span, .nv-category-filter-empty span { font-size: 10px; }
+.nv-category-filter-empty { background: var(--c-surface); border: 1px dashed var(--c-border); border-radius: 12px; margin-top: 14px; }
+.nv-category-filter-empty strong { color: var(--c-text-primary); font-size: 12px; }
+@media (max-width: 780px) { .nv-category-sections { grid-template-columns: 1fr; } }
+@media (max-width: 560px) { .nv-category-page-header { align-items: stretch; flex-direction: column; gap: 13px; margin-bottom: 18px; } .nv-category-primary-action { justify-content: center; width: 100%; } .nv-category-summary-card { padding: 11px; } .nv-category-summary-card small { font-size: 9px; } .nv-category-toolbar { align-items: stretch; flex-direction: column; } .nv-category-search { flex-basis: auto; } .nv-category-filters { width: 100%; } .nv-category-filter { flex: 1; padding: 0 7px; } .nv-category-results-count { margin-left: 0; } .nv-category-card__type { display: none; } .nv-category-card__count { font-size: 8px; } .nv-category-subrows { padding-left: 18px; } .nv-category-subrow { flex-wrap: wrap; padding: 4px 0; } .nv-category-subrow__name { min-width: 100px; } }
+
+/* Categories package: explicit hierarchy, per-row metadata and contextual actions. */
+.nv-category-summary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.nv-category-summary-card.is-expense .nv-category-summary-card__icon { background: color-mix(in srgb, var(--c-danger) 11%, var(--c-surface)); color: var(--c-danger); }
+.nv-category-summary-card.is-income .nv-category-summary-card__icon { background: color-mix(in srgb, var(--c-success) 11%, var(--c-surface)); color: var(--c-success); }
+.nv-category-row-icon { align-items: center; border-radius: 7px; color: #fff; display: inline-flex; flex: 0 0 25px; height: 25px; justify-content: center; }
+.nv-category-row-icon i { font-size: 10px; }
+.nv-category-subrow__name { display: flex; flex: 1; flex-direction: column; gap: 2px; min-width: 0; }
+.nv-category-subrow__name strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-category-subrow__name small { color: var(--c-text-secondary); font-size: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-category-subrow.is-archived { opacity: .72; }
+.nv-category-actions-menu { flex: 0 0 auto; position: relative; }
+.nv-category-actions-menu > summary { align-items: center; border-radius: 6px; color: var(--c-text-secondary); cursor: pointer; display: inline-flex; height: 27px; justify-content: center; list-style: none; width: 27px; }
+.nv-category-actions-menu > summary::-webkit-details-marker { display: none; }
+.nv-category-actions-menu > summary:hover { background: var(--c-surface-soft); color: var(--c-brand-medium); }
+.nv-category-actions-popover { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 8px; box-shadow: var(--shadow-md, 0 8px 24px rgba(0,0,0,.14)); display: flex; flex-direction: column; min-width: 132px; padding: 4px; position: absolute; right: 0; top: calc(100% + 3px); z-index: 10; }
+.nv-category-actions-popover button { align-items: center; background: transparent; border: 0; border-radius: 6px; color: var(--c-text-primary); cursor: pointer; display: flex; font: inherit; font-size: 10px; gap: 7px; padding: 7px 8px; text-align: left; white-space: nowrap; }
+.nv-category-actions-popover button:hover { background: var(--c-surface-soft); color: var(--c-brand-medium); }
+.nv-category-actions-popover button[data-action="deleteCategory"] { color: var(--c-danger); }
+.nv-category-legacy-note { align-items: center; color: var(--c-text-secondary); display: flex; font-size: 10px; gap: 7px; margin: 12px 0 0; }
+.nv-category-legacy-note i { color: var(--c-brand-medium); }
+@media (max-width: 900px) { .nv-category-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .nv-category-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .nv-category-row-icon { flex-basis: 22px; height: 22px; } }

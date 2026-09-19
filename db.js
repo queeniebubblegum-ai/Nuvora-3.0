@@ -1,4 +1,4 @@
-import { CATEGORIAS_PADRAO } from './categorias-padrao.js';
+import { CATEGORIAS_PADRAO, getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment } from './reconciliation.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
@@ -141,44 +141,33 @@ const loadData = async () => {
 
     if (db.categorias.length > 0) {
         const padraoPorNome = new Map(CATEGORIAS_PADRAO.map(c => [String(c.nome).toLowerCase(), c]));
-        db.categorias = db.categorias.map(c => {
-            const padrao = padraoPorNome.get(String(typeof c === 'string' ? c : c.nome || '').toLowerCase());
-            if (!padrao || typeof c === 'string') return typeof c === 'string' ? { ...padrao, id: 'cat_' + Date.now() + Math.random() } : c;
-            return { ...c, grupo: c.grupo || padrao.grupo, subgrupo: c.subgrupo || padrao.subgrupo, tipo: c.tipo || padrao.tipo, fixa: c.fixa ?? padrao.fixa, icone: c.icone || padrao.icone, cor: c.cor || padrao.cor };
-        });
-        await IDB.set('categorias', db.categorias);
-        const categoryDefaults = {
-            'Alimentação': { icone: 'fa-utensils', cor: '#F97316' },
-            'Moradia': { icone: 'fa-house', cor: '#8B5CF6' },
-            'Transporte': { icone: 'fa-car', cor: '#3B82F6' },
-            'Lazer': { icone: 'fa-gamepad', cor: '#EC4899' },
-            'Saúde': { icone: 'fa-heart-pulse', cor: '#F43F5E' },
-            'Salário': { icone: 'fa-money-bill-wave', cor: '#10B981' },
-            'Serviços': { icone: 'fa-bolt', cor: '#06B6D4' },
-            'Educação': { icone: 'fa-graduation-cap', cor: '#6366F1' },
-            'Compras': { icone: 'fa-bag-shopping', cor: '#F59E0B' }
-        };
-        
-        db.categorias = db.categorias.map((c, index) => {
-            if (typeof c === 'string') {
-                const def = categoryDefaults[c] || { icone: 'fa-tag', cor: '#9CA3AF' };
-                return { id: 'cat_' + Date.now() + index, nome: c, icone: def.icone, cor: def.cor };
-            } else if (typeof c === 'object' && c !== null) {
-                return {
-                    id: c.id || 'cat_' + Date.now() + index,
-                    nome: c.nome || 'Categoria ' + (index + 1),
-                    icone: c.icone || 'fa-tag',
-                    cor: c.cor || '#9CA3AF',
-                    paiId: c.paiId || null,
-                    grupo: c.grupo || null,
-                    subgrupo: c.subgrupo || c.nome || null,
-                    tipo: c.grupo === 'Renda' ? 'receita' : (c.tipo || 'despesa')
-                };
+        // Fill legacy fields without treating a custom category with the same
+        // display name as a default. The stable seed id and explicit fixa flag
+        // are the only default signals.
+        db.categorias = db.categorias.map((raw, index) => {
+            if (typeof raw === 'string') {
+                const padrao = padraoPorNome.get(raw.toLowerCase());
+                return padrao ? { ...padrao, id: 'cat_' + Date.now() + index, fixa: false } : { id: 'cat_' + Date.now() + index, nome: raw, icone: 'fa-tag', cor: '#9CA3AF', fixa: false };
             }
-            return null;
-        }).filter(c => c !== null);
-        
-        IDB.set('categorias', db.categorias).catch(console.error);
+            const c = raw && typeof raw === 'object' ? raw : {};
+            const padrao = padraoPorNome.get(String(c.nome || '').toLowerCase());
+            const id = c.id || 'cat_' + Date.now() + index;
+            const defaultRecord = isCategoriaPadrao({ ...c, id }, padrao);
+            const merged = {
+                ...c,
+                id,
+                nome: c.nome || 'Categoria ' + (index + 1),
+                grupo: c.grupo || padrao?.grupo || null,
+                subgrupo: c.subgrupo || padrao?.subgrupo || c.nome || null,
+                tipo: c.grupo === 'Renda' ? 'receita' : (c.tipo || padrao?.tipo || 'despesa'),
+                fixa: defaultRecord,
+                icone: c.icone || padrao?.icone || 'fa-tag',
+                cor: c.cor || padrao?.cor || '#9CA3AF',
+                paiId: c.paiId || null
+            };
+            return { ...merged, icone: getCategoriaIcon(merged) };
+        }).filter(Boolean);
+        await IDB.set('categorias', db.categorias);
     }
 
     let oldCardExpensesStr = null;
@@ -564,38 +553,159 @@ export const BudgetRepo = {
 };
 
 export const CategoryRepo = {
-    add: (item) => {
-        if (!db.categorias.some(c => c.nome.toLowerCase() === item.nome.toLowerCase())) {
-            db.categorias.push(item); 
-            persist('categorias'); 
-            return true;
+    _lastError: '',
+    _fail: (message) => { CategoryRepo._lastError = message; return false; },
+    getLastError: () => CategoryRepo._lastError,
+    _find: (id) => db.categorias.find(c => String(c.id) === String(id)),
+    _isArchived: (category) => category?.ativo === false || category?.arquivada === true,
+    isPrincipal: (category) => {
+        if (!category) return false;
+        const group = String(category.grupo || '').trim();
+        const name = String(category.nome || '').trim();
+        return category.tipoCategoria === 'principal' || !group || (group === name && String(category.subgrupo || name) === name);
+    },
+    _compatibleType: (category, tipo) => !category?.tipo || category.tipo === tipo,
+    _sameName: (a, b) => String(a || '').trim().toLocaleLowerCase('pt-BR') === String(b || '').trim().toLocaleLowerCase('pt-BR'),
+    _findParent: (group, tipo, excludeId = null, includeArchived = false) => {
+        const target = String(group || '').trim();
+        if (!target) return null;
+        return db.categorias.find(c => String(c.id) !== String(excludeId ?? '') &&
+            CategoryRepo._compatibleType(c, tipo) && CategoryRepo.isPrincipal(c) &&
+            (includeArchived || !CategoryRepo._isArchived(c)) &&
+            CategoryRepo._sameName(c.grupo || c.nome, target));
+    },
+    _references: (oldName, newName) => {
+        ['transacoes', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas'].forEach(collection => {
+            (db[collection] || []).forEach(item => { if (item?.categoria === oldName) item.categoria = newName; });
+        });
+    },
+    usage: (id) => {
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return { exists: false, count: 0, references: [] };
+        const name = String(categoria.nome);
+        const references = [];
+        const check = (collection, label) => (db[collection] || []).forEach(item => { if (item && item.categoria === name) references.push(label); });
+        check('transacoes', 'lançamentos'); check('orcamentos', 'orçamentos'); check('agendamentos', 'agendamentos'); check('receitasFuturas', 'receitas futuras'); check('assinaturas', 'assinaturas');
+        const children = (db.categorias || []).filter(c => String(c.paiId || '') === String(id) || (String(c.grupo || '') === name && String(c.id) !== String(id)));
+        if (children.length) references.push(`${children.length} subcategoria(s)`);
+        return { exists: true, count: references.length, references, default: isCategoriaPadrao(categoria) };
+    },
+    add: (item = {}) => {
+        CategoryRepo._lastError = '';
+        const nome = String(item.nome || '').trim();
+        const tipo = String(item.tipo || '').toLowerCase();
+        const nivel = item.tipoCategoria === 'subcategoria' ? 'subcategoria' : 'principal';
+        if (!nome) return CategoryRepo._fail('Informe um nome para a categoria.');
+        if (!['despesa', 'receita'].includes(tipo)) return CategoryRepo._fail('O tipo deve ser Despesa ou Receita.');
+        if (db.categorias.some(c => CategoryRepo._sameName(c?.nome, nome))) return CategoryRepo._fail(`Já existe uma categoria chamada “${nome}”.`);
+
+        let grupo = nome;
+        let paiId = null;
+        if (nivel === 'subcategoria') {
+            const parentName = String(item.grupo || '').trim();
+            const parent = CategoryRepo._findParent(parentName, tipo);
+            if (!parent) return CategoryRepo._fail('Escolha uma categoria principal ativa do mesmo tipo.');
+            grupo = String(parent.grupo || parent.nome).trim();
+            paiId = parent.id;
         }
-        return false;
+        db.categorias.push({
+            ...item, nome, tipo, tipoCategoria: nivel, grupo, subgrupo: nome, paiId,
+            fixa: false, ativo: true, arquivada: false
+        });
+        persist('categorias'); return true;
     },
     rename: (id, novoNome) => {
-        const categoria = db.categorias.find(c => String(c.id) === String(id));
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
         const nome = String(novoNome || '').trim();
-        if (!categoria || !nome || db.categorias.some(c => c !== categoria && String(c.nome).toLowerCase() === nome.toLowerCase())) return false;
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão são protegidas.');
+        if (!nome) return CategoryRepo._fail('Informe um nome para a categoria.');
+        if (db.categorias.some(c => c !== categoria && CategoryRepo._sameName(c.nome, nome))) return CategoryRepo._fail(`Já existe uma categoria chamada “${nome}”.`);
         const antigo = categoria.nome;
         categoria.nome = nome;
-        db.transacoes.forEach(t => { if (t.categoria === antigo) t.categoria = nome; });
-        db.orcamentos.forEach(o => { if (o.categoria === antigo) o.categoria = nome; });
-        db.agendamentos.forEach(a => { if (a.categoria === antigo) a.categoria = nome; });
-        persist('categorias'); persist('transacoes'); persist('orcamentos'); persist('agendamentos');
+        categoria.subgrupo = nome;
+        if (CategoryRepo.isPrincipal(categoria)) {
+            categoria.grupo = nome;
+            db.categorias.forEach(c => { if (c !== categoria && c.grupo === antigo) c.grupo = nome; });
+        }
+        CategoryRepo._references(antigo, nome);
+        persist('categorias'); ['transacoes', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas'].forEach(persist);
         return true;
     },
+    update: (id, data = {}) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão são protegidas e não podem ser editadas.');
+        const nome = String(data.nome || '').trim();
+        const tipo = String(data.tipo || categoria.tipo || '').toLowerCase();
+        const nivel = data.tipoCategoria === 'subcategoria' ? 'subcategoria' : 'principal';
+        if (!nome) return CategoryRepo._fail('Informe um nome para a categoria.');
+        if (!['despesa', 'receita'].includes(tipo)) return CategoryRepo._fail('O tipo deve ser Despesa ou Receita.');
+        if (db.categorias.some(c => c !== categoria && CategoryRepo._sameName(c.nome, nome))) return CategoryRepo._fail(`Já existe uma categoria chamada “${nome}”.`);
 
-    remove: (id) => { 
-        const categoria = db.categorias.find(c => String(c.id) === String(id));
-        if (!categoria) return false;
-        if (categoria.fixa) return false;
-        const usada = db.transacoes.some(t => t.categoria === categoria.nome) ||
-            db.orcamentos.some(o => o.categoria === categoria.nome) ||
-            db.agendamentos.some(a => a.categoria === categoria.nome);
-        if (usada) return false;
-        db.categorias = db.categorias.filter(c => c.id.toString() !== id.toString()); 
-        persist('categorias');
+        const oldLevel = CategoryRepo.isPrincipal(categoria) ? 'principal' : 'subcategoria';
+        const children = db.categorias.filter(c => c !== categoria && (String(c.paiId || '') === String(categoria.id) || String(c.grupo || '') === String(categoria.nome)));
+        if (oldLevel === 'principal' && nivel === 'subcategoria' && children.length) return CategoryRepo._fail('Esta categoria principal possui subcategorias e não pode virar subcategoria.');
+        if (oldLevel === 'principal' && children.length && categoria.tipo && categoria.tipo !== tipo) return CategoryRepo._fail('Altere o tipo das subcategorias antes de mudar o tipo desta categoria principal.');
+
+        let grupo = nome;
+        let paiId = null;
+        if (nivel === 'subcategoria') {
+            const requestedGroup = String(data.grupo || '').trim();
+            const parent = CategoryRepo._findParent(requestedGroup, tipo, categoria.id) ||
+                // An archived category may be edited to repair/display an old
+                // record without making its archived parent a new choice.
+                (CategoryRepo._isArchived(categoria) && CategoryRepo._findParent(requestedGroup, tipo, categoria.id, true));
+            if (!parent) return CategoryRepo._fail('Escolha uma categoria principal ativa e compatível.');
+            grupo = String(parent.grupo || parent.nome).trim();
+            paiId = parent.id;
+        }
+
+        const antigo = categoria.nome;
+        const eraPrincipal = oldLevel === 'principal';
+        categoria.nome = nome;
+        categoria.tipo = tipo;
+        categoria.tipoCategoria = nivel;
+        categoria.grupo = grupo;
+        categoria.subgrupo = nome;
+        categoria.paiId = paiId;
+        if (data.icone) categoria.icone = data.icone;
+        if (data.cor) categoria.cor = data.cor;
+        // ativo/arquivada/fixa are lifecycle/protection state, not editable form fields.
+        if (eraPrincipal && antigo !== nome) db.categorias.forEach(c => { if (c !== categoria && c.grupo === antigo) c.grupo = nome; });
+        if (antigo !== nome) CategoryRepo._references(antigo, nome);
+        persist('categorias'); ['transacoes', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas'].forEach(persist);
         return true;
+    },
+    archive: (id) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão não podem ser arquivadas.');
+        const activeChildren = db.categorias.filter(c => c !== categoria &&
+            (String(c.paiId || '') === String(id) || String(c.grupo || '') === String(categoria.nome)) && !CategoryRepo._isArchived(c));
+        if (activeChildren.length) return CategoryRepo._fail('Arquive as subcategorias deste grupo antes de arquivar a categoria principal.');
+        categoria.ativo = false; categoria.arquivada = true;
+        persist('categorias'); return true;
+    },
+    restore: (id) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão não podem ser restauradas.');
+        categoria.ativo = true; categoria.arquivada = false;
+        persist('categorias'); return true;
+    },
+    remove: (id) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão não podem ser excluídas.');
+        if (CategoryRepo.usage(id).count) return CategoryRepo._fail('Categoria possui referências; arquive-a para preservar o histórico.');
+        db.categorias = db.categorias.filter(c => String(c.id) !== String(id));
+        persist('categorias'); return true;
     }
 };
 
@@ -734,6 +844,11 @@ export const Database = {
     updateConfig: NotificationRepo.updateConfig,
     updateBudget: BudgetRepo.updateLimit,
     renameCategory: CategoryRepo.rename,
+    updateCategory: CategoryRepo.update,
+    archiveCategory: CategoryRepo.archive,
+    restoreCategory: CategoryRepo.restore,
+    getCategoryUsage: CategoryRepo.usage,
+    getCategoryError: CategoryRepo.getLastError,
     depositGoal: GoalRepo.deposit,
     updateUser: UserRepo.update,
     markNotificationRead: NotificationRepo.markRead,

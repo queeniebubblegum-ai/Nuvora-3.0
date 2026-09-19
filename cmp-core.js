@@ -1,5 +1,6 @@
 import { Utils } from './utils.js';
 import { db } from './db.js';
+import { getCategoriaIcon } from './categorias-padrao.js';
 
 export const CoreComponents = {
     _getCategoryConfig: (catName) => {
@@ -7,7 +8,7 @@ export const CoreComponents = {
             const nome = typeof c === 'string' ? c : c.nome;
             return nome === catName;
         });
-        if (cat && typeof cat === 'object') return { icone: cat.icone || 'fa-tag', cor: cat.cor || 'var(--c-text-secondary)' }; 
+        if (cat && typeof cat === 'object') return { icone: getCategoriaIcon(cat), cor: cat.cor || 'var(--c-text-secondary)' }; 
         return { icone: 'fa-tag', cor: 'var(--c-text-secondary)' };
     },
 
@@ -335,9 +336,10 @@ export const CoreComponents = {
         <div class="flex flex-col lg:flex-row gap-4 items-end">
             <div class="flex-1 w-full"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Buscar</label><div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-text-secondary"></i><input type="text" placeholder="Ex: Mercado, Uber..." value="${Utils.escapeHTML(f.desc)}" data-input="setFilterDesc" class="w-full pl-10 p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-all text-text-primary"></div></div>
             <div class="w-full lg:w-40"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Mês</label><select data-change="setFilter" data-filter-key="mes" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todos</option>${meses.map((m, i) => `<option value="${i}" ${f.mes === i.toString() ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-            <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todas</option>${categorias.map(c => {
+            <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todas</option>${categorias.filter(c => typeof c === 'string' || (c.ativo !== false && !c.arquivada) || (f.categoria && c.nome === f.categoria)).map(c => {
                 const nome = typeof c === 'string' ? c : c.nome;
-                return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`;
+                const archived = typeof c !== 'string' && (c.ativo === false || c.arquivada === true);
+                return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}${archived ? ' (arquivada · histórico)' : ''}</option>`;
             }).join('')}</select></div>
             <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Conta/Cartão</label><select data-change="setFilter" data-filter-key="bancoId" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary">${selectContaOptions}</select></div>
             <div class="w-full lg:w-auto"><button data-action="clearFilters" class="w-full lg:w-auto px-4 py-2.5 bg-bg text-text-primary hover:bg-border rounded-[12px] text-sm font-bold transition-colors flex items-center justify-center gap-2"><i class="fa-solid fa-eraser"></i> Limpar</button></div>

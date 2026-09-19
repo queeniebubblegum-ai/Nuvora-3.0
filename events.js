@@ -19,6 +19,9 @@ export const EventManager = {
             if (e.target.matches('[data-input="setFilterDesc"]')) { 
                 handleSearchInput(e.target.value); 
             }
+            if (e.target.matches('[data-input="categorySearch"]')) {
+                App.filterCategoriesDOM(e.target.value);
+            }
             if (e.target.matches('[data-input="preview503020"]')) {
                 Controllers.preview503020(e.target.value);
             }

@@ -57,6 +57,6 @@ describe('invoice modal lifecycle contract', () => {
     const sw = source('service-worker.js');
     expect(sw).toContain("avenera-app-shell-v2");
     expect(sw).toMatch(/fetch\(event\.request\)\.then/);
-    expect(sw).toMatch(/catch\(\(\) => caches\.match\(event\.request\)\)/);
+    expect(sw).toMatch(/catch\(\(\) => caches\.match\(event\.request\)\.then/);
   });
 });
