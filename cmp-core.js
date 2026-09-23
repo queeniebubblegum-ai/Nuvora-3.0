@@ -3,6 +3,11 @@ import { db } from './db.js';
 import { getCategoriaIcon } from './categorias-padrao.js';
 
 export const CoreComponents = {
+    // Synchronous screens do not render this by default. The helper is kept
+    // for a real async boundary (for example, a future report fetch) without
+    // introducing artificial delays or first-paint flicker.
+    loadingSkeleton: (label = 'Carregando conteúdo') => `<div class="nv-skeleton" role="status" aria-live="polite" aria-label="${Utils.escapeHTML(label)}"><span class="nv-skeleton__line nv-skeleton__line--wide" aria-hidden="true"></span><span class="nv-skeleton__line" aria-hidden="true"></span><span class="nv-skeleton__line nv-skeleton__line--short" aria-hidden="true"></span><span class="sr-only">${Utils.escapeHTML(label)}</span></div>`,
+
     _getCategoryConfig: (catName) => {
         const cat = db.categorias.find(c => {
             const nome = typeof c === 'string' ? c : c.nome;
@@ -44,7 +49,7 @@ export const CoreComponents = {
                     <i class="fa-solid ${iconClass}"></i>
                 </div>
             </div>
-            <h3 class="text-3xl font-bold text-text-primary mb-1 font-mono tracking-tight">${Utils.formatMoney(value)}</h3>
+            <h3 data-currency-value="${Number.isFinite(Number(value)) ? Number(value) : ''}" class="text-3xl font-bold text-text-primary mb-1 font-mono tracking-tight">${Utils.formatMoney(value)}</h3>
             <p class="text-[11px] text-text-secondary font-medium">${Utils.escapeHTML(trendSubtitle)}</p>
         </div>`;
     },
@@ -123,19 +128,16 @@ export const CoreComponents = {
 
     _buildBudgetCard: (o, gasto, options = {}) => {
         const readOnly = options.readOnly === true;
-        const restante = o.limite - gasto; 
-        const pctReal = (gasto / o.limite) * 100; 
-        const pctBarra = Math.min(pctReal, 100);
-        
-        let tagHtml = '';
-        let barColor = 'bg-reserve'; 
-        if (pctReal > 100) { 
-            tagHtml = '<span class="text-[10px] text-danger font-bold ml-2 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Excedido</span>'; 
-            barColor = 'bg-danger';
-        } else if (pctReal > 80) { 
-            tagHtml = '<span class="text-[10px] text-credit font-bold ml-2 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Atenção</span>'; 
-            barColor = 'bg-credit';
-        }
+        const planned = Number(o?.limite);
+        const spent = Number(gasto) || 0;
+        const hasPlannedLimit = Number.isFinite(planned) && planned > 0;
+        const restante = hasPlannedLimit ? planned - spent : 0;
+        const pctReal = hasPlannedLimit ? (spent / planned) * 100 : null;
+        const pctBarra = pctReal == null ? 0 : Math.min(Math.max(pctReal, 0), 100);
+        const status = pctReal == null ? 'neutral' : pctReal >= 100 ? 'danger' : pctReal >= 80 ? 'warning' : 'success';
+        const statusText = status === 'danger' ? 'Limite ultrapassado' : status === 'warning' ? 'Próximo do limite' : status === 'success' ? 'Dentro do planejado' : 'Limite não informado';
+        const tagHtml = `<span class="text-[10px] ${status === 'danger' ? 'text-danger' : status === 'warning' ? 'text-credit' : 'text-text-secondary'} font-bold ml-2 flex items-center gap-1" data-budget-status="${status}">${status === 'danger' || status === 'warning' ? '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>' : ''}${statusText}</span>`;
+        const barColor = status === 'danger' ? 'bg-danger' : status === 'warning' ? 'bg-credit' : status === 'success' ? 'bg-reserve' : 'bg-border';
         
         const catObj = CoreComponents._getCategoryConfig(o.categoria);
 
@@ -148,13 +150,13 @@ export const CoreComponents = {
                     </div>
                     <div>
                         <h4 class="font-bold text-text-primary text-base flex items-center mb-1 font-primary">${Utils.escapeHTML(o.categoria)} ${tagHtml}</h4>
-                        <p class="text-sm text-text-secondary"><strong class="font-mono text-text-primary">${Utils.formatMoney(gasto)}</strong> de <span class="font-mono">${Utils.formatMoney(o.limite)}</span></p>
+                        <p class="text-sm text-text-secondary"><strong class="font-mono text-text-primary">${Utils.formatMoney(spent)}</strong> de <span class="font-mono">${hasPlannedLimit ? Utils.formatMoney(planned) : 'Limite não informado'}</span></p>
                     </div>
                 </div>
                 <div class="flex items-center gap-6">
                     <div class="text-right">
-                        <span class="block font-bold text-text-primary text-base font-mono">${Utils.formatMoney(restante)}</span>
-                        <span class="text-xs text-text-secondary">restante</span>
+                        <span class="block font-bold text-text-primary text-base font-mono">${hasPlannedLimit ? Utils.formatMoney(restante) : '—'}</span>
+                        <span class="text-xs text-text-secondary">${hasPlannedLimit ? 'restante' : 'limite não informado'}</span>
                     </div>
                     ${readOnly ? '' : `<div class="flex gap-2">
                         <button data-action="delete" data-col="orcamentos" data-id="${o.id}" class="text-border hover:text-danger transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg"><i class="fa-solid fa-trash-can"></i></button>
@@ -162,10 +164,10 @@ export const CoreComponents = {
                 </div>
             </div>
             <div class="relative pt-2">
-                <div class="overflow-hidden h-[6px] mb-2 text-xs flex rounded-full bg-border">
+                <div class="overflow-hidden h-[6px] mb-2 text-xs flex rounded-full bg-border" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctReal == null ? 0 : pctBarra.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(statusText)}" aria-label="${Utils.escapeHTML(o.categoria || 'Categoria')}">
                     <div style="width:${pctBarra}%" class="shadow-none flex flex-col text-center whitespace-nowrap justify-center ${barColor} transition-all duration-500"></div>
                 </div>
-                <div class="text-right w-full text-text-secondary text-xs font-medium font-mono">${pctReal.toFixed(0)}% utilizado</div>
+                <div class="text-right w-full text-text-secondary text-xs font-medium font-mono">${pctReal == null ? 'Limite não informado' : `${pctReal.toFixed(0)}% utilizado · ${statusText}`}</div>
             </div>
         </div>`;
     },
@@ -173,12 +175,18 @@ export const CoreComponents = {
     _getGoalProgress: (m) => {
         const atual = Number(m?.atual) || 0;
         const alvo = Number(m?.alvo) || 0;
-        return { atual, alvo, pct: alvo > 0 ? Math.min((atual / alvo) * 100, 100) : 0 };
+        const hasTarget = alvo > 0;
+        const percentual = hasTarget ? (atual / alvo) * 100 : null;
+        const pct = hasTarget ? Math.min(Math.max(percentual, 0), 100) : 0;
+        const status = !hasTarget ? 'neutral' : percentual >= 100 ? 'success' : percentual >= 75 ? 'brand' : 'neutral';
+        const statusLabel = !hasTarget ? 'Alvo não informado' : percentual >= 100 ? 'Concluída' : percentual >= 75 ? 'Quase lá' : 'Em progresso';
+        return { atual, alvo, hasTarget, percentual, pct, status, statusLabel };
     },
 
     _buildGoalCard: (m, hoje, options = {}) => {
         const readOnly = options.readOnly === true;
-        const pct = CoreComponents._getGoalProgress(m).pct; 
+        const goalProgress = CoreComponents._getGoalProgress(m);
+        const { pct, hasTarget, status, statusLabel } = goalProgress;
         let diasRestantes = 0; 
         let economiaMensal = 0; 
         let temPrazo = false;
@@ -207,8 +215,9 @@ export const CoreComponents = {
                 ${readOnly ? '' : `<button data-action="delete" data-col="metas" data-id="${m.id}" class="text-border hover:text-danger transition-colors"><i class="fa-solid fa-trash-can"></i></button>`}
             </div>
             <div class="mb-6">
-                <div class="flex justify-between text-sm mb-2"><span class="font-bold text-text-primary">Progresso</span><span class="font-bold text-text-primary font-mono">${pct.toFixed(1)}%</span></div>
-                <div class="w-full bg-border rounded-full h-[6px]"><div class="bg-investment h-[6px] rounded-full transition-all duration-1000" style="width: ${Utils.escapeHTML(pct)}%"></div></div>
+                <div class="flex justify-between items-center gap-2 text-sm mb-2"><span class="font-bold text-text-primary">Progresso</span><span class="nv-goal-status nv-goal-status--${status}">${Utils.escapeHTML(statusLabel)}</span></div>
+                <div class="flex justify-between items-center mb-2"><span class="text-xs text-text-secondary">${hasTarget ? 'Percentual atingido' : 'Defina um alvo positivo para acompanhar o percentual'}</span><span class="font-bold text-text-primary font-mono">${hasTarget ? `${pct.toFixed(1)}%` : '—'}</span></div>
+                <div class="w-full bg-border rounded-full h-[6px]" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${hasTarget ? pct.toFixed(0) : 0}" aria-valuetext="${Utils.escapeHTML(statusLabel)}"><div class="bg-investment h-[6px] rounded-full transition-all duration-1000" style="width: ${Utils.escapeHTML(pct)}%"></div></div>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-6">
                 <div class="bg-bg border border-border p-4 rounded-[12px]"><p class="text-xs text-text-secondary mb-1">Atual</p><p class="font-bold text-text-primary font-mono">${Utils.formatMoney(m.atual)}</p></div>

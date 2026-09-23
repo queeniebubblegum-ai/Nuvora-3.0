@@ -1,6 +1,7 @@
 import { db } from './db.js';
 import { CSVImport } from './csv-import.js';
 import { Utils } from './utils.js';
+import { asImportError } from './import-errors.js';
 
 export const CSVManager = {
     iniciarImportacao: (bancoId, viewState) => {
@@ -54,7 +55,21 @@ export const CSVManager = {
                 if (confirmarSaldo) confirmarSaldo.checked = false;
                 openModalCallback('modal-revisao-ofx');
                 window.App?.renderOFXReviewList();
-            } catch (error) { Utils.showToast(error.message || 'CSV inválido.', 'error'); }
+            } catch (error) {
+                // Parsing happens before any Database write, so a failed import
+                // cannot partially alter financial data. The action opens the
+                // existing picker contract; it is not a dead "retry" CTA.
+                const importError = asImportError(error);
+                Utils.showToast(importError.message, 'error', {
+                    action: { action: 'iniciarImportacaoCSV', label: 'Escolher outro arquivo', payload: viewState.bancoAlvoOFX || '' }
+                });
+            }
+            event.target.value = '';
+        };
+        reader.onerror = () => {
+            Utils.showToast('Não foi possível ler o arquivo CSV.', 'error', {
+                action: { action: 'iniciarImportacaoCSV', label: 'Escolher outro arquivo', payload: viewState.bancoAlvoOFX || '' }
+            });
             event.target.value = '';
         };
         reader.readAsText(file);

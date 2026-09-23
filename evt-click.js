@@ -1,6 +1,7 @@
 import { Utils } from './utils.js';
 import { Controllers } from './controllers.js';
 import { App } from './app.js';
+import { trackUIEvent } from './ui-tracking.js';
 
 export const ClickEvents = {
     setup: () => {
@@ -56,6 +57,7 @@ export const ClickEvents = {
                 // canonical comparison against numeric or string persisted IDs.
                 'deleteExpense': () => Controllers.deleteExpense(actionId()),
                 'deleteSelectedTx': () => Controllers.deleteSelectedTransactions(),
+                'undoTransactions': () => Controllers.undoDeletedTransactions(),
                 'openEditModal': () => App.openEditModal(actionId()),
                 'toggleEditLock': () => App.toggleEditLock(),
                 'openDepositModal': () => App.openDepositModal(btn.getAttribute('data-id'), btn.getAttribute('data-nome')),
@@ -87,14 +89,16 @@ export const ClickEvents = {
                 'exportTransactionsCSV': () => App.exportTransactionsCSV(),
                 'exportBackup': () => App.exportBackup(),
                 'clearFilters': () => App.clearFilters(),
+                'filterUncategorized': () => App.filterUncategorized(),
+                'clearUncategorizedFilter': () => App.clearUncategorizedFilter(),
                 'setTransactionType': () => App.setTransactionType(btn.getAttribute('data-payload')),
                 'setTransactionTypeFilter': () => App.setFilter('tipo', btn.getAttribute('data-payload') || ''),
                 'setTxPage': () => App.setTxPage(btn.getAttribute('data-payload')),
                 'simularDespesaCartao': () => Controllers.simularDespesaCartao(),
                 'simularTransacaoGeral': () => Controllers.simularTransacaoGeral(),
                 'salvarOFXAprovado': () => App.salvarOFXAprovado(),
-                'iniciarImportacaoOFX': () => App.iniciarImportacaoOFX(btn.getAttribute('data-banco-id')),
-                'iniciarImportacaoCSV': () => App.iniciarImportacaoCSV(btn.getAttribute('data-banco-id')),
+                'iniciarImportacaoOFX': () => App.iniciarImportacaoOFX(btn.getAttribute('data-banco-id') ?? btn.getAttribute('data-payload')),
+                'iniciarImportacaoCSV': () => App.iniciarImportacaoCSV(btn.getAttribute('data-banco-id') ?? btn.getAttribute('data-payload')),
                 'iniciarFechamentoMes': () => App.iniciarFechamentoMes(),
                 'silenciarAnora': () => {
                     Utils.showToast('Alertas da Anora silenciados por 24 horas.', 'success');
@@ -111,6 +115,13 @@ export const ClickEvents = {
             e.preventDefault();
             e.stopPropagation();
             handler();
+            if (action === 'navigate' || action === 'openModal') {
+                trackUIEvent({ screen: App.currentPage || 'unknown', source: 'quick_action', action });
+            }
+            // Action buttons inside a toast close that toast after handling,
+            // while normal page actions keep their existing lifecycle.
+            const actionToast = btn.closest?.('[data-toast="true"]');
+            if (actionToast) actionToast.remove();
         });
     }
 };

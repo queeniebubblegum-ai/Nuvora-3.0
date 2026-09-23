@@ -8,13 +8,40 @@ const cssCompact = css => css.replace(/\s+/g, ' ').replace(/\s*([{}:;])\s*/g, '$
 const normalizeText = text => String(text).replace(/\u00a0/g, ' ');
 
 describe('dashboard hierarchy and financial semantics', () => {
-    it('uses one speed-dial primary action and keeps secondary header contracts', () => {
+    it('uses a real desktop type selector and keeps secondary header contracts', () => {
         const pages = source('rnd-pages.js');
+        const css = source('input.css');
         expect(pages).toContain('Novo lançamento');
-        expect(pages).toContain('onclick="toggleSpeedDial()"');
-        expect(pages).not.toMatch(/data-type="receita" class="nv-dashboard-primary-action|data-type="despesa" class="nv-dashboard-primary-action/);
+        expect(pages).toContain('class="nv-dashboard-new-menu"');
+        expect(pages).toContain('data-action="openModal" data-modal="modal-transacao" data-type="receita"');
+        expect(pages).toContain('data-action="openModal" data-modal="modal-transacao" data-type="despesa"');
+        expect(pages).toContain('data-action="openModal" data-modal="modal-transferencia"');
+        expect((pages.match(/role=\"menuitem\" data-action=\"openModal\" data-modal=\"modal-transacao\"/g) || []).length).toBe(2);
+        expect(pages).toContain('aria-label=\"Escolher tipo de lançamento\"');
+        expect(pages).toContain("action === 'openTypeSelector'");
+        expect(css).toContain('@media (min-width: 768px)');
+        expect(css).toContain('#btn-flutuante-main');
+        expect(css).toContain('#speed-dial-menu');
         expect(pages).toContain('data-action="iniciarFechamentoMes"');
         expect(pages).toContain('data-action="openModal" data-modal="modal-simulador"');
+    });
+
+    it('keeps the speed dial focus contract isolated to the existing mobile menu', () => {
+        const index = source('index.html');
+        expect(index).toContain('requestAnimationFrame(() =>');
+        expect(index).toContain('menuItems[0]?.focus()');
+        expect(index).toContain("event.key !== 'Escape'");
+        expect(index).toContain("mainBtn?.focus()");
+        expect(index).toContain("menu.setAttribute('aria-hidden'");
+        expect(index).toContain("mainBtn.setAttribute('aria-expanded'");
+    });
+
+    it('keeps period context explicit and escapes dynamic labels', () => {
+        const pages = source('rnd-pages.js');
+        expect(pages).toContain('dashboardPeriodLabels');
+        expect(pages).toContain('Visão de ${escapedDashboardPeriodLabel}');
+        expect(pages).toContain('Resultado financeiro');
+        expect(pages).toContain('Saldo atual:');
     });
 
     it('labels global balance, period result, and upcoming due amounts without changing inputs', () => {
@@ -25,10 +52,68 @@ describe('dashboard hierarchy and financial semantics', () => {
         expect(html).toContain('Saldo atual');
         expect(html).toContain('Resultado do período');
         expect(html).toContain('Próximos vencimentos');
+        expect(html).toContain('Contas pendentes de hoje até o fim do mês');
         const normalizedHtml = normalizeText(html);
         expect(normalizedHtml).toContain('R$ 1.000,00');
         expect(normalizedHtml).toContain('R$ 500,00');
         expect(normalizedHtml).toContain('R$ 125,00');
+    });
+
+    it('provides a useful empty category state with a real expense CTA', () => {
+        const html = DashboardComponents.dashboardCategories([], 'Mês passado');
+        expect(html).toContain('fa-chart-pie');
+        expect(html).toContain('Nenhuma despesa em Mês passado');
+        expect(html).toContain('data-action="openModal"');
+        expect(html).toContain('data-modal="modal-transacao"');
+        expect(html).toContain('data-type="despesa"');
+    });
+
+    it('bounds Dashboard upcoming expenses from today through the end of the current month', () => {
+        const pages = source('rnd-pages.js');
+        expect(pages).toContain('const inicioDoDiaAtual = new Date(hojeObj.getFullYear(), hojeObj.getMonth(), hojeObj.getDate());');
+        expect(pages).toContain('return dtVenc >= inicioDoDiaAtual && dtVenc <= fimDoMesAtual;');
+    });
+
+    it('keeps the attention strip hidden when no actionable data exists', () => {
+        const html = DashboardComponents.attentionStrip(
+            { saldo: 0 },
+            { contasAtrasadas: [], cartoes: [], comprasCartao: [], orcamento: { orcamentos: [], gastosPorCat: {} } }
+        );
+        expect(html).toBe('');
+    });
+
+    it('renders one accessible overdue alert with the existing Agenda navigation contract', () => {
+        const html = DashboardComponents.attentionStrip(
+            { saldo: 0 },
+            { contasAtrasadas: [{ id: 1, desc: 'Aluguel', valor: 900 }] }
+        );
+        expect(html).toContain('Atenção agora');
+        expect(html).toContain('Há contas vencidas');
+        expect(html).toContain('data-action="navigate" data-payload="Agendamentos"');
+        expect(html).toContain('aria-label="Ver contas vencidas"');
+        expect((html.match(/data-payload="Agendamentos"/g) || []).length).toBe(1);
+    });
+
+    it('prioritizes overdue accounts over upcoming due dates and renders one decision action', () => {
+        const data = {
+            contasAtrasadas: [{ id: 1, desc: 'Aluguel', valor: 900 }],
+            proximosVencimentos: [{ id: 2, desc: 'Internet', valor: 100 }]
+        };
+        expect(DashboardComponents.nextDecision(data).priority).toBe('overdue');
+        const html = DashboardComponents.nextDecisionBlock(data);
+        expect(html).toContain('Próxima decisão');
+        expect(html).toContain('data-action="navigate" data-payload="Agendamentos"');
+        expect((html.match(/data-action="navigate"/g) || []).length).toBe(1);
+        expect(DashboardComponents.nextDecision({ contasAtrasadas: [], proximosVencimentos: [] })).toBeNull();
+    });
+
+    it('keeps attention groups explicit and the strip between summary and accounts', () => {
+        const pages = source('rnd-pages.js');
+        expect(pages).toContain('const agendamentosPendentesDespesas');
+        expect(pages).toContain('const contasAtrasadas');
+        expect(pages).toContain('const proximosVencimentos');
+        expect(pages.indexOf('Components.attentionStrip')).toBeGreaterThan(pages.indexOf('Components.dashboardCards'));
+        expect(pages.indexOf('Components.attentionStrip')).toBeLessThan(pages.indexOf('Components.dashboardAccounts'));
     });
 
     it('keeps Anora compact with a real native diagnostic disclosure', () => {

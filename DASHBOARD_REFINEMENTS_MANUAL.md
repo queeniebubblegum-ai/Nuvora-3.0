@@ -2,17 +2,43 @@
 
 ## Dashboard hierarchy and actions
 
-- [ ] Confirm the header has one primary **Novo lançamento** action. It toggles the existing speed dial and exposes Receita, Transferência and Despesa; no duplicate transaction CTAs appear in the header.
+- [ ] Confirm the header has one primary **Novo lançamento** action. On desktop it opens a real accessible type selector with Receita, Despesa and Transferência; on mobile the fixed FAB keeps the quick speed-dial access.
 - [ ] Confirm **Fechar mês** and **Simular** remain secondary actions and retain their existing delegated `data-action`/modal contracts.
-- [ ] Confirm the period selector is adjacent to the header and the section order is: summary metrics; Contas e cartões; Anora; Agenda financeira/Categorias; Pilares.
-- [ ] Confirm the large financial summary area is transparent and does not create a nested card, while the three actionable/informational metric cards remain visible.
+- [ ] Confirm the period selector is adjacent to the header and the section order is: summary metrics; one prioritized **Próxima decisão** or non-duplicative **Atenção agora** signal; Contas e cartões; Anora; Agenda financeira/Categorias; Pilares.
+- [ ] On the mobile speed dial, open with the FAB and confirm its first item receives focus on the next frame, all items are tabbable only while open, and Escape closes the menu, restores `tabindex="-1"`, synchronizes `aria-hidden`/`aria-expanded`, and returns focus to the FAB. Confirm the desktop hidden behavior is unchanged.
+- [ ] Confirm the large financial summary area is transparent and does not create a nested card, while the three actionable/informational metric cards remain visible. The heading reads **Visão de [período]** and **Resultado financeiro**, with a separate **Saldo atual: ...** context.
+
+## Period context and empty states
+
+- [ ] Switch among **Este mês**, **Mês passado**, **Trimestre** and **Este ano**; confirm the heading uses the selected period and unknown/stale values safely fall back to **este ano**.
+- [ ] Select a period with no expenses and confirm Principais Categorias shows the chart-pie empty state, explanatory text, and a working **Adicionar despesa** CTA that opens `modal-transacao` with `data-type="despesa"`.
+- [ ] Confirm category rows remain unchanged when the selected period contains expenses.
+- [ ] Confirm period labels and balances remain safe with unusual/stale local-state values.
 
 ## Financial semantics
 
 - [ ] Select a period and confirm **Saldo atual** equals the global balance (not the selected period).
 - [ ] Confirm **Resultado do período** equals filtered period receitas minus filtered period despesas.
-- [ ] Confirm **Próximos vencimentos** keeps the existing pending-account calculation through the end of the current month.
+- [ ] Confirm **Próximos vencimentos** includes only pending expense accounts due from today through the end of the current month; an overdue account is not included in this card.
+- [ ] Confirm overdue pending accounts remain available in Planning/Agenda for follow-up.
 - [ ] Confirm no transaction or total calculation changes when switching periods.
+
+## Prioridade global
+
+- [ ] Quando houver mais de um sinal, confirme que apenas a decisão vencedora conduz a ação principal, nesta ordem: contas vencidas; saldo global negativo; orçamento ultrapassado; uso alto de cartão (80% ou mais); recomendação acionável da Anora; sinal informativo.
+- [ ] Confirme que os blocos **Próxima decisão**, **Atenção agora**, CTA do cabeçalho e ação compacta da Anora não repetem a mesma urgência nem competem por rotas diferentes.
+- [ ] Valores ausentes, limites inválidos/zerados, cartões sem compras e recomendação de retorno ao Dashboard não devem criar alertas.
+
+## Atenção agora
+
+- [ ] With no overdue account, card at/above 80% utilization, exceeded category budget, or negative global balance, confirm the strip is not rendered (no empty placeholder).
+- [ ] Add an overdue pending expense with a valid date and confirm one prioritized **Próxima decisão** block renders before secondary alerts; activate **Ver contas vencidas** and confirm it navigates to **Agendamentos** without a duplicate overdue action.
+- [ ] With no overdue account but one or more valid pending expenses due today through month-end, confirm the decision block says **Antecipe os próximos vencimentos** and its **Ver próximos vencimentos** action opens **Agendamentos**.
+- [ ] Confirm overdue accounts are excluded from **Próximos vencimentos**, while pending expenses due today through month-end remain included; invalid/missing dates do not create either alert or total.
+- [ ] Test a card with real transactions at exactly 80% and above its limit threshold; confirm one consolidated card alert and **Ver cartões** opens **Contas**. Confirm missing limit/transactions do not create a false alert.
+- [ ] With a current-month budget exceeded in one or more categories, confirm one consolidated **Orçamento ultrapassado** alert and **Revisar orçamento** opens **Orcamento**.
+- [ ] Confirm a negative global account balance creates one **Saldo global negativo** alert, with a keyboard-visible action and no duplicate balance alert.
+- [ ] Check the strip in light/dark themes and at narrow width: text wraps without horizontal overflow, actions remain keyboard reachable, icons are decorative, and each action has an accessible label.
 
 ## Onboarding Anora
 

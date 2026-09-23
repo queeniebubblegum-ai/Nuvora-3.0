@@ -178,7 +178,7 @@
     <div class="fixed bottom-8 right-8 flex flex-col items-end" style="z-index: 30;">
         
         <div id="speed-dial-menu" aria-hidden="true" class="flex flex-col items-end gap-3 opacity-0 translate-y-4 pointer-events-none transition-all duration-300 mb-3">
-            
+            <button type="button" id="speed-dial-contextual" tabindex="-1" hidden class="flex items-center gap-3 group/item focus:outline-none cursor-pointer" aria-label="Ação recomendada no Dashboard"><span id="speed-dial-contextual-label" class="bg-surface text-text-primary text-xs font-bold py-1.5 px-3 rounded-[8px] shadow-soft"></span><div class="w-11 h-11 bg-brand-medium text-white rounded-full shadow-soft flex items-center justify-center text-sm"><i id="speed-dial-contextual-icon" class="fa-solid fa-bolt" aria-hidden="true"></i></div></button>
             <button type="button" tabindex="-1" data-action="openModal" data-modal="modal-transacao" data-type="receita" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer">
                 <span class="bg-surface text-text-primary text-xs font-bold py-1.5 px-3 rounded-[8px] shadow-soft group-hover/item:scale-105 transition-transform">Receita</span>
                 <div class="w-11 h-11 bg-success text-white rounded-full shadow-soft flex items-center justify-center text-sm group-hover/item:scale-110 active:scale-95 transition-transform">
@@ -206,31 +206,59 @@
     </div>
 
     <script>
+        window.resetDashboardQuickAction = function() {
+            const menu = document.getElementById('speed-dial-menu');
+            const contextual = document.getElementById('speed-dial-contextual');
+            if (!menu || !contextual) return;
+            contextual.hidden = true;
+            delete contextual.dataset.action;
+            menu.querySelectorAll('button:not(#speed-dial-contextual)').forEach(item => { item.hidden = false; item.tabIndex = -1; });
+        };
+
         function toggleSpeedDial() {
             const menu = document.getElementById('speed-dial-menu');
             const icon = document.getElementById('speed-dial-icon');
-            const buttons = [document.getElementById('btn-flutuante-main'), ...document.querySelectorAll('.nv-dashboard-primary-action')].filter(Boolean);
+            const mainBtn = document.getElementById('btn-flutuante-main');
+            if (!menu || !icon || !mainBtn) return;
+
             const menuItems = menu.querySelectorAll('button');
             const isOpening = menu.classList.contains('opacity-0');
-            
+
             if (isOpening) {
-                // Abre o menu e gira o ícone.
+                // Abre o menu e gira o ícone. Os itens só entram na ordem de
+                // tabulação enquanto o menu está visível, inclusive no mobile.
                 menu.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
                 menu.classList.add('opacity-100', 'translate-y-0', 'pointer-events-auto');
                 icon.classList.add('rotate-45');
+                menuItems.forEach(item => item.tabIndex = item.hidden ? -1 : 0);
+                requestAnimationFrame(() => {
+                    // O usuário pode ter fechado o menu antes do próximo frame.
+                    if (!menu.classList.contains('opacity-0')) { const firstVisible = Array.from(menuItems).find(item => !item.hidden); if (firstVisible) firstVisible.focus(); else menuItems[0]?.focus(); }
+                });
             } else {
                 // Fecha o menu e volta o ícone ao normal.
                 menu.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
                 menu.classList.remove('opacity-100', 'translate-y-0', 'pointer-events-auto');
                 icon.classList.remove('rotate-45');
+                menuItems.forEach(item => item.tabIndex = -1);
             }
+
             menu.setAttribute('aria-hidden', String(!isOpening));
-            menuItems.forEach(item => item.tabIndex = isOpening ? 0 : -1);
-            buttons.forEach(button => {
-                button.setAttribute('aria-expanded', String(isOpening));
-                if (button.id === 'btn-flutuante-main') button.setAttribute('aria-label', isOpening ? 'Fechar menu de novo lançamento' : 'Abrir menu de novo lançamento');
-            });
+            mainBtn.setAttribute('aria-expanded', String(isOpening));
+            mainBtn.setAttribute('aria-label', isOpening ? 'Fechar menu de novo lançamento' : 'Abrir menu de novo lançamento');
         }
+
+        // Escape fecha somente o speed dial aberto e devolve o foco ao botão
+        // que controla o menu; não interfere em modais ou outros atalhos.
+        document.addEventListener('keydown', function(event) {
+            if (event.key !== 'Escape') return;
+            const menu = document.getElementById('speed-dial-menu');
+            const mainBtn = document.getElementById('btn-flutuante-main');
+            if (!menu || menu.classList.contains('opacity-0')) return;
+            event.preventDefault();
+            toggleSpeedDial();
+            mainBtn?.focus();
+        });
 
         // UX: Fecha o menu automaticamente se o usuário clicar fora da área dele
         document.addEventListener('click', function(event) {

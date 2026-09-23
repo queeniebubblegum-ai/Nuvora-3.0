@@ -1,6 +1,22 @@
 import { Utils } from './utils.js';
 import { Database } from './db.js';
-import { buildCashflowModel, reportPeriodLabel, formatReportDateRange } from './report-data.js';
+import { buildCashflowModel, reportPeriodLabel, formatReportDateRange, signedPeriodVariation } from './report-data.js';
+import { financialValueClass } from './financial-refinements.js';
+
+const reportSource = text => `<details class="nv-report-source"><summary>Fonte dos dados</summary><p>${Utils.escapeHTML(text)}</p></details>`;
+const estimatedBadge = (explanation = 'Valor calculado a partir de previsões e compromissos futuros; não representa uma movimentação realizada.') => `<span class="nv-estimated-badge" title="${Utils.escapeHTML(explanation)}" aria-label="Estimado. ${Utils.escapeHTML(explanation)}">Estimado</span>`;
+
+const reportPeriodContext = (database, state = {}, tab) => {
+    if (tab === 'fluxo') {
+        const model = buildCashflowModel(database, state.reportCashflowPeriod || 1);
+        return `${reportPeriodLabel(model.period)} · ${formatReportDateRange(model)}`;
+    }
+    const period = state.reportPeriod || 6;
+    if (tab === 'cartoes') return `Próximos ${period} meses`;
+    // These reports are multi-month views. Keep the context neutral rather than
+    // inventing a month label that is not part of their selected model.
+    return `Últimos ${period} meses`;
+};
 
 export const ReportComponents = {
     reportsPage: (database, state, actionsHtml = '', analysisHtml = '') => {
@@ -10,18 +26,20 @@ export const ReportComponents = {
             cartoes: { eyebrow: 'Compromissos', title: 'Cartões', description: 'Projeção de faturas e uso dos cartões.', icon: 'fa-credit-card' },
             patrimonio: { eyebrow: 'Visão patrimonial', title: 'Patrimônio', description: 'Saldos, metas e compromissos em uma visão consolidada.', icon: 'fa-briefcase' }
         };
-        const selected = reportMeta[state.reportTab] || reportMeta.fluxo;
+        const selectedTab = reportMeta[state.reportTab] ? state.reportTab : 'fluxo';
+        const selected = reportMeta[selectedTab];
+        const selectedPeriod = reportPeriodContext(database, state, selectedTab);
         let contentHtml = '';
-        if (state.reportTab === 'fluxo') contentHtml = ReportComponents.reportFluxo(database, state);
-        else if (state.reportTab === 'compare') contentHtml = ReportComponents.reportComparativo(database, state);
-        else if (state.reportTab === 'cartoes') contentHtml = ReportComponents.reportCartoesVisual(database, state);
-        else if (state.reportTab === 'patrimonio') contentHtml = ReportComponents.reportPatrimonio(database, state);
+        if (selectedTab === 'fluxo') contentHtml = ReportComponents.reportFluxo(database, state);
+        else if (selectedTab === 'compare') contentHtml = ReportComponents.reportComparativo(database, state);
+        else if (selectedTab === 'cartoes') contentHtml = ReportComponents.reportCartoesVisual(database, state);
+        else if (selectedTab === 'patrimonio') contentHtml = ReportComponents.reportPatrimonio(database, state);
 
         return `
             <section class="nv-reports-workspace" aria-label="Relatórios financeiros">
                 <header class="nv-reports-selected-heading" aria-label="Relatório selecionado">
                     <div class="nv-reports-selected-icon"><i class="fa-solid ${selected.icon}"></i></div>
-                    <div class="nv-reports-selected-copy"><p>${selected.eyebrow}</p><h1>${selected.title}</h1><span>${selected.description}</span></div>
+                    <div class="nv-reports-selected-copy"><p>${selected.eyebrow}</p><h1>${selected.title}</h1><span class="nv-reports-selected-period">Período: ${Utils.escapeHTML(selectedPeriod)}</span><span>${selected.description}</span></div>
                     ${actionsHtml ? `<div class="nv-reports-actions" aria-label="Ações dos relatórios">${actionsHtml}</div>` : ''}
                 </header>
                 ${analysisHtml}
@@ -49,9 +67,9 @@ export const ReportComponents = {
         const tableRows = model.activeBuckets.map(bucket => `
             <div class="nv-report-table-row">
                 <div>${model.isDaily ? `${bucket.date.getDate()} de ${['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][bucket.date.getMonth()]}` : bucket.label}</div>
-                <div class="is-income">${bucket.entradas > 0 ? '+ ' + Utils.formatMoney(bucket.entradas) : '–'}</div>
-                <div class="is-expense">${bucket.saidas > 0 ? '− ' + Utils.formatMoney(bucket.saidas) : '–'}</div>
-                <div>${Utils.formatMoney(bucket.acumulado)}</div>
+                <div class="is-income ${financialValueClass(bucket.entradas)}">${bucket.entradas > 0 ? '+ ' + Utils.formatMoney(bucket.entradas) : '–'}</div>
+                <div class="is-expense ${financialValueClass(-bucket.saidas)}">${bucket.saidas > 0 ? '− ' + Utils.formatMoney(bucket.saidas) : '–'}</div>
+                <div class="${financialValueClass(null)}">${Utils.formatMoney(bucket.acumulado)}</div>
             </div>`).join('');
         const emptyState = `<div class="nv-report-empty" role="status"><i class="fa-regular fa-chart-line"></i><div><strong>Sem movimentações no período</strong><span>Não há receitas ou despesas reais registradas entre ${formatReportDateRange(model)}. O relatório não exibe valores estimados.</span></div></div>`;
 
@@ -66,9 +84,9 @@ export const ReportComponents = {
                 </select></label>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 nv-report-metrics">
-                <div class="nv-report-metric is-income"><p><i class="fa-solid fa-arrow-trend-up"></i> Entradas</p><h3>${Utils.formatMoney(model.entradas)}</h3></div>
-                <div class="nv-report-metric is-expense"><p><i class="fa-solid fa-arrow-trend-down"></i> Saídas</p><h3>${Utils.formatMoney(model.saidas)}</h3></div>
-                <div class="nv-report-metric is-net"><p><i class="fa-solid fa-arrow-right-arrow-left"></i> Fluxo líquido</p><h3>${Utils.formatMoney(liquido)}</h3></div>
+                <div class="nv-report-metric is-income"><p><i class="fa-solid fa-arrow-trend-up"></i> Entradas</p><h3 data-currency-value="${model.entradas}" class="${financialValueClass(model.entradas)}">${Utils.formatMoney(model.entradas)}</h3>${reportSource('Soma das receitas não classificadas como transferência nas transações do período selecionado.')}</div>
+                <div class="nv-report-metric is-expense"><p><i class="fa-solid fa-arrow-trend-down"></i> Saídas</p><h3 data-currency-value="${model.saidas}" class="${financialValueClass(-model.saidas)}">${Utils.formatMoney(model.saidas)}</h3>${reportSource('Soma das despesas não classificadas como transferência nas transações do período selecionado.')}</div>
+                <div class="nv-report-metric is-net"><p><i class="fa-solid fa-arrow-right-arrow-left"></i> Fluxo líquido</p><h3 data-currency-value="${liquido}" class="${financialValueClass(liquido)}">${Utils.formatMoney(liquido)}</h3>${reportSource('Entradas menos saídas, calculadas a partir das transações do período selecionado.')}</div>
             </div>
             <div class="nv-report-panel mb-6"><div class="nv-report-panel-heading"><div><h4>Evolução do fluxo</h4><p>${model.isDaily ? 'Acompanhamento diário' : 'Acompanhamento mensal'} · fluxo acumulado no período</p></div></div>
                 <div class="relative h-[300px] w-full">${model.hasMovement ? '<canvas id="reportsFluxoChart" aria-label="Gráfico do fluxo acumulado"></canvas>' : emptyState}</div>
@@ -86,6 +104,7 @@ export const ReportComponents = {
         const today = new Date();
         let totalRec = 0; let totalDes = 0;
         let tableRows = '';
+        const monthlyTotals = [];
 
         for (let i = period - 1; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
@@ -96,6 +115,7 @@ export const ReportComponents = {
             
             const saldo = rec - des;
             const poup = rec > 0 ? (saldo / rec) * 100 : 0;
+            monthlyTotals.push({ rec, des, saldo, label: `${monthNames[d.getMonth()]} de ${d.getFullYear()}` });
 
             tableRows += `
                 <div class="flex items-center justify-between p-4 border-b border-border hover:bg-bg transition-colors">
@@ -106,6 +126,21 @@ export const ReportComponents = {
                     <div class="w-1/5 text-sm font-bold text-text-secondary text-right font-mono">${poup.toFixed(1)}%</div>
                 </div>`;
         }
+
+        const currentTotals = monthlyTotals[monthlyTotals.length - 1] || null;
+        const previousTotals = monthlyTotals.length > 1 ? monthlyTotals[monthlyTotals.length - 2] : null;
+        const comparisonRows = [
+            ['Entradas', 'rec'],
+            ['Saídas', 'des'],
+            ['Saldo', 'saldo']
+        ].map(([label, key]) => {
+            const variation = signedPeriodVariation(currentTotals?.[key], previousTotals?.[key]);
+            const icon = variation.tone === 'positive' ? 'fa-arrow-trend-up' : variation.tone === 'negative' ? 'fa-arrow-trend-down' : 'fa-minus';
+            return `<div class="nv-report-comparison-row is-${variation.tone}"><span>${label}</span><strong aria-label="${label}: ${variation.label}"><i class="fa-solid ${icon}" aria-hidden="true"></i>${variation.label}</strong></div>`;
+        }).join('');
+        const comparisonContext = currentTotals && previousTotals
+            ? `${currentTotals.label} em relação a ${previousTotals.label}`
+            : 'Histórico anterior insuficiente para uma comparação válida';
 
         return `
             <div class="nv-report-toolbar mb-6">
@@ -121,19 +156,24 @@ export const ReportComponents = {
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média de Receitas</p>
                     <h3 class="text-2xl font-bold text-success font-mono">${Utils.formatMoney(totalRec/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das receitas nas transações do período comparado; transferências são excluídas.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média de Despesas</p>
                     <h3 class="text-2xl font-bold text-danger font-mono">${Utils.formatMoney(totalDes/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das despesas nas transações do período comparado; transferências são excluídas.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Saldo Médio</p>
                     <h3 class="text-2xl font-bold text-reserve font-mono">${Utils.formatMoney((totalRec - totalDes)/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal de receitas menos despesas nas transações do período comparado.')}
                 </div>
             </div>
+
+            <section class="nv-report-comparison-insight" aria-labelledby="nv-report-comparison-title" aria-live="polite">
+                <div><p class="nv-report-comparison-eyebrow">Leitura rápida</p><h4 id="nv-report-comparison-title">Comparação com período anterior</h4><p>${comparisonContext}</p></div>
+                <div class="nv-report-comparison-grid">${comparisonRows}</div>
+            </section>
 
             <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft mb-6">
                 <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Comparativo Mensal</h4>
@@ -193,7 +233,7 @@ export const ReportComponents = {
 
         return `
             <div class="nv-report-toolbar mb-6">
-                <div><span class="nv-report-filter-label">Período projetado</span><span class="nv-report-filter-context">Próximos ${period} meses</span></div>
+                <div><span class="nv-report-filter-label">Período projetado ${estimatedBadge('Este relatório projeta compromissos futuros de cartão.')}</span><span class="nv-report-filter-context">Próximos ${period} meses</span></div>
                 <select data-change="setReportPeriod" class="nv-report-select">
                     <option value="3" ${period === 3 ? 'selected' : ''}>Próximos 3 meses</option>
                     <option value="6" ${period === 6 ? 'selected' : ''}>Próximos 6 meses</option>
@@ -203,13 +243,14 @@ export const ReportComponents = {
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
-                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Total Provisionado</p>
+                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Total Provisionado ${estimatedBadge()}</p>
                     <h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalProx)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">próximos ${period} meses</p>
+                    <p class="text-[10px] text-text-secondary mt-1">próximos ${period} meses</p>${reportSource('Soma das parcelas de cartão previstas nos próximos meses do período projetado.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
-                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média Mensal</p>
+                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média Mensal ${estimatedBadge()}</p>
                     <h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalProx/period)}</h3>
+                    ${reportSource('Total provisionado dividido pela quantidade de meses selecionada.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Cartões Ativos</p>
@@ -218,7 +259,7 @@ export const ReportComponents = {
             </div>
 
             <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft mb-6">
-                <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Projeção de Faturas</h4>
+                <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Projeção de Faturas ${estimatedBadge('Faturas calculadas com base nas parcelas de cartão previstas.')}</h4>
                 <div class="relative h-[250px] w-full"><canvas id="reportsCartoesChart"></canvas></div>
             </div>
 
@@ -279,18 +320,22 @@ export const ReportComponents = {
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold tracking-wider uppercase">Saldo Bancário</p>
                     <h3 class="text-xl font-bold text-reserve font-mono">${Utils.formatMoney(saldoBancario)}</h3>
+                    ${reportSource('Soma dos saldos atuais registrados nas contas bancárias.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold tracking-wider uppercase">Metas/Investimentos</p>
                     <h3 class="text-xl font-bold text-investment font-mono">${Utils.formatMoney(metasAcumuladas)}</h3>
+                    ${reportSource('Soma dos valores atuais registrados nas metas.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold tracking-wider uppercase">Dívida Cartões</p>
                     <h3 class="text-xl font-bold text-credit font-mono">${Utils.formatMoney(dividaCartoes)}</h3>
+                    ${reportSource('Soma das parcelas de cartão registradas em aberto.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform border-l-4 border-l-brand-deep">
                     <p class="text-xs font-brand-deep mb-2 font-bold tracking-wider uppercase text-brand-deep">Patrimônio</p>
                     <h3 class="text-xl font-bold text-brand-deep font-mono">${Utils.formatMoney(patrimonioLiquido)}</h3>
+                    ${reportSource('Saldo bancário mais metas acumuladas, menos a dívida dos cartões.')}
                 </div>
             </div>
 

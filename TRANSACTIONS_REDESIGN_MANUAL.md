@@ -16,12 +16,13 @@ Run from `index.html` with the app's normal local/static serving setup.
 - [ ] Search by part of a description and by a transaction identifier; clear it with **Limpar filtros**.
 - [ ] Use **Todas**, **Receitas**, **Despesas**, and **Transferências** tabs; confirm the selected tab and results update.
 - [ ] Use the Período/month and Tipo controls and confirm they remain synchronized with the tabs.
-- [ ] Open **Mais filtros** and test category, account/card, start date, end date, and reset behavior.
+- [ ] Open **Mais filtros** and test category, account/card, start date, end date, and reset behavior. Count active values across search, category, account/card, month, type, start date and end date; confirm the clear action is hidden with zero active filters and reads **Limpar N filtros** when filters are active.
 - [ ] Change rows per page, move between pages, and verify page 1 is restored after changing a filter.
 
 ## Data actions and semantics
 
-- [ ] Create a new income and expense through the existing modal; confirm the new row and real summary update.
+- [ ] Create a new income and expense through the existing modal; confirm the new row and real summary update. The success confirmation keeps its original message and exposes an accessible **Ver lançamento** action that navigates to **Transações**.
+- [ ] Confirm **Ver lançamento** is a real toast button handled by the existing `navigate` contract, not a `data-action` string embedded in toast text; destructive/delete confirmations do not receive this action.
 - [ ] Create a transfer; confirm both transfer legs remain visible under **Transferências**, show the correct `+`/`−` direction, and are excluded from income/expense/balance totals.
 - [ ] Select one row, select the visible page, deselect it, classify selected rows where available, and use bulk deletion; verify the existing selection hooks still work.
 - [ ] Edit a transaction from the visible **Editar** action and confirm its data and metadata persist.

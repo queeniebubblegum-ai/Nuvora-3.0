@@ -1,7 +1,7 @@
 export const Modals = {
     getHTML: () => `
     <div id="modal-chat-anora" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-4 border-b border-border flex justify-between items-center bg-brand-deep rounded-t-[16px] text-white shrink-0">
                 <div class="flex items-center gap-3">
                     <img src="assets/anora.svg" class="w-10 h-10 rounded-full border-2 border-white/20 object-cover">
@@ -32,7 +32,7 @@ export const Modals = {
     </div>
 
     <div id="modal-historico-anora" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-4 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Histórico de Mentoria</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -48,7 +48,7 @@ export const Modals = {
     </div>
 
     <div id="modal-agenda-dia" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium border border-border flex flex-col max-h-[75vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[75vh] overflow-hidden">
             <div class="p-5 border-b border-border flex justify-between items-center"><div><h3 class="text-lg font-bold text-text-primary">Agenda do dia</h3><p id="agenda-dia-data" class="text-xs text-text-secondary"></p></div><button data-action="closeModal" class="text-text-secondary"><i class="fa-solid fa-xmark"></i></button></div>
             <div id="agenda-dia-lista" class="p-5 overflow-y-auto space-y-2"></div>
             <div class="p-4 border-t border-border"><button id="agenda-dia-adicionar" data-action="addAgendaOnDate" class="w-full py-2.5 rounded-lg bg-brand-medium text-white text-sm font-bold"><i class="fa-solid fa-plus mr-2"></i>Adicionar previsão neste dia</button></div>
@@ -56,7 +56,7 @@ export const Modals = {
     </div>
 
     <div id="modal-agendamento" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 id="agendamento-titulo" class="text-lg font-bold font-primary text-text-primary">Nova previsão</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -98,7 +98,7 @@ export const Modals = {
     </div>
 
     <div id="modal-editar-transacao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1002;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-4 shrink-0">
                 <div>
                     <h3 class="text-lg font-bold font-primary text-text-primary">Editar Lançamento</h3>
@@ -145,7 +145,7 @@ export const Modals = {
     </div>
 
     <div id="modal-contato" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Contato</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -167,7 +167,7 @@ export const Modals = {
     </div>
 
     <div id="modal-categoria" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 id="nova-categoria-titulo" class="text-lg font-bold font-primary text-text-primary">Nova categoria</h3>
                 <button type="button" data-action="closeModal" class="text-text-secondary hover:text-text-primary" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
@@ -222,7 +222,7 @@ export const Modals = {
     </div>
 
     <div id="modal-transferencia" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1001;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border">
             <div class="flex justify-between items-center mb-5"><div><h3 class="font-bold text-text-primary">Transferir entre contas</h3><p class="text-xs text-text-secondary mt-1">Não será contabilizada como receita ou despesa.</p></div><button data-action="closeModal" class="text-text-secondary"><i class="fa-solid fa-xmark"></i></button></div>
             <form data-submit="transferencia" class="space-y-3">
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase mb-1">Conta de origem</label><select id="transfer-origem" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm"></select></div>
@@ -235,7 +235,7 @@ export const Modals = {
     </div>
 
     <div id="modal-transacao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[90vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[90vh] overflow-hidden">
             
             <div class="flex justify-between items-center mb-3 shrink-0">
                 <button type="button" data-action="closeModal" class="text-text-secondary hover:text-text-primary transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -362,7 +362,7 @@ export const Modals = {
         </div>
     </div>
     <div id="modal-banco" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Nova Conta Bancária</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -390,7 +390,7 @@ export const Modals = {
     </div>
 
     <div id="modal-cartao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Cartão</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -416,7 +416,7 @@ export const Modals = {
     </div>
 
     <div id="modal-despesa-cartao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <div>
                     <h3 class="text-lg font-bold font-primary text-text-primary">Nova Compra</h3>
@@ -452,13 +452,13 @@ export const Modals = {
     </div>
 
     <div id="modal-fatura-detalhes" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1001;">
-        <div class="bg-surface w-full max-w-2xl rounded-[16px] shadow-medium border border-border flex flex-col h-[90vh] max-h-[760px] overflow-hidden">
+        <div class="bg-surface w-full max-w-2xl rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col h-[90vh] max-h-[760px] overflow-hidden">
             <div id="modal-fatura-content" class="flex-1 min-h-0 overflow-hidden rounded-[16px]"></div>
         </div>
     </div>
 
     <div id="modal-classificar-fatura" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1003;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border">
             <div class="flex justify-between items-center mb-4">
                 <div><h3 class="text-lg font-bold font-primary text-text-primary">Classificar transações</h3><p id="invoice-classification-count" class="text-xs text-text-secondary mt-1"></p></div>
                 <button type="button" data-action="closeInvoiceClassification" class="text-text-secondary hover:text-text-primary w-8 h-8"><i class="fa-solid fa-xmark"></i></button>
@@ -472,7 +472,7 @@ export const Modals = {
     </div>
 
     <div id="modal-meta" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Nova Meta</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -492,7 +492,7 @@ export const Modals = {
     </div>
 
     <div id="modal-depositar-meta" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-xs rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-xs rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-3 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Depositar</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -511,7 +511,7 @@ export const Modals = {
     </div>
 
     <div id="modal-orcamento" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Limite</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -533,7 +533,7 @@ export const Modals = {
     </div>
 
     <div id="modal-simulador" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Simulador</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -613,7 +613,7 @@ export const Modals = {
     </div>
 
     <div id="modal-orcamento-inteligente" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-brand-medium"></i> Inteligente</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>

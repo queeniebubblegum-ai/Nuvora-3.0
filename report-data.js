@@ -80,6 +80,29 @@ export const buildCashflowModel = (db, period = 1, referenceDate = new Date()) =
     };
 };
 
+/**
+ * Returns a signed period-over-period percentage only when both values and a
+ * non-zero previous baseline exist.  Zero baselines intentionally stay neutral
+ * instead of implying an invented percentage.
+ */
+export const signedPeriodVariation = (current, previous) => {
+    const currentValue = Number(current);
+    const previousValue = Number(previous);
+    if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue) || previousValue === 0) {
+        return { value: null, label: 'Sem comparação anterior', direction: 'neutral', tone: 'neutral', isNeutral: true };
+    }
+    const variation = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+    const direction = variation > 0 ? 'up' : variation < 0 ? 'down' : 'neutral';
+    const tone = direction === 'up' ? 'positive' : direction === 'down' ? 'negative' : 'neutral';
+    return {
+        value: variation,
+        label: `${variation > 0 ? '+' : ''}${variation.toFixed(1)}%`,
+        direction,
+        tone,
+        isNeutral: false
+    };
+};
+
 export const reportPeriodLabel = period => {
     const months = Number.parseInt(period, 10) || 1;
     return months === 1 ? 'Mês atual' : `Últimos ${months} meses`;

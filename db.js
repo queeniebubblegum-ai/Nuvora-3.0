@@ -31,7 +31,9 @@ const initialDB = {
     historicoMentoria: [],
     receitasFuturas: [],
     assinaturas: [],
-    investimentos: []
+    investimentos: [],
+    // Persisted write timestamp; null means freshness is not trustworthy yet.
+    metadados: { ultimaAtualizacao: null }
 };
 
 export let db = {};
@@ -241,12 +243,16 @@ Object.defineProperty(db, 'comprasCartao', {
 });
 
 const persist = (col) => {
+    // This timestamp is written only from mutation paths, never from render.
+    // It therefore remains a trustworthy freshness signal across reloads.
+    db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
+    IDB.set('metadados', db.metadados).catch(console.error);
     if (col && db[col] !== undefined) {
         IDB.set(col, db[col]).catch(console.error);
     } else {
         collections.forEach(c => IDB.set(c, db[c]).catch(console.error));
     }
-    clearCache(); 
+    clearCache();
     if (typeof document !== 'undefined') {
         document.dispatchEvent(new Event('db-updated'));
     }
@@ -776,6 +782,7 @@ export const Database = {
     getTransacoesPorMes: TransactionsRepo.getByMonth,
     getComprasCartaoPorMes: TransactionsRepo.getCardExpensesByMonth,
     save: persist,
+    getLastUpdated: () => db.metadados?.ultimaAtualizacao || null,
     replaceAll: async (data) => {
         if (!data || typeof data !== 'object') throw new Error('Backup inválido');
 
@@ -793,6 +800,7 @@ export const Database = {
             }
         }
 
+        db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
         await Promise.all(collections.map(col => IDB.set(col, db[col])));
         clearCache();
         if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));

@@ -1,9 +1,11 @@
 import { Controllers } from './controllers.js';
+import { SubmitGuard } from './submit-guard.js';
 
 export const SubmitEvents = {
     setup: () => {
         document.body.addEventListener('submit', (e) => {
-            const action = e.target.getAttribute('data-submit');
+            const form = e.target;
+            const action = form.getAttribute('data-submit');
             if (!action) return;
 
             const submitMap = {
@@ -29,7 +31,12 @@ export const SubmitEvents = {
             };
 
             if (submitMap[action]) {
-                submitMap[action](e);
+                // Lock once at the delegated submit boundary. Controllers that
+                // schedule callback-based work call SubmitGuard.hold() after
+                // validation and release when that work completes.
+                if (!SubmitGuard.run(form, () => submitMap[action](e))) {
+                    e.preventDefault();
+                }
             }
         });
     }

@@ -1,113 +1,112 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { App } from './app.js';
+import { SubmitGuard } from './submit-guard.js';
+import { SubmitFeedback } from './submit-feedback.js';
+import { trackUIEvent } from './ui-tracking.js';
 
-// HELPER DE UX/UI: Gerencia o estado visual de processamento dos formulários
+// HELPER DE UX/UI: mantém o loading existente e acrescenta um estado acessível.
+// O lock de duplicidade fica no delegated submit guard; não há um segundo lock
+// por botão que possa impedir a recuperação após uma validação inválida.
 const toggleLoadingState = (form, isLoading, text = "Processando...") => {
-    const btn = form.querySelector('button[type="submit"]');
-    if (!btn) return;
-    
-    if (isLoading) {
-        btn.dataset.originalHtml = btn.innerHTML; // Salva o texto/ícone original
-        btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> ${text}`;
-        btn.disabled = true;
-        btn.classList.add('opacity-80', 'cursor-not-allowed');
-    } else {
-        if (btn.dataset.originalHtml) {
-            btn.innerHTML = btn.dataset.originalHtml;
-        }
-        btn.disabled = false;
-        btn.classList.remove('opacity-80', 'cursor-not-allowed');
-    }
+    if (!form) return;
+    SubmitFeedback.set(form, isLoading ? 'loading' : 'idle', text);
 };
 
-// --- HELPER DE ENGENHARIA DE UX: GESTOR DE UNDO (SOFT DELETE) ---
+const markSaved = form => {
+    const modal = form?.closest?.('[id^="modal-"]');
+    if (modal && (modal.classList.contains('hidden') || modal.getAttribute('aria-hidden') === 'true')) return;
+    SubmitFeedback.set(form, 'success', 'Salvo');
+};
+
+// Reusable confirmation pattern for successful transaction persistence. The
+// action is a real toast button handled by evt-click, not text pretending to
+// be an action, and does not alter the existing save/toast timing.
+const showTransactionSavedToast = message => Utils.showToast(message, 'success', {
+    action: {
+        action: 'navigate',
+        payload: 'Transacoes',
+        label: 'Ver lançamento',
+        ariaLabel: 'Ver lançamento salvo'
+    }
+});
+
+// --- GESTOR DE UNDO PARA EXCLUSÕES ---
+// Only one snapshot is intentionally kept: a newer deletion supersedes the
+// previous one, while the prior operation remains safely deleted after its
+// timeout. Records are copied before removing them so later edits cannot mutate
+// the undo payload.
 let undoContext = {
     timeout: null,
     items: []
 };
 
-const executeSoftDelete = (itemsToDelete, toastMsg) => {
-    if (!itemsToDelete || itemsToDelete.length === 0) return;
+const cloneTransaction = transaction => ({ ...transaction });
 
-    // Se já houver um timer rodando, nós o limpamos (efetiva a exclusão anterior permanentemente)
-    if (undoContext.timeout) {
-        clearTimeout(undoContext.timeout);
-    }
-
-    // Armazena a cópia exata dos itens para possível restauração
-    undoContext.items = [...itemsToDelete];
-
-    // Efetua a deleção no banco de dados
-    const idsToDelete = itemsToDelete.map(t => t.id);
-    Database.removeMultiple('transacoes', idsToDelete);
-
-    // Atualiza a interface otimisticamente (remoção imediata da tela)
+const refreshTransactionsAfterMutation = () => {
     if (App.currentPage === 'Dashboard' && document.getElementById('modal-fatura-detalhes') && document.getElementById('modal-fatura-detalhes').classList.contains('flex')) {
         App.renderInvoiceModal();
     } else {
         App.scheduleRender();
     }
-
-    // Mostra o Toast flutuante de Desfazer
-    showUndoToast(toastMsg);
 };
 
-const showUndoToast = (msg) => {
-    let toast = document.getElementById('undo-toast-nuvora');
-    if (toast) toast.remove();
+const clearUndoSnapshot = () => {
+    if (undoContext.timeout) clearTimeout(undoContext.timeout);
+    undoContext.timeout = null;
+    undoContext.items = [];
+};
 
-    toast = document.createElement('div');
-    toast.id = 'undo-toast-nuvora';
-    // Estética premium para contraste forte na UI
-    toast.className = 'fixed bottom-10 left-1/2 -translate-x-1/2 bg-brand-deep text-white px-6 py-3.5 rounded-[16px] shadow-2xl flex items-center gap-5 z-[9999] transition-all duration-300 transform translate-y-0 opacity-100 border border-white/10';
-    toast.innerHTML = `
-        <span class="text-sm font-bold whitespace-nowrap">${msg}</span>
-        <div class="w-px h-5 bg-white/20"></div>
-        <button id="btn-undo-action" class="text-brand-soft font-black text-sm hover:text-white transition-colors uppercase tracking-wider focus:outline-none">Desfazer</button>
-    `;
-    document.body.appendChild(toast);
+const undoDeletedTransactions = () => {
+    const snapshot = undoContext.items;
+    if (!snapshot.length) return false;
 
-    // Animação de entrada fluida
-    toast.animate([
-        { opacity: 0, transform: 'translate(-50%, 20px)' },
-        { opacity: 1, transform: 'translate(-50%, 0)' }
-    ], { duration: 300, easing: 'ease-out' });
-
-    // Lógica de Restauração ao clicar em Desfazer
-    document.getElementById('btn-undo-action').addEventListener('click', () => {
-        undoContext.items.forEach(t => Database.add('transacoes', t));
-        
-        // Garante que a transação volte para a ordem cronológica certa e não vá para o topo
-        db.transacoes.sort((a,b) => new Date(b.data) - new Date(a.data));
-        Database.save('transacoes'); 
-
-        toast.style.opacity = '0';
-        toast.style.transform = 'translate(-50%, 20px)';
-        setTimeout(() => toast.remove(), 300);
-        
-        clearTimeout(undoContext.timeout);
-        undoContext.items = [];
-
-        Utils.showToast('Ação desfeita. Transações restauradas.', 'success');
-        
-        if (App.currentPage === 'Dashboard' && document.getElementById('modal-fatura-detalhes') && document.getElementById('modal-fatura-detalhes').classList.contains('flex')) {
-            App.renderInvoiceModal();
-        } else {
-            App.scheduleRender();
+    clearUndoSnapshot();
+    // Restore through the repository method so bank balance deltas are applied
+    // exactly as they are for a newly added transaction. Card installments do
+    // not alter bank balances, and transfer legs preserve their original
+    // metadata, keeping transfer semantics intact.
+    snapshot.forEach(transaction => {
+        if (!db.transacoes.some(current => String(current.id) === String(transaction.id))) {
+            Database.add('transacoes', cloneTransaction(transaction));
         }
     });
+    db.transacoes.sort((a, b) => new Date(b.data || b.id) - new Date(a.data || a.id));
+    Database.save('transacoes');
+    refreshTransactionsAfterMutation();
+    Utils.showToast('Ação desfeita. Transações restauradas.', 'success');
+    return true;
+};
 
-    // Timeout de 6 segundos para efetivar a exclusão invisivelmente
-    undoContext.timeout = setTimeout(() => {
-        if (document.getElementById('undo-toast-nuvora')) {
-            const el = document.getElementById('undo-toast-nuvora');
-            el.style.opacity = '0';
-            el.style.transform = 'translate(-50%, 20px)';
-            setTimeout(() => el.remove(), 300);
+const showUndoToast = (message) => {
+    Utils.showToast(message, 'success', {
+        id: 'transaction-undo-toast',
+        duration: 8000,
+        action: {
+            action: 'undoTransactions',
+            label: 'Desfazer',
+            ariaLabel: 'Desfazer exclusão das transações'
         }
-        undoContext.items = []; // Limpa a memória
-    }, 6000); 
+    });
+};
+
+const executeSoftDelete = (itemsToDelete, toastMsg) => {
+    if (!itemsToDelete || itemsToDelete.length === 0) return;
+
+    // Keep a complete snapshot (including every card installment and both
+    // transfer legs selected by the caller) before the destructive operation.
+    clearUndoSnapshot();
+    undoContext.items = itemsToDelete.map(cloneTransaction);
+    Database.removeMultiple('transacoes', undoContext.items.map(t => t.id));
+    refreshTransactionsAfterMutation();
+    showUndoToast(toastMsg);
+
+    undoContext.timeout = setTimeout(() => {
+        // The database deletion has already happened; expiry only discards the
+        // in-memory restoration snapshot and the action becomes a no-op.
+        undoContext.items = [];
+        undoContext.timeout = null;
+    }, 8000);
 };
 
 export const TransacoesController = {
@@ -126,7 +125,7 @@ export const TransacoesController = {
         // Two ledger entries keep each account balance correct; the explicit type is excluded from income/expense analytics.
         Database.add('transacoes', { id: Date.now(), desc, valor, tipo: 'despesa', transferenciaInterna: true, transferenciaId, bancoId: origemId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna' });
         Database.add('transacoes', { id: Date.now() + 1, desc, valor, tipo: 'receita', transferenciaInterna: true, transferenciaId, bancoId: destinoId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna', transferenciaEntrada: true });
-        Utils.showToast('Transferência registrada sem alterar receitas e despesas.', 'success');
+        showTransactionSavedToast('Transferência registrada sem alterar receitas e despesas.');
         App.closeModal();
     },
 
@@ -166,6 +165,7 @@ export const TransacoesController = {
             if (!cartaoId) { Utils.showToast('Selecione um cartão de crédito válido.', 'error'); return; }
         }
 
+        SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Salvando...");
 
         setTimeout(() => {
@@ -185,7 +185,7 @@ export const TransacoesController = {
                 Database.addCardExpense({
                     desc, total: valorTotal, parcelas, cartaoId: cartaoId, categoria, data, contatoId
                 });
-                Utils.showToast(`Despesa lançada no cartão em ${parcelas}x!`, 'success');
+                showTransactionSavedToast(`Despesa lançada no cartão em ${parcelas}x!`);
             } else {
                 if (isRecorrente) {
                     const valorParcela = Math.round((valor / parcelasRecorrentes) * 100) / 100;
@@ -225,7 +225,7 @@ export const TransacoesController = {
                             bancoId: bancoId
                         });
                     }
-                    Utils.showToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} registada e agendada para os próximos ${parcelasRecorrentes - 1} meses!`, 'success');
+                    showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} registada e agendada para os próximos ${parcelasRecorrentes - 1} meses!`);
                 } else {
                     Database.add('transacoes', {
                         id: Date.now(),
@@ -237,12 +237,14 @@ export const TransacoesController = {
                         recorrente: false,
                         contatoId
                     });
-                    Utils.showToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} adicionada com sucesso!`, 'success');
+                    showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
                 }
             }
-            
+
+            markSaved(form);
+            trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_created' });
             App.closeModal();
-            toggleLoadingState(form, false); 
+            SubmitGuard.release(form);
         }, 350);
     },
 
@@ -255,6 +257,7 @@ export const TransacoesController = {
         const valorBase = Math.abs(parseFloat(document.getElementById('dc-valor').value));
         if (valorBase === 0 || isNaN(valorBase)) { Utils.showToast('O valor deve ser maior que zero.', 'warning'); return; }
 
+        SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Registrando...");
 
         setTimeout(() => {
@@ -278,10 +281,11 @@ export const TransacoesController = {
             Database.addCardExpense({
                 desc, total: valorTotal, parcelas, cartaoId, categoria, data, contatoId: null
             });
-            Utils.showToast(`Compra lançada em ${parcelas}x!`, 'success');
-            
+            showTransactionSavedToast(`Compra lançada em ${parcelas}x!`);
+            markSaved(form);
+            trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_created' });
             App.closeModal();
-            toggleLoadingState(form, false);
+            SubmitGuard.release(form);
         }, 350);
     },
 
@@ -294,6 +298,7 @@ export const TransacoesController = {
         const valor = Math.abs(parseFloat(document.getElementById('edit-valor').value));
         if (valor === 0 || isNaN(valor)) { Utils.showToast('O valor deve ser maior que zero.', 'warning'); return; }
 
+        SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Atualizando...");
 
         setTimeout(() => {
@@ -303,12 +308,15 @@ export const TransacoesController = {
             const contatoId = contatoIdRaw ? parseInt(contatoIdRaw) : null;
 
             if(Database.updateTransaction(id, { desc, valor, data, categoria, contatoId })) {
-                Utils.showToast('Transação atualizada!', 'success');
+                showTransactionSavedToast('Transação atualizada!');
+                markSaved(form);
+                trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_updated' });
                 App.closeModal();
             } else {
                 Utils.showToast('Erro ao atualizar.', 'error');
+                SubmitFeedback.set(form, 'idle');
             }
-            toggleLoadingState(form, false);
+            SubmitGuard.release(form);
         }, 350);
     },
 
@@ -319,7 +327,12 @@ export const TransacoesController = {
         let itemsToDelete = [];
         let msg = 'Transação apagada.';
 
-        if (target.isCartao && target.grupoId) {
+        if (target.transferenciaId) {
+            // A transfer is one logical operation represented by two ledger
+            // legs. Never leave an orphan leg when either row is removed.
+            itemsToDelete = db.transacoes.filter(t => String(t.transferenciaId) === String(target.transferenciaId));
+            msg = 'Transferência apagada.';
+        } else if (target.isCartao && target.grupoId) {
             itemsToDelete = db.transacoes.filter(t => t.grupoId === target.grupoId);
             msg = `Compra parcelada apagada (${itemsToDelete.length} parcelas).`;
         } else {
@@ -357,6 +370,8 @@ export const TransacoesController = {
         App.viewState.selectedTransactions = [];
         executeSoftDelete(itemsToDelete, `${count} transações apagadas.`);
     },
+
+    undoDeletedTransactions,
 
     simularDespesaCartao: () => {
         const valorBaseRaw = document.getElementById('dc-valor').value;

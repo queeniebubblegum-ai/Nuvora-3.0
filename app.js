@@ -11,6 +11,17 @@ import { OFXManager } from './ofx.js';
 import { CSVManager } from './csv-manager.js';
 import { Classification } from './classification.js';
 import { isCategoriaPadrao } from './categorias-padrao.js';
+import { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
+import { loadViewContext, saveViewContext, isValidViewContextTab, isValidReportPeriod, isValidCashflowPeriod, isValidPage, isValidPlanningPeriod } from './view-context.js';
+import { trackUIEvent } from './ui-tracking.js';
+export { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
+
+const validMonth = value => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 11;
+const validYear = value => Number.isInteger(Number(value)) && Number(value) >= 1970 && Number(value) <= 9999;
+const loadPlanningContext = () => loadViewContext('planning.period', {
+    month: new Date().getMonth(), year: new Date().getFullYear()
+}, isValidPlanningPeriod);
+const planningContext = loadPlanningContext();
 
 // --- ENGENHARIA DE UX: Assistente de Fechamento de Mês ---
 const FechamentoManager = {
@@ -200,24 +211,25 @@ export const App = {
         activeCardId: null,
         invoiceMonth: new Date().getMonth(),
         invoiceYear: new Date().getFullYear(),
-        budgetMonth: new Date().getMonth(),
-        budgetYear: new Date().getFullYear(),
+        budgetMonth: planningContext.month,
+        budgetYear: planningContext.year,
         agendaMonth: new Date().getMonth(),
         agendaYear: new Date().getFullYear(),
         agendaSelectedDate: null,
-        filters: { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' },
-        reportTab: 'fluxo',
+        filters: loadTransactionFilters(),
+        reportTab: loadViewContext('reports.tab', 'fluxo', isValidViewContextTab),
         isNotifOpen: false,
         notifTab: 'alertas',
         dashboardPeriod: 'este_mes',
-        reportPeriod: 6,
-        reportCashflowPeriod: 1,
+        reportPeriod: loadViewContext('reports.period', 6, isValidReportPeriod),
+        reportCashflowPeriod: loadViewContext('reports.cashflowPeriod', 1, isValidCashflowPeriod),
         selectedTransactions: [],
+        uncategorizedOnly: false,
         ofxPendente: null,
         ofxPendenteSaldoFinal: null, 
         rawOfxString: null,
         bancoAlvoOFX: null,
-        txPage: 1,
+        txPage: loadViewContext('transactions.page', 1, isValidPage),
         txPerPage: 10
     }, () => {
         if (App.scheduleRender) App.scheduleRender();
@@ -746,18 +758,34 @@ export const App = {
         });
     },
 
-    navigate: (page, skipHistory = false) => { 
+    navigate: (page, skipHistory = false) => {
+        if (typeof document !== 'undefined') document.dispatchEvent(new Event('nuvora:navigate'));
         App.closeModal(); 
         App.viewState.selectedTransactions = []; 
-        App.currentPage = page; 
+        App.currentPage = page;
+        if (page !== 'Dashboard' && typeof window !== 'undefined') window.resetDashboardQuickAction?.();
         Router.navigate(page, skipHistory);
         App.scheduleRender(); 
     },
     
     setDashboardPeriod: (period) => { App.viewState.dashboardPeriod = period; },
-    setReportPeriod: (months) => { App.viewState.reportPeriod = parseInt(months); },
-    setReportCashflowPeriod: (months) => { App.viewState.reportCashflowPeriod = parseInt(months); },
-    setReportTab: (tab) => { App.viewState.reportTab = tab; },
+    setReportPeriod: (months) => {
+        const value = parseInt(months, 10);
+        if (!isValidReportPeriod(value)) return;
+        App.viewState.reportPeriod = value;
+        saveViewContext('reports.period', value, isValidReportPeriod);
+    },
+    setReportCashflowPeriod: (months) => {
+        const value = parseInt(months, 10);
+        if (!isValidCashflowPeriod(value)) return;
+        App.viewState.reportCashflowPeriod = value;
+        saveViewContext('reports.cashflowPeriod', value, isValidCashflowPeriod);
+    },
+    setReportTab: (tab) => {
+        if (!isValidViewContextTab(tab)) return;
+        App.viewState.reportTab = tab;
+        saveViewContext('reports.tab', tab, isValidViewContextTab);
+    },
 
     prepareCategoryParents: (preferred = null) => {
         const type = ['despesa', 'receita'].includes(document.getElementById('nova-categoria-tipo')?.value)
@@ -919,24 +947,48 @@ export const App = {
     },
     
     setTxPage: (page) => {
-        App.viewState.txPage = parseInt(page);
+        const value = parseInt(page, 10);
+        if (!isValidPage(value)) return;
+        App.viewState.txPage = value;
+        saveViewContext('transactions.page', value, isValidPage);
     },
     
     setTxPerPage: (limit) => {
         App.viewState.txPerPage = parseInt(limit);
         App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
     },
 
-    setFilter: (key, value) => { 
-        App.viewState.selectedTransactions = []; 
-        App.viewState.filters[key] = value; 
-        App.viewState.txPage = 1; 
+    setFilter: (key, value) => {
+        if (!TRANSACTION_FILTER_KEYS.includes(key)) return;
+        App.viewState.selectedTransactions = [];
+        const defaults = getDefaultTransactionFilters();
+        App.viewState.filters[key] = normalizeTransactionFilter(key, value, defaults[key]);
+        App.viewState.uncategorizedOnly = false;
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+        persistTransactionFilters(App.viewState.filters);
+        trackUIEvent({ screen: 'Transacoes', source: 'filter', action: 'filter_changed' });
     },
     
-    clearFilters: () => { 
-        App.viewState.selectedTransactions = []; 
-        App.viewState.filters = { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' }; 
-        App.viewState.txPage = 1; 
+    filterUncategorized: () => {
+        App.viewState.selectedTransactions = [];
+        App.viewState.uncategorizedOnly = true;
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+    },
+    clearUncategorizedFilter: () => {
+        App.viewState.uncategorizedOnly = false;
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+    },
+    clearFilters: () => {
+        App.viewState.selectedTransactions = [];
+        App.viewState.uncategorizedOnly = false;
+        App.viewState.filters = getDefaultTransactionFilters();
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+        persistTransactionFilters(App.viewState.filters);
     },
     
     showAgendaDay: (date) => {
@@ -1022,7 +1074,8 @@ export const App = {
             App.viewState.invoiceMonth = m; App.viewState.invoiceYear = y; 
             if(document.getElementById('modal-fatura-detalhes')?.classList.contains('flex')) Renderer.renderInvoiceModal(App.viewState);
         } else { 
-            App.viewState.budgetMonth = m; App.viewState.budgetYear = y; 
+            App.viewState.budgetMonth = m; App.viewState.budgetYear = y;
+            saveViewContext('planning.period', { month: m, year: y }, isValidPlanningPeriod);
         }
     },
 

@@ -1,35 +1,62 @@
 import { Utils } from './utils.js';
 import { CoreComponents } from './cmp-core.js';
+import { financialValueClass } from './financial-refinements.js';
+import { PRIORITY_KEYS, resolvePriority } from './priority.js';
+
+/**
+ * Compares two period values without turning a missing/zero baseline into a
+ * fabricated 100% trend.  A non-zero baseline keeps the existing percentage
+ * semantics; callers decide how to present the neutral state.
+ */
+export const calculateDashboardTrend = (current, previous) => {
+    const currentValue = Number(current);
+    const previousValue = Number(previous);
+    if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue) || previousValue === 0) {
+        return { val: null, label: 'Sem comparação anterior', direction: 'neutral', isUp: false, isNeutral: true };
+    }
+    const diff = ((currentValue - previousValue) / previousValue) * 100;
+    return { val: Math.abs(diff).toFixed(1), label: `${Math.abs(diff).toFixed(1)}%`, direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral', isUp: diff >= 0, isNeutral: false };
+};
 
 export const DashboardComponents = {
-    dashboardCards: (atual, anterior) => {
-        const calcTrend = (a, b) => {
-            if (b === 0) return { val: a > 0 ? 100 : 0, isUp: a > 0 };
-            const diff = ((a - b) / b) * 100;
-            return { val: Math.abs(diff).toFixed(1), isUp: diff >= 0 };
-        };
+    dashboardCards: (atual = {}, anterior = {}) => {
+        const calcTrend = calculateDashboardTrend;
 
         // Receitas/despesas are intentionally period-filtered. Saldo atual is
         // the existing global Database.getTotals().saldo passed by the page;
         // none of these values change the underlying financial calculations.
-        const resultadoPeriodo = atual.receitas - atual.despesas;
-        const resultadoAnterior = anterior.receitas - anterior.despesas;
+        const resultadoPeriodo = (Number(atual.receitas) || 0) - (Number(atual.despesas) || 0);
+        const resultadoAnterior = (Number(anterior.receitas) || 0) - (Number(anterior.despesas) || 0);
         const resultadoT = calcTrend(resultadoPeriodo, resultadoAnterior);
+        const resultadoTrendClass = resultadoT.isNeutral ? 'text-text-secondary' : (resultadoT.isUp ? 'text-success' : 'text-danger');
+        const resultadoTrendIcon = resultadoT.isNeutral ? 'fa-minus' : (resultadoT.isUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down');
+        const resultadoTrendLabel = resultadoT.isNeutral ? resultadoT.label : `${resultadoT.label}`;
         const vencimentos = atual.contasPendentes || 0;
         const resultadoColor = resultadoPeriodo >= 0 ? 'text-success' : 'text-danger';
         const vencimentosColor = vencimentos > 0 ? 'text-danger' : 'text-success';
+        const projection = atual.projecaoFimMes || {};
+        const projectionAvailable = projection.available === true && Number.isFinite(Number(projection.value));
+        const projectionValue = projectionAvailable ? Utils.formatMoney(projection.value) : '—';
+        const projectionTone = projectionAvailable ? financialValueClass(projection.value) : financialValueClass(null);
 
         const resultadoCard = `
         <div class="nv-dashboard-card nv-summary-card nv-summary-card--result group">
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-2">
                     <span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Resultado do período</span>
-                    <span class="${resultadoT.isUp ? 'text-success' : 'text-danger'} text-[10px] font-bold flex items-center gap-1 font-mono"><i class="fa-solid ${resultadoT.isUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i> ${resultadoT.val}%</span>
+                    <span class="${resultadoTrendClass} text-[10px] font-bold flex items-center gap-1 ${resultadoT.isNeutral ? '' : 'font-mono'}" aria-label="${resultadoTrendLabel}"><i class="fa-solid ${resultadoTrendIcon}" aria-hidden="true"></i> ${resultadoTrendLabel}</span>
                 </div>
                 <div class="w-10 h-10 text-brand-medium bg-brand-soft rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i></div>
             </div>
-            <h3 class="text-3xl font-bold ${resultadoColor} mb-1 font-mono tracking-tight">${Utils.formatMoney(resultadoPeriodo)}</h3>
+            <h3 data-currency-value="${resultadoPeriodo}" class="text-3xl font-bold ${resultadoColor} ${financialValueClass(resultadoPeriodo)} mb-1 font-mono tracking-tight">${Utils.formatMoney(resultadoPeriodo)}</h3>
             <p class="text-[11px] text-text-secondary font-medium">Receitas ${Utils.formatMoney(atual.receitas)} · Despesas ${Utils.formatMoney(atual.despesas)}</p>
+        </div>`;
+
+        const projectionCard = `
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--projection group" aria-label="Projeção de saldo no fim do mês">
+            <div class="flex justify-between items-start mb-4"><div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Fim do mês</span></div><div class="w-10 h-10 text-brand-medium bg-brand-soft rounded-[12px] flex items-center justify-center text-base shadow-sm"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></div></div>
+            <h3 data-currency-value="${projectionAvailable ? projection.value : ''}" class="text-3xl font-bold ${projectionTone} mb-1 font-mono tracking-tight">${projectionValue}</h3>
+            <p class="text-[11px] text-text-secondary font-medium" title="${Utils.escapeHTML(projection.explanation || 'Dados futuros insuficientes para projetar.')}">${Utils.escapeHTML(projectionAvailable ? 'Saldo estimado no fim do mês' : 'Dados insuficientes para projetar')}</p>
         </div>`;
 
         const vencimentosCard = `
@@ -38,23 +65,206 @@ export const DashboardComponents = {
                 <div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Próximos vencimentos</span></div>
                 <div class="w-10 h-10 ${vencimentos > 0 ? 'text-danger bg-danger/10' : 'text-success bg-success/10'} rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-clock" aria-hidden="true"></i></div>
             </div>
-            <h3 class="text-3xl font-bold ${vencimentosColor} mb-1 font-mono tracking-tight">${Utils.formatMoney(vencimentos)}</h3>
-            <p class="text-[11px] text-text-secondary font-medium">Contas pendentes até o fim do mês</p>
+            <h3 data-currency-value="${vencimentos}" class="text-3xl font-bold ${vencimentosColor} ${financialValueClass(vencimentos)} mb-1 font-mono tracking-tight">${Utils.formatMoney(vencimentos)}</h3>
+            <p class="text-[11px] text-text-secondary font-medium">Contas pendentes de hoje até o fim do mês</p>
         </div>`;
 
         return `
-        <div class="nv-dashboard-summary-grid grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="nv-dashboard-summary-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             ${CoreComponents._buildSummaryCard('Saldo atual', atual.saldo, '', true, 'fa-wallet', 'Saldo global de todas as contas')}
             ${resultadoCard}
             ${vencimentosCard}
+            ${projectionCard}
         </div>`;
     },
 
-    insightsSection: (mentoria) => {
+    // Chooses one next action so the dashboard has a single prioritized
+    // narrative instead of stacking alerts with the same urgency.
+    nextDecision: (atual = {}, context = {}) => {
+        const selection = resolvePriority({ ...atual, ...context });
+        const asNumber = value => {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : 0;
+        };
+        const describe = (items, singular, plural, suffix = 'aguardando regularização.') => {
+            const total = items.reduce((sum, item) => sum + asNumber(item.valor), 0);
+            const countLabel = `${items.length} ${items.length === 1 ? singular : plural}`;
+            return total > 0 ? `${countLabel} · ${Utils.formatMoney(total)} ${suffix}` : `${countLabel} ${suffix}`;
+        };
+        const labelsFor = items => {
+            const labels = [...new Set(items.map(item => item.nome || item.modelo || item.categoria || 'Item').filter(Boolean))];
+            return labels.length <= 2 ? labels.join(' e ') : `${labels.slice(0, 2).join(', ')} e mais ${labels.length - 2}`;
+        };
+
+        if (selection.priority === PRIORITY_KEYS.OVERDUE) {
+            return {
+                priority: selection.priority,
+                tone: 'danger',
+                icon: 'fa-triangle-exclamation',
+                title: 'Regularize as contas vencidas',
+                detail: describe(selection.overdue, 'conta vencida', 'contas vencidas'),
+                action: 'Agendamentos',
+                actionLabel: 'Ver contas vencidas'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.NEGATIVE_BALANCE) {
+            return {
+                priority: selection.priority,
+                tone: 'danger',
+                icon: 'fa-arrow-trend-down',
+                title: 'Recomponha o saldo global',
+                detail: `O saldo de todas as contas está em ${Utils.formatMoney(selection.balance)}.`,
+                action: 'Contas',
+                actionLabel: 'Ver contas'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.OVER_BUDGET) {
+            const label = labelsFor(selection.overBudget);
+            return {
+                priority: selection.priority,
+                tone: 'warning',
+                icon: 'fa-chart-pie',
+                title: 'Revise o orçamento ultrapassado',
+                detail: `${label} ${selection.overBudget.length === 1 ? 'ultrapassou' : 'ultrapassaram'} o limite definido.`,
+                action: 'Orcamento',
+                actionLabel: 'Revisar orçamento'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.HIGH_CARD_USAGE) {
+            const label = labelsFor(selection.highCardUsage);
+            return {
+                priority: selection.priority,
+                tone: 'warning',
+                icon: 'fa-credit-card',
+                title: 'Revise o uso dos cartões',
+                detail: `${label} ${selection.highCardUsage.length === 1 ? 'está' : 'estão'} com pelo menos 80% do limite utilizado.`,
+                action: 'Contas',
+                actionLabel: 'Ver cartões'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.ANORA_RECOMMENDATION) {
+            const candidate = selection.anoraRecommendation;
+            return {
+                priority: selection.priority,
+                tone: 'info',
+                icon: 'fa-sparkles',
+                title: 'Siga a recomendação da Anora',
+                detail: candidate.detail || candidate.label || 'Há uma recomendação da Anora pronta para você.',
+                action: candidate.payload || candidate.modal || 'Dashboard',
+                actionType: candidate.action,
+                actionModal: candidate.modal,
+                actionLabel: candidate.label || 'Ver recomendação'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.INFORMATIONAL) {
+            return {
+                priority: selection.priority,
+                tone: 'warning',
+                icon: 'fa-calendar-day',
+                title: 'Antecipe os próximos vencimentos',
+                detail: describe(selection.upcoming, 'conta próxima', 'contas próximas', 'programadas até o fim do mês.'),
+                action: 'Agendamentos',
+                actionLabel: 'Ver próximos vencimentos'
+            };
+        }
+        return null;
+    },
+
+    nextDecisionBlock: (atual = {}, context = {}) => {
+        const decision = DashboardComponents.nextDecision(atual, context);
+        if (!decision) return '';
+        const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+        const actionAttributes = decision.actionType === 'openModal'
+            ? `data-action="openModal" data-modal="${escape(decision.actionModal)}"`
+            : `data-action="navigate" data-payload="${escape(decision.action)}"`;
+        return `<section class="nv-dashboard-attention nv-dashboard-decision is-${escape(decision.tone)}" aria-labelledby="nv-dashboard-decision-title" aria-live="polite"><header class="nv-dashboard-attention__header"><div><p class="nv-dashboard-eyebrow">Próxima decisão</p><h3 id="nv-dashboard-decision-title">Ação recomendada</h3></div><i class="fa-solid ${escape(decision.icon)}" aria-hidden="true"></i></header><div class="nv-dashboard-attention-item is-${escape(decision.tone)}"><span class="nv-dashboard-attention-item__icon" aria-hidden="true"><i class="fa-solid ${escape(decision.icon)}"></i></span><div class="nv-dashboard-attention-item__copy"><strong>${escape(decision.title)}</strong><p>${escape(decision.detail)}</p></div><button type="button" ${actionAttributes} class="nv-dashboard-attention-item__action" aria-label="${escape(decision.actionLabel)}">${escape(decision.actionLabel)}<i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></div></section>`;
+    },
+
+    // Alias kept descriptive for callers that render the decision section
+    // directly, without changing the nextDecision data contract.
+    decisionBlock: (atual = {}, context = {}) => DashboardComponents.nextDecisionBlock(atual, context),
+
+    attentionStrip: (atual = {}, context = {}) => {
+        const selection = resolvePriority({ ...atual, ...context });
+        if (!selection.priority || context.excludePriority === selection.priority) return '';
+        const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+        const labelsFor = items => {
+            const labels = [...new Set(items.map(item => item.nome || item.modelo || item.categoria || 'Item').filter(Boolean))];
+            return labels.length <= 2 ? labels.join(' e ') : `${labels.slice(0, 2).join(', ')} e mais ${labels.length - 2}`;
+        };
+        const describe = (items, singular, plural, suffix = 'aguardando regularização.') => {
+            const total = items.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+            const countLabel = `${items.length} ${items.length === 1 ? singular : plural}`;
+            return total > 0 ? `${countLabel} · ${Utils.formatMoney(total)} ${suffix}` : `${countLabel} ${suffix}`;
+        };
+        let alert;
+        if (selection.priority === PRIORITY_KEYS.OVERDUE) {
+            alert = {
+                tone: 'danger', icon: 'fa-triangle-exclamation', title: 'Há contas vencidas',
+                detail: describe(selection.overdue, 'conta vencida', 'contas vencidas'),
+                action: 'navigate', payload: 'Agendamentos', actionLabel: 'Ver contas vencidas'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.NEGATIVE_BALANCE) {
+            alert = {
+                tone: 'danger', icon: 'fa-arrow-trend-down', title: 'Saldo global negativo',
+                detail: `O saldo de todas as contas está em ${Utils.formatMoney(selection.balance)}.`,
+                action: 'navigate', payload: 'Contas', actionLabel: 'Ver contas'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.OVER_BUDGET) {
+            const label = labelsFor(selection.overBudget);
+            alert = {
+                tone: 'warning', icon: 'fa-chart-pie', title: 'Orçamento ultrapassado',
+                detail: `${label} ${selection.overBudget.length === 1 ? 'ultrapassou' : 'ultrapassaram'} o limite definido.`,
+                action: 'navigate', payload: 'Orcamento', actionLabel: 'Revisar orçamento'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.HIGH_CARD_USAGE) {
+            const label = labelsFor(selection.highCardUsage);
+            alert = {
+                tone: 'warning', icon: 'fa-credit-card', title: 'Limite de cartão em atenção',
+                detail: `${label} ${selection.highCardUsage.length === 1 ? 'está' : 'estão'} com pelo menos 80% do limite utilizado.`,
+                action: 'navigate', payload: 'Contas', actionLabel: 'Ver cartões'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.ANORA_RECOMMENDATION) {
+            const candidate = selection.anoraRecommendation;
+            alert = {
+                tone: 'info', icon: 'fa-sparkles', title: 'Recomendação da Anora',
+                detail: candidate.detail || candidate.label || 'Há uma recomendação da Anora pronta para você.',
+                action: candidate.action, payload: candidate.payload, modal: candidate.modal,
+                actionLabel: candidate.label || 'Ver recomendação'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.INFORMATIONAL) {
+            alert = {
+                tone: 'warning', icon: 'fa-calendar-day', title: 'Próximos vencimentos',
+                detail: describe(selection.upcoming, 'conta próxima', 'contas próximas', 'programadas até o fim do mês.'),
+                action: 'navigate', payload: 'Agendamentos', actionLabel: 'Ver próximos vencimentos'
+            };
+        }
+        if (!alert) return '';
+        const actionAttributes = alert.action === 'openModal'
+            ? `data-action="openModal" data-modal="${escape(alert.modal)}"`
+            : `data-action="navigate" data-payload="${escape(alert.payload)}"`;
+        const item = `<li class="nv-dashboard-attention-item is-${alert.tone}"><span class="nv-dashboard-attention-item__icon" aria-hidden="true"><i class="fa-solid ${alert.icon}"></i></span><div class="nv-dashboard-attention-item__copy"><strong>${escape(alert.title)}</strong><p>${escape(alert.detail)}</p></div><button type="button" ${actionAttributes} class="nv-dashboard-attention-item__action" aria-label="${escape(alert.actionLabel)}">${escape(alert.actionLabel)}<i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></li>`;
+        return `<section class="nv-dashboard-attention" aria-labelledby="nv-dashboard-attention-title" aria-live="polite"><header class="nv-dashboard-attention__header"><div><p class="nv-dashboard-eyebrow">Ação recomendada</p><h3 id="nv-dashboard-attention-title">Atenção agora</h3></div><i class="fa-solid fa-bolt" aria-hidden="true"></i></header><ul class="nv-dashboard-attention__list">${item}</ul></section>`;
+    },
+
+    insightsSection: (mentoria, context = {}) => {
         let btnHtml = '';
-        if (mentoria.onboardingAction) {
-            const { label, action, modal, type } = mentoria.onboardingAction;
-            btnHtml = `<button data-action="${action}" data-modal="${modal}" ${type ? `data-type="${type}"` : ''} class="nv-onboarding-action"><i class="fa-solid fa-bolt" aria-hidden="true"></i> ${label}</button>`;
+        const typedActions = {
+            budget: { action: 'navigate', payload: 'Planejamento', label: 'Revisar orçamento' },
+            overdue: { action: 'navigate', payload: 'Agendamentos', label: 'Regularizar pendências' }
+        };
+        const anoraCandidate = mentoria.onboardingAction || mentoria.actionableAction || typedActions[mentoria.recommendationType] || (!mentoria.isOnboarding ? { action: 'navigate', payload: 'Dashboard', label: 'Voltar à visão geral' } : null);
+        const selection = resolvePriority({ ...context, anoraRecommendation: anoraCandidate });
+        const higherPriority = [PRIORITY_KEYS.OVERDUE, PRIORITY_KEYS.NEGATIVE_BALANCE, PRIORITY_KEYS.OVER_BUDGET, PRIORITY_KEYS.HIGH_CARD_USAGE, PRIORITY_KEYS.INFORMATIONAL].includes(selection.priority);
+        // The single prioritized dashboard decision owns urgent routes; Anora's
+        // compact CTA remains available when it is the winning recommendation.
+        const candidate = higherPriority ? null : anoraCandidate;
+        const validNavigation = candidate?.action === 'navigate' && ['Dashboard', 'Planejamento', 'Agendamentos'].includes(candidate.payload);
+        const validOnboarding = candidate?.action === 'openModal' && ['modal-banco', 'modal-transacao'].includes(candidate.modal);
+        if (validNavigation) {
+            btnHtml = `<button type="button" data-action="navigate" data-payload="${Utils.escapeHTML(candidate.payload)}" class="nv-onboarding-action" aria-label="${Utils.escapeHTML(candidate.label)}"><i class="fa-solid fa-bolt" aria-hidden="true"></i> ${Utils.escapeHTML(candidate.label)}</button>`;
+        } else if (validOnboarding) {
+            btnHtml = `<button type="button" data-action="openModal" data-modal="${Utils.escapeHTML(candidate.modal)}" ${candidate.type ? `data-type="${Utils.escapeHTML(candidate.type)}"` : ''} class="nv-onboarding-action" aria-label="${Utils.escapeHTML(candidate.label)}"><i class="fa-solid fa-bolt" aria-hidden="true"></i> ${Utils.escapeHTML(candidate.label)}</button>`;
         }
 
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -229,7 +439,7 @@ export const DashboardComponents = {
         return `<section class="nv-dashboard-card nv-dashboard-agenda agenda-calendar" aria-label="Agenda financeira"><header class="calendar-header"><div><p class="calendar-eyebrow">Planejamento</p><h3 class="calendar-title">Agenda financeira</h3><p class="calendar-subtitle">${nomes[mes]} de ${ano} · selecione um dia para ver os detalhes</p></div><div class="calendar-controls"><button type="button" data-action="resetAgendaToday" class="calendar-today" aria-label="Ir para hoje">Hoje</button><div class="calendar-nav" role="group" aria-label="Navegação da agenda"><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="calendar-nav-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="calendar-nav-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div></header><div class="calendar-weekdays agenda-weekdays" aria-hidden="true">${diasSemana.map(dia => `<span>${dia}</span>`).join('')}</div><div class="calendar-grid agenda-grid" role="grid" aria-label="${nomes[mes]} de ${ano}">${cells.join('')}</div><footer class="calendar-legend" aria-label="Legenda da agenda"><span><i class="calendar-legend-dot calendar-legend-dot--commitment" aria-hidden="true"></i>Compromisso</span><span><i class="calendar-legend-dot calendar-legend-dot--due-date" aria-hidden="true"></i>Vencimento</span><span><i class="calendar-legend-dot calendar-legend-dot--completed" aria-hidden="true"></i>Concluído</span></footer></section>`;
     },
 
-    dashboardCategories: (transacoesPeriodoAtual) => {
+    dashboardCategories: (transacoesPeriodoAtual, periodLabel = 'Este ano') => {
         const cats = {};
         transacoesPeriodoAtual.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => { 
             cats[t.categoria] = (cats[t.categoria] || 0) + t.valor; 
@@ -257,10 +467,13 @@ export const DashboardComponents = {
             </div>`;
         }).join('');
 
+        const safePeriodLabel = Utils.escapeHTML(periodLabel == null ? 'Este ano' : String(periodLabel));
         const emptyState = `
-            <div class="text-center py-10 px-4 bg-bg rounded-[16px] border border-dashed border-border">
-                <i class="fa-solid fa-chart-pie text-brand-soft text-4xl mb-3 block"></i>
-                <p class="text-sm text-text-secondary">Sem despesas registradas no período.</p>
+            <div class="nv-dashboard-categories__empty text-center py-10 px-4 bg-bg rounded-[16px] border border-dashed border-border">
+                <i class="fa-solid fa-chart-pie text-brand-soft text-4xl mb-3 block" aria-hidden="true"></i>
+                <h4 class="text-sm font-bold text-text-primary mb-1">Nenhuma despesa em ${safePeriodLabel}</h4>
+                <p class="text-sm text-text-secondary mb-5">Registre uma despesa para acompanhar suas categorias neste período.</p>
+                <button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-dashboard-categories__empty-action"><i class="fa-solid fa-plus" aria-hidden="true"></i> Adicionar despesa</button>
             </div>
         `;
 

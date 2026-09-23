@@ -30,6 +30,27 @@ describe('transactions Phase 1 redesign contracts', () => {
         expect(html).not.toContain('<Movimentações>');
     });
 
+    it('preserves an explicit action aria-label without emitting a duplicate attribute', () => {
+        const html = renderPageHeader({
+            title: 'Transações',
+            actions: [{ action: 'navigate', label: 'Abrir histórico', icon: 'fa-list', attributes: { 'aria-label': 'Consultar histórico financeiro', 'data-payload': 'Transacoes' } }]
+        });
+        expect((html.match(/aria-label=/g) || []).length).toBe(1);
+        expect(html).toContain('aria-label="Consultar histórico financeiro"');
+        expect(html).toContain('data-action="navigate"');
+    });
+
+    it('keeps successful transaction confirmations actionable without changing destructive toasts', () => {
+        const controller = read('ctrl-transacoes.js');
+        const dom = read('util-dom.js');
+        expect(controller).toContain('showTransactionSavedToast');
+        expect(controller).toContain("payload: 'Transacoes'");
+        expect(controller).toContain("label: 'Ver lançamento'");
+        expect(dom).toContain('options = {}');
+        expect(dom).toContain('data-action');
+        expect(controller).toContain("Utils.showToast('Ação desfeita. Transações restauradas.', 'success')");
+    });
+
     it('keeps transaction action contracts, all utility imports, filters and list protagonist hooks', () => {
         const pages = read('rnd-pages.js');
         const component = read('cmp-pages.js');
@@ -75,6 +96,12 @@ describe('transactions Phase 1 redesign contracts', () => {
         expect(html).toContain('data-filter-key="dataInicio"');
         expect(html).toContain('data-filter-key="dataFim"');
         expect(html).toContain('<details class="nv-tx-more-filters"');
-        expect(html).toContain('data-action="clearFilters"');
+        expect(html).not.toContain('Limpar 0 filtros');
+        const activeHtml = PageComponents.filtersSection(
+            { desc: 'uber', categoria: 'Casa', bancoId: 'banco_1', mes: '2', tipo: 'despesa', dataInicio: '', dataFim: '' },
+            [], ['Casa'], []
+        );
+        expect(activeHtml).toContain('Limpar 5 filtros');
+        expect((activeHtml.match(/data-action="clearFilters"/g) || []).length).toBe(1);
     });
 });

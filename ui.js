@@ -1,5 +1,7 @@
 import { db } from './db.js';
 import { Utils } from './utils.js';
+import { SubmitFeedback } from './submit-feedback.js';
+import { SubmitGuard } from './submit-guard.js';
 
 export const UI = {
     modalSnapshots: {},
@@ -120,7 +122,11 @@ export const UI = {
             modal.classList.add('hidden');
             modal.classList.remove('flex', 'animate-fade-in-up');
             // Só a camada encerrada é resetada; não destrói o estado da fatura subjacente.
-            modal.querySelectorAll('form').forEach(form => form.reset());
+            modal.querySelectorAll('form').forEach(form => {
+                form.reset();
+                SubmitFeedback.reset(form);
+                SubmitGuard.cancel(form);
+            });
             if (modalId === 'modal-categoria') UI.resetCategoryModal();
             delete UI.modalSnapshots[modal.id];
             if (modalId === 'modal-fatura-detalhes') {
@@ -152,7 +158,11 @@ export const UI = {
             const el = document.getElementById(id); if(el) { el.innerHTML = ''; el.classList.add('hidden'); }
         });
         
-        document.querySelectorAll('form').forEach(form => form.reset());
+        document.querySelectorAll('form').forEach(form => {
+            form.reset();
+            SubmitFeedback.reset(form);
+            SubmitGuard.cancel(form);
+        });
         UI.resetCategoryModal();
         UI.modalSnapshots = {};
         

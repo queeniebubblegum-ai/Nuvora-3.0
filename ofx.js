@@ -1,5 +1,6 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
+import { ImportError, IMPORT_ERROR_CODES, asImportError } from './import-errors.js';
 
 export const OFXManager = {
     iniciarImportacaoOFX: (bancoId, viewState) => {
@@ -15,9 +16,21 @@ export const OFXManager = {
         const reader = new FileReader();
 
         reader.onload = (event) => {
-            viewState.rawOfxString = event.target.result;
-            OFXManager.processarEVerificarDuplicidades(event.target.result, bancoIdPrevio, viewState, renderCallback, openModalCallback);
-            e.target.value = ''; 
+            try {
+                viewState.rawOfxString = event.target.result;
+                OFXManager.processarEVerificarDuplicidades(event.target.result, bancoIdPrevio, viewState, renderCallback, openModalCallback);
+            } catch (error) {
+                const importError = asImportError(error, IMPORT_ERROR_CODES.OFX_INVALID_FORMAT);
+                Utils.showToast(importError.message, 'error', {
+                    action: { action: 'iniciarImportacaoOFX', label: 'Escolher outro arquivo', payload: bancoIdPrevio }
+                });
+            } finally { e.target.value = ''; }
+        };
+        reader.onerror = () => {
+            Utils.showToast('Não foi possível ler o arquivo OFX.', 'error', {
+                action: { action: 'iniciarImportacaoOFX', label: 'Escolher outro arquivo', payload: bancoIdPrevio }
+            });
+            e.target.value = '';
         };
 
         reader.readAsText(file);
@@ -30,8 +43,12 @@ export const OFXManager = {
     },
 
     processarEVerificarDuplicidades: (ofxString, bancoId, viewState, renderCallback, openModalCallback) => {
-        const parsedData = Utils.parseOFX(ofxString);
+        const raw = String(ofxString ?? '');
+        if (!raw.trim()) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
+        if (!/<OFX[\s>]/i.test(raw)) throw new ImportError(IMPORT_ERROR_CODES.OFX_INVALID_FORMAT);
+        const parsedData = Utils.parseOFX(raw);
         const transacoesOFX = parsedData.transactions;
+        if (!transacoesOFX.length) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
 
         const selectBanco = document.getElementById('ofx-banco-alvo-id');
         if (selectBanco) {

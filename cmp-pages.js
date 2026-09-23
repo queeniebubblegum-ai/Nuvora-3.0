@@ -4,6 +4,22 @@ import { getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { CoreComponents } from './cmp-core.js';
 import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, invoiceReconciliationKey } from './reconciliation.js';
 
+const transactionDateInfo = value => {
+    const raw = String(value || '').slice(0, 10);
+    if (!raw) return { key: 'missing', label: 'Data não informada' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return { key: `invalid:${raw}`, label: 'Data inválida' };
+    const parsed = new Date(`${raw}T12:00:00`);
+    if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() !== Number(raw.slice(0, 4)) || parsed.getMonth() + 1 !== Number(raw.slice(5, 7)) || parsed.getDate() !== Number(raw.slice(8, 10))) {
+        return { key: `invalid:${raw}`, label: 'Data inválida' };
+    }
+    const today = new Date();
+    const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    const diffDays = Math.round((startToday - startDate) / 86400000);
+    const label = diffDays === 0 ? 'Hoje' : diffDays === 1 ? 'Ontem' : parsed.toLocaleDateString('pt-BR');
+    return { key: raw, label };
+};
+
 export const PageComponents = {
     /**
      * Avenera accounts workspace: keeps the existing bank/card records and action
@@ -40,7 +56,7 @@ export const PageComponents = {
             const committed = transacoes.filter(t => t?.isCartao && String(t.bancoId) === String(card.id)).reduce((sum, t) => sum + (Number(t.valor) || 0), 0);
             const limit = Number(card.limite ?? card.limiteTotal) || 0;
             const invoice = invoiceFor(card);
-            return { card, committed, limit, available: Math.max(limit - committed, 0), invoice, dueDate: dueDateFor(card) };
+            return { card, committed, limit, hasLimit: limit > 0, available: Math.max(limit - committed, 0), invoice, dueDate: dueDateFor(card) };
         });
         const openInvoiceAmount = cardsData.reduce((sum, item) => sum + (Number(item.invoice.explainedTotal) || 0), 0);
         const nextDue = cardsData.map(item => item.dueDate).filter(Boolean).sort((a, b) => a - b)[0] || null;
@@ -82,10 +98,13 @@ export const PageComponents = {
             </article>`).join('') : `
             <div class="nv-accounts-empty"><div class="nv-accounts-empty-icon"><i class="fa-solid fa-building-columns" aria-hidden="true"></i></div><div><strong>Nenhuma conta cadastrada</strong><p>Adicione uma conta para acompanhar saldos e importar movimentações.</p></div><button type="button" data-action="openModal" data-modal="modal-banco" class="nv-accounts-empty-action">Adicionar conta</button></div>`;
 
-        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, available, invoice, dueDate }) => {
+        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, hasLimit, available, invoice, dueDate }) => {
             const bank = bankFor(card);
-            const usagePercent = limit > 0 ? Math.min((committed / limit) * 100, 100) : 0;
-            const usageClass = usagePercent >= 80 ? 'is-high' : usagePercent >= 50 ? 'is-medium' : 'is-low';
+            const usagePercent = limit > 0 ? (committed / limit) * 100 : null;
+            const visualUsagePercent = usagePercent == null ? 0 : Math.min(Math.max(usagePercent, 0), 100);
+            const usageState = usagePercent == null ? 'unknown' : usagePercent >= 100 ? 'danger' : usagePercent >= 80 ? 'warning' : 'success';
+            const usageClass = `is-${usageState}`;
+            const usageLabel = usagePercent == null ? 'Limite não informado' : `${usagePercent.toFixed(0)}% utilizado`;
             return `
             <article class="nv-accounts-card nv-accounts-card--credit" data-key="cartao_${Utils.escapeHTML(String(card.id))}">
                 <div class="nv-credit-card-top">
@@ -93,8 +112,8 @@ export const PageComponents = {
                     <div class="nv-credit-card-mark"><i class="fa-regular fa-credit-card" aria-hidden="true"></i></div>
                 </div>
                 <div class="nv-credit-card-details"><div><span>Fechamento</span><strong>Dia ${Utils.escapeHTML(String(card.fechamento || card.diaFechamento || '—'))}</strong></div><div><span>Vencimento</span><strong>Dia ${Utils.escapeHTML(String(card.vencimento || card.diaVencimento || '—'))}</strong></div><div><span>Próximo vencimento</span><strong>${dateLabel(dueDate)}</strong></div></div>
-                <div class="nv-credit-card-metrics"><div><span>Fatura em aberto</span><strong class="money">${money(invoice.explainedTotal)}</strong></div><div><span>Comprometido</span><strong class="money">${money(committed)}</strong></div><div><span>Disponível</span><strong class="money is-positive">${money(available)}</strong></div><div><span>Limite total</span><strong class="money">${money(limit)}</strong></div></div>
-                <div class="nv-credit-card-progress"><div class="nv-credit-card-progress-label"><span>Limite comprometido</span><strong>${usagePercent.toFixed(0)}%</strong></div><div class="nv-credit-card-progress-track"><span class="${usageClass}" style="width:${usagePercent}%"></span></div></div>
+                <div class="nv-credit-card-metrics"><div><span>Fatura em aberto</span><strong class="money">${money(invoice.explainedTotal)}</strong></div><div><span>Comprometido</span><strong class="money">${money(committed)}</strong></div><div><span>Disponível</span><strong class="money is-positive">${hasLimit ? money(available) : '—'}</strong></div><div><span>Limite total</span><strong class="money">${hasLimit ? money(limit) : 'Limite não informado'}</strong></div></div>
+                <div class="nv-credit-card-progress" data-usage-state="${usageState}"><div class="nv-credit-card-progress-label"><span>Limite comprometido</span><strong>${Utils.escapeHTML(usageLabel)}</strong></div><div class="nv-credit-card-progress-track" role="progressbar" aria-label="Limite comprometido de ${Utils.escapeHTML(card.nome || 'cartão')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usagePercent == null ? 0 : visualUsagePercent.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(usageLabel)}"><span class="${usageClass}" style="width:${visualUsagePercent}%"></span></div></div>
                 <div class="nv-accounts-card-actions">
                     ${actionButton('openInvoiceDetails', 'Abrir fatura', 'fa-solid fa-file-invoice-dollar', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}
                     ${actionButton('openCardExpenseModal', 'Lançar despesa', 'fa-solid fa-plus', `data-id="${Utils.escapeHTML(String(card.id))}" data-nome="${Utils.escapeHTML(card.nome || 'Cartão')}"`, 'primary')}
@@ -214,6 +233,11 @@ export const PageComponents = {
     filtersSection: (f, bancos, categorias = [], cartoes = []) => {
         const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
         const currentType = f.tipo || '';
+        const filterKeys = ['desc', 'categoria', 'bancoId', 'mes', 'tipo', 'dataInicio', 'dataFim'];
+        const activeFilterCount = filterKeys.reduce((count, key) => {
+            const value = f?.[key];
+            return count + (value !== null && value !== undefined && String(value).trim() !== '' ? 1 : 0);
+        }, 0);
         const tabs = [
             ['', 'Todas', 'fa-layer-group'],
             ['receita', 'Receitas', 'fa-arrow-trend-up'],
@@ -231,6 +255,10 @@ export const PageComponents = {
             return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}${archived ? ' (arquivada · histórico)' : ''}</option>`;
         }).join('');
 
+        const clearFiltersHtml = activeFilterCount > 0
+            ? `<button type="button" data-action="clearFilters" class="nv-tx-clear"><i class="fa-solid fa-eraser" aria-hidden="true"></i> Limpar ${activeFilterCount} filtros</button>`
+            : '';
+
         return `<div class="nv-tx-filters">
             <div class="nv-tx-filter-tabs" role="tablist" aria-label="Filtrar por tipo">${tabHtml}</div>
             <div class="nv-tx-filter-grid">
@@ -238,11 +266,11 @@ export const PageComponents = {
                 <div><label for="transactions-month" class="nv-tx-label">Período</label><select id="transactions-month" data-change="setFilter" data-filter-key="mes" class="nv-tx-input"><option value="">Todos os meses</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>
                 <div><label for="transactions-type" class="nv-tx-label">Tipo</label><select id="transactions-type" data-change="setFilter" data-filter-key="tipo" class="nv-tx-input"><option value="">Todos os tipos</option><option value="receita" ${f.tipo==='receita'?'selected':''}>Receitas</option><option value="despesa" ${f.tipo==='despesa'?'selected':''}>Despesas</option><option value="transferencia" ${f.tipo==='transferencia'?'selected':''}>Transferências</option></select></div>
             </div>
-            <details class="nv-tx-more-filters" ${f.categoria || f.bancoId || f.dataInicio || f.dataFim ? 'open' : ''}><summary>Mais filtros <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid">
+            <details class="nv-tx-more-filters" ${activeFilterCount > 0 ? 'open' : ''}><summary>Mais filtros <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid">
                 <div><label for="transactions-category" class="nv-tx-label">Categoria</label><select id="transactions-category" data-change="setFilter" data-filter-key="categoria" class="nv-tx-input"><option value="">Todas as categorias</option>${cats}</select></div>
                 <div><label for="transactions-account" class="nv-tx-label">Conta ou cartão</label><select id="transactions-account" data-change="setFilter" data-filter-key="bancoId" class="nv-tx-input">${contas}</select></div>
                 <div class="nv-tx-date-range"><div><label for="transactions-start" class="nv-tx-label">De</label><input id="transactions-start" type="date" data-change="setFilter" data-filter-key="dataInicio" value="${Utils.escapeHTML(f.dataInicio || '')}" class="nv-tx-input"></div><div><label for="transactions-end" class="nv-tx-label">Até</label><input id="transactions-end" type="date" data-change="setFilter" data-filter-key="dataFim" value="${Utils.escapeHTML(f.dataFim || '')}" class="nv-tx-input"></div></div>
-                <button type="button" data-action="clearFilters" class="nv-tx-clear"><i class="fa-solid fa-eraser" aria-hidden="true"></i> Limpar filtros</button>
+                ${clearFiltersHtml}
             </div></details>
         </div>`;
     },
@@ -255,6 +283,13 @@ export const PageComponents = {
         return `<section class="nv-tx-summary" aria-label="Resumo da consulta">${card('Receitas', Utils.formatMoney(receitas), 'is-income', 'fa-arrow-trend-up')}${card('Despesas', Utils.formatMoney(despesas), 'is-expense', 'fa-arrow-trend-down')}${card('Saldo', Utils.formatMoney(saldo), saldo >= 0 ? 'is-balance-positive' : 'is-balance-negative', 'fa-scale-balanced')}<div class="nv-tx-summary-count"><span>Movimentações</span><strong>${transacoes.length}</strong></div></section>`;
     },
 
+    uncategorizedTransactionsNotice: (count, active = false) => {
+        if (!count && !active) return '';
+        const label = `${count} ${count === 1 ? 'transação sem categoria' : 'transações sem categoria'}`;
+        if (active) return `<div class="nv-tx-uncategorized-notice is-active" role="status" aria-live="polite"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>Filtro ativo: ${label}.</span><button type="button" data-action="clearUncategorizedFilter" aria-label="Mostrar todas as transações">Limpar filtro</button></div>`;
+        return `<div class="nv-tx-uncategorized-notice" role="status" aria-live="polite"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>${label} nos resultados filtrados.</span><button type="button" data-action="filterUncategorized" aria-label="Filtrar ${label}">Ver sem categoria</button></div>`;
+    },
+
     transactionList: (list, state) => {
         const selected = (state?.selectedTransactions || []).map(String);
         const allVisibleSelected = list.length > 0 && list.every(t => selected.includes(String(t.id)));
@@ -263,16 +298,18 @@ export const PageComponents = {
             return `<div class="nv-tx-empty"><div class="nv-tx-empty-icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div><h4>Nenhuma transação encontrada</h4><p>Os filtros aplicados não retornaram resultados ou você ainda não registrou movimentações.</p><button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-tx-empty-action">Nova transação</button></div>`;
         }
 
-        return `<div class="nv-tx-list-head"><label class="nv-tx-select-all"><input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} aria-label="Selecionar todas as movimentações visíveis"><span>Selecionar página</span></label>${selected.length > 0 ? `<button type="button" data-action="deleteSelectedTx" class="nv-tx-bulk-delete"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Apagar selecionadas (${selected.length})</button>` : ''}</div><div class="nv-tx-list">${list.map(t => {
+        return `<div class="nv-tx-list-head"><label class="nv-tx-select-all"><input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} aria-label="Selecionar todas as movimentações visíveis"><span>Selecionar página</span></label>${selected.length > 0 ? `<button type="button" data-action="deleteSelectedTx" class="nv-tx-bulk-delete"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Apagar selecionadas (${selected.length})</button>` : ''}</div><div class="nv-tx-list">${list.map((t, index) => {
             const isTransfer = !!t.transferenciaInterna || t.tipo === 'transferencia';
             const isRec = isTransfer ? !!t.transferenciaEntrada : t.tipo === 'receita';
             const valColor = isRec ? 'is-income' : 'is-expense';
             const sign = isRec ? '+' : '-';
-            let dataFormatada = 'Hoje';
-            if (t.data) {
-                const parsed = new Date(t.data + 'T12:00:00');
-                dataFormatada = isNaN(parsed.getTime()) ? 'Data inválida' : parsed.toLocaleDateString('pt-BR');
-            }
+            const dateInfo = transactionDateInfo(t.data);
+            const previousDateKey = index > 0
+                ? transactionDateInfo(list[index - 1]?.data).key
+                : (state?.previousTransactionDate !== undefined ? transactionDateInfo(state.previousTransactionDate).key : null);
+            const dateHeading = dateInfo.key !== previousDateKey
+                ? `<div class="nv-tx-date-heading" role="heading" aria-level="3"><span>${Utils.escapeHTML(dateInfo.label)}</span></div>`
+                : '';
             const contato = t.contatoId && db.contatos ? db.contatos.find(c => c.id === t.contatoId) : null;
             const banco = db.bancos?.find(b => String(b.id) === String(t.bancoId));
             const cartao = t.isCartao ? db.cartoes?.find(c => String(c.id) === String(t.bancoId)) : null;
@@ -282,7 +319,9 @@ export const PageComponents = {
             const catColor = Utils.escapeHTML(String(catObj.cor || 'var(--c-text-secondary)'));
             const isSelected = selected.includes(String(t.id));
             const typeLabel = isTransfer ? 'Transferência' : (t.tipo === 'receita' ? 'Receita' : 'Despesa');
-            return `<div class="swipe-container nv-tx-row ${isSelected ? 'is-selected' : ''}" data-id="${Utils.escapeHTML(String(t.id))}"><div class="swipe-front nv-tx-row-front"><div class="nv-tx-row-main"><label class="nv-tx-check"><input type="checkbox" data-change="toggleSelectTx" value="${Utils.escapeHTML(String(t.id))}" ${isSelected ? 'checked' : ''} aria-label="Selecionar ${Utils.escapeHTML(t.desc || typeLabel)}"><span></span></label><span class="nv-tx-category-icon" style="background-color: ${catColor}"><i class="fa-solid ${Utils.escapeHTML(catObj.icone)}" aria-hidden="true"></i></span><div class="nv-tx-description"><div class="nv-tx-title-line"><strong>${Utils.escapeHTML(t.desc || typeLabel)}</strong><span class="nv-tx-reference">#${Utils.escapeHTML(String(txId))}</span></div><div class="nv-tx-meta"><span class="nv-tx-type" style="--tx-category-color: ${catColor}">${Utils.escapeHTML(t.categoria || typeLabel)}</span><span><i class="fa-regular fa-calendar" aria-hidden="true"></i>${Utils.escapeHTML(dataFormatada)}</span>${contaLabel ? `<span><i class="fa-solid fa-building-columns" aria-hidden="true"></i>${Utils.escapeHTML(contaLabel)}</span>` : ''}${t.isCartao ? `<span><i class="fa-regular fa-credit-card" aria-hidden="true"></i>Cartão${t.parcelaAtual ? ` · ${Utils.escapeHTML(String(t.parcelaAtual))}/${Utils.escapeHTML(String(t.totalParcelas))}` : ''}</span>` : ''}${t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="nv-tx-meta-optional">${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}${t.recorrente && !t.isCartao ? '<span><i class="fa-solid fa-repeat" aria-hidden="true"></i>Fixa</span>' : ''}${contato ? `<span class="nv-tx-meta-optional"><i class="fa-regular fa-address-book" aria-hidden="true"></i>${Utils.escapeHTML(contato.nome)}</span>` : ''}</div></div></div><div class="nv-tx-row-value"><strong class="money ${valColor}">${sign} ${Utils.formatMoney(t.valor)}</strong><span class="nv-tx-row-kind">${typeLabel}</span><div class="nv-tx-row-actions"><button type="button" data-action="openEditModal" data-id="${Utils.escapeHTML(String(t.id))}" title="Editar transação" aria-label="Editar transação"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Editar</span></button><button type="button" data-action="deleteExpense" data-id="${Utils.escapeHTML(String(t.id))}" title="Apagar transação" aria-label="Apagar transação"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Apagar</span></button></div></div></div></div>`;
+            const uncategorized = !String(t.categoria || '').trim() || String(t.categoria).trim().toLocaleLowerCase('pt-BR') === 'sem categoria';
+            const categoryLabel = uncategorized ? 'Sem categoria' : t.categoria;
+            return `${dateHeading}<div class="swipe-container nv-tx-row ${isSelected ? 'is-selected' : ''} ${uncategorized ? 'is-uncategorized' : ''}" data-id="${Utils.escapeHTML(String(t.id))}"><div class="swipe-front nv-tx-row-front"><div class="nv-tx-row-main"><label class="nv-tx-check"><input type="checkbox" data-change="toggleSelectTx" value="${Utils.escapeHTML(String(t.id))}" ${isSelected ? 'checked' : ''} aria-label="Selecionar ${Utils.escapeHTML(t.desc || typeLabel)}"><span></span></label><span class="nv-tx-category-icon" style="background-color: ${catColor}"><i class="fa-solid ${Utils.escapeHTML(catObj.icone)}" aria-hidden="true"></i></span><div class="nv-tx-description"><div class="nv-tx-title-line"><strong>${Utils.escapeHTML(t.desc || typeLabel)}</strong><span class="nv-tx-reference">#${Utils.escapeHTML(String(txId))}</span></div><div class="nv-tx-meta"><span class="nv-tx-type" style="--tx-category-color: ${catColor}">${Utils.escapeHTML(categoryLabel || typeLabel)}${uncategorized ? ' <span class="sr-only">Sem categoria</span>' : ''}</span><span><i class="fa-regular fa-calendar" aria-hidden="true"></i>${Utils.escapeHTML(dateInfo.label)}</span>${contaLabel ? `<span><i class="fa-solid fa-building-columns" aria-hidden="true"></i>${Utils.escapeHTML(contaLabel)}</span>` : ''}${t.isCartao ? `<span><i class="fa-regular fa-credit-card" aria-hidden="true"></i>Cartão${t.parcelaAtual ? ` · ${Utils.escapeHTML(String(t.parcelaAtual))}/${Utils.escapeHTML(String(t.totalParcelas))}` : ''}</span>` : ''}${t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="nv-tx-meta-optional">${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}${t.recorrente && !t.isCartao ? '<span><i class="fa-solid fa-repeat" aria-hidden="true"></i>Fixa</span>' : ''}${contato ? `<span class="nv-tx-meta-optional"><i class="fa-regular fa-address-book" aria-hidden="true"></i>${Utils.escapeHTML(contato.nome)}</span>` : ''}</div></div></div><div class="nv-tx-row-value"><strong class="money ${valColor}">${sign} ${Utils.formatMoney(t.valor)}</strong><span class="nv-tx-row-kind">${typeLabel}</span><div class="nv-tx-row-actions"><button type="button" data-action="openEditModal" data-id="${Utils.escapeHTML(String(t.id))}" title="Editar transação" aria-label="Editar transação"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Editar</span></button><button type="button" data-action="deleteExpense" data-id="${Utils.escapeHTML(String(t.id))}" title="Apagar transação" aria-label="Apagar transação"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Apagar</span></button></div></div></div></div>`;
         }).join('')}</div>`;
     },
 

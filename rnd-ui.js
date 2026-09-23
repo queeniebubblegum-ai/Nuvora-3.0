@@ -2,12 +2,16 @@ import { Utils } from './utils.js';
 import { db } from './db.js';
 import { Components } from './components.js';
 import { listInvoiceTransactions, calculateReconciliation } from './reconciliation.js';
+import { animateCurrencyValues } from './financial-refinements.js';
 
 export const UIRenderer = {
     updateDOM: (elementId, newHTML) => {
         const el = document.getElementById(elementId);
         if (!el) return;
         try { Utils.morphDOM(el, newHTML); } catch(error) { el.innerHTML = newHTML; }
+        // Only explicitly annotated values participate; unchanged values and
+        // first paint remain static, while reduced motion bypasses interpolation.
+        animateCurrencyValues(el, Utils.formatMoney, typeof window !== 'undefined' ? window : globalThis);
     },
 
     renderInvoiceModal: (appState) => {

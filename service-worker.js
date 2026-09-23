@@ -27,6 +27,9 @@ const LOCAL_ASSETS = [
     './evt-click.js',
     './evt-change.js',
     './evt-submit.js',
+    './submit-guard.js',
+    './submit-feedback.js',
+    './ui-tracking.js',
     
     // Controladores
     './controllers.js',
@@ -39,6 +42,7 @@ const LOCAL_ASSETS = [
     './components.js',
     './cmp-core.js',
     './cmp-dashboard.js',
+    './priority.js',
     './cmp-reports.js',
     './cmp-pages.js',
     './cmp-modals.js',
