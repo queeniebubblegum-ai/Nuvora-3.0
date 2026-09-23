@@ -1881,3 +1881,156 @@ body {
 .nv-tx-date-heading:first-child { margin-top: 4px; }
 .nv-onboarding-action[aria-busy="true"] { cursor: wait; }
 @media (prefers-reduced-motion: reduce) { .nv-tx-date-heading::after { transition: none; } }
+
+/* Fase 2 — decisão de gasto disponível. */
+.nv-spendable-card {
+  align-items: flex-end;
+  background: linear-gradient(135deg, var(--c-surface) 0%, var(--c-surface-soft) 100%);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  padding: 20px;
+}
+.nv-spendable-card h2 { color: var(--c-text-primary); font-size: clamp(19px, 2.4vw, 26px); font-weight: 750; letter-spacing: -.035em; margin: 0; }
+.nv-spendable-card strong { color: var(--c-text-primary); font-size: clamp(25px, 4vw, 38px); font-variant-numeric: tabular-nums; letter-spacing: -.045em; white-space: nowrap; }
+.nv-spendable-card strong.is-positive { color: var(--c-success); }
+.nv-spendable-card strong.is-expense { color: var(--c-danger); }
+.nv-spendable-description { color: var(--c-text-secondary); font-size: 11px; line-height: 1.5; margin: 8px 0 0; max-width: 620px; }
+@media (max-width: 560px) {
+  .nv-spendable-card { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .nv-spendable-card strong { align-self: flex-end; }
+}
+
+/* Fase 2 — separação visual entre patrimônio e crédito. */
+.nv-account-overview { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 16px; }
+.nv-account-overview__cash, .nv-account-overview__credit { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); min-width: 0; padding: 20px; }
+.nv-account-overview__cash { border-top: 2px solid var(--c-success); }
+.nv-account-overview__credit { border-top: 2px solid var(--c-brand-medium); }
+.nv-account-overview span { color: var(--c-text-secondary); display: block; font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.nv-account-overview strong { color: var(--c-text-primary); display: block; font-size: clamp(22px, 3vw, 32px); font-variant-numeric: tabular-nums; letter-spacing: -.04em; margin-top: 7px; overflow-wrap: anywhere; }
+.nv-account-overview__cash strong { color: var(--c-success); }
+.nv-account-overview small { color: var(--c-text-secondary); display: block; font-size: 10px; margin-top: 6px; }
+.nv-credit-card__header { align-items: flex-start; gap: 12px; }
+.nv-credit-card__eyebrow { margin-bottom: 3px; }
+.nv-credit-status { border: 1px solid var(--c-border); border-radius: 999px; color: var(--c-text-secondary); flex: 0 0 auto; font-size: 9px; font-weight: 800; padding: 5px 8px; white-space: nowrap; }
+.nv-credit-status.is-success { background: color-mix(in srgb, var(--c-success) 12%, transparent); border-color: color-mix(in srgb, var(--c-success) 35%, var(--c-border)); color: var(--c-success); }
+.nv-credit-status.is-warning { background: color-mix(in srgb, var(--c-warning) 13%, transparent); border-color: color-mix(in srgb, var(--c-warning) 38%, var(--c-border)); color: var(--c-warning); }
+.nv-credit-status.is-danger { background: color-mix(in srgb, var(--c-danger) 12%, transparent); border-color: color-mix(in srgb, var(--c-danger) 35%, var(--c-border)); color: var(--c-danger); }
+.nv-credit-status.is-unknown { color: var(--c-text-secondary); }
+.nv-credit-card-highlight { border-top: 1px solid var(--c-border); margin-top: 15px; padding-top: 14px; }
+.nv-credit-card-highlight strong { color: var(--c-success); display: block; font-size: 25px; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.nv-credit-card-highlight p { color: var(--c-text-secondary); font-size: 10px; margin: 3px 0 0; }
+.nv-credit-card__footer { border-top: 1px solid var(--c-border); color: var(--c-text-secondary); display: flex; flex-wrap: wrap; font-size: 10px; gap: 10px 16px; justify-content: space-between; margin-top: 5px; padding-top: 12px; }
+.nv-credit-progress { margin-top: 4px; }
+@media (max-width: 700px) { .nv-account-overview { grid-template-columns: 1fr; } }
+@media (max-width: 480px) { .nv-credit-card__header { flex-wrap: wrap; } .nv-credit-status { margin-left: 0; } }
+/* Keep the utilization field legible inside the colored card header. */
+.nv-credit-card-top > div:first-child { flex: 1 1 auto; min-width: 0; }
+.nv-credit-card-top .nv-credit-status { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.38); color: #fff; line-height: 1.25; max-width: 100%; }
+.nv-credit-card-top .nv-credit-status.is-success, .nv-credit-card-top .nv-credit-status.is-warning, .nv-credit-card-top .nv-credit-status.is-danger, .nv-credit-card-top .nv-credit-status.is-unknown { background: rgba(255,255,255,.16); border-color: rgba(255,255,255,.38); color: #fff; }
+/* Accounts cards: use a compact hierarchy and reserve two columns for wide canvases. */
+.nv-accounts-summary-grid--single { grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+.nv-accounts-section--cards .nv-accounts-grid { grid-template-columns: minmax(0, 1fr); }
+.nv-credit-card-highlight { align-items: baseline; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; }
+.nv-credit-card-highlight p { margin: 0; }
+.nv-credit-card-progress-label { align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.nv-credit-card-progress-label span { min-width: 0; overflow-wrap: anywhere; }
+@media (min-width: 1280px) { .nv-accounts-section--cards .nv-accounts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.nv-credit-card__body { min-width: 0; padding: 0 18px 18px; }
+.nv-credit-card__body .nv-accounts-card-actions { margin-top: 5px; }
+@media (max-width: 480px) { .nv-credit-card__body { padding: 0 15px 15px; } }
+/* Draw a continuous perimeter around the whole card, including under its header. */
+.nv-credit-card--outlined { background: var(--c-surface); border: 1.5px solid color-mix(in srgb, var(--c-text-secondary) 34%, var(--c-border)); border-radius: var(--radius-lg); box-shadow: 0 0 0 1px color-mix(in srgb, var(--c-border) 75%, transparent), var(--shadow-sm); box-sizing: border-box; overflow: hidden; padding: 0 !important; }
+.nv-credit-card--outlined .nv-credit-card-top { margin: 0; }
+.nv-credit-card--outlined .nv-credit-card__body { padding: 18px 24px 20px; }
+@media (max-width: 480px) { .nv-credit-card--outlined .nv-credit-card__body { padding: 16px 18px 18px; } }
+
+/* Settings grouped navigation and responsive panels. */
+.nv-settings-page { display: grid; gap: 22px; margin: 0 auto 36px; max-width: 1180px; }
+.nv-settings-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nv-settings-card { align-items: center; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); color: var(--c-text-primary); cursor: pointer; display: flex; gap: 13px; min-height: 96px; min-width: 0; padding: 16px; text-align: left; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
+.nv-settings-card:hover, .nv-settings-card[aria-pressed="true"] { border-color: color-mix(in srgb, var(--c-brand-medium) 55%, var(--c-border)); box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.nv-settings-card:focus-visible, .nv-settings-panel:focus-visible { box-shadow: var(--focus-ring); outline: 0; }
+.nv-settings-card__icon, .nv-settings-panel__icon { align-items: center; background: var(--c-brand-soft); border-radius: 11px; color: var(--c-brand-medium); display: inline-flex; flex: 0 0 40px; height: 40px; justify-content: center; }
+.nv-settings-card__copy { display: grid; flex: 1 1 auto; gap: 3px; min-width: 0; }
+.nv-settings-card__copy strong { font-size: 13px; font-weight: 800; }
+.nv-settings-card__copy small { color: var(--c-text-secondary); font-size: 10px; line-height: 1.4; }
+.nv-settings-card__items { color: var(--c-brand-medium); font-size: 9px; font-weight: 750; }
+.nv-settings-card__chevron { color: var(--c-text-secondary); font-size: 11px; }
+.nv-settings-sections { display: grid; gap: 16px; }
+.nv-settings-panel { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); min-width: 0; padding: 22px; scroll-margin-top: 18px; }
+.nv-settings-panel__header { align-items: center; border-bottom: 1px solid var(--c-border); display: flex; gap: 13px; margin-bottom: 18px; padding-bottom: 15px; }
+.nv-settings-panel__header h2 { color: var(--c-text-primary); font-size: 18px; font-weight: 800; margin: 0; }
+.nv-settings-panel__header p:last-child { color: var(--c-text-secondary); font-size: 11px; margin: 3px 0 0; }
+.nv-settings-eyebrow { color: var(--c-text-secondary); font-size: 9px; font-weight: 800; letter-spacing: .1em; margin: 0 0 3px; text-transform: uppercase; }
+.nv-settings-profile-form, .nv-settings-anora-form { display: grid; gap: 14px; max-width: 780px; }
+.nv-settings-photo-row { align-items: center; display: flex; gap: 14px; margin-bottom: 4px; }
+.nv-settings-photo-row img { border: 2px solid var(--c-border); border-radius: 50%; height: 56px; object-fit: cover; width: 56px; }
+.nv-settings-photo-row small { color: var(--c-text-secondary); display: block; font-size: 9px; margin-top: 5px; }
+.nv-settings-field { display: grid; gap: 6px; min-width: 0; }
+.nv-settings-field > span { color: var(--c-text-secondary); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.nv-settings-field input, .nv-settings-field select { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 9px; color: var(--c-text-primary); font: inherit; font-size: 12px; min-height: 40px; min-width: 0; padding: 9px 11px; width: 100%; }
+.nv-settings-field input:focus, .nv-settings-field select:focus { border-color: var(--c-brand-medium); box-shadow: var(--focus-ring); outline: 0; }
+.nv-settings-field input:disabled, .nv-settings-field select:disabled { background: var(--c-surface-soft); color: var(--c-text-secondary); }
+.nv-settings-field > small { color: var(--c-text-secondary); font-size: 9px; }
+.nv-settings-field-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nv-settings-subsection { border-top: 1px solid var(--c-border); display: grid; gap: 13px; margin-top: 5px; padding-top: 15px; }
+.nv-settings-subsection h3 { color: var(--c-text-primary); font-size: 13px; margin: 0; }
+.nv-settings-primary-action, .nv-settings-secondary-action { align-items: center; border: 1px solid var(--c-border); border-radius: 9px; cursor: pointer; display: inline-flex; font: inherit; font-size: 11px; font-weight: 750; gap: 8px; justify-content: center; min-height: 38px; padding: 0 13px; }
+.nv-settings-primary-action { background: var(--c-brand-medium); border-color: var(--c-brand-medium); color: #fff; }
+.nv-settings-secondary-action { background: var(--c-surface); color: var(--c-text-primary); }
+.nv-settings-action-grid { display: grid; gap: 11px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.nv-settings-action-card { align-items: flex-start; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 11px; color: var(--c-text-primary); cursor: pointer; display: flex; gap: 11px; min-height: 76px; padding: 14px; text-align: left; }
+.nv-settings-action-card > i { color: var(--c-brand-medium); margin-top: 2px; }
+.nv-settings-action-card span { display: grid; gap: 4px; }
+.nv-settings-action-card strong { font-size: 11px; }
+.nv-settings-action-card small { color: var(--c-text-secondary); font-size: 9px; line-height: 1.4; }
+.nv-settings-action-card:hover:not(:disabled) { border-color: var(--c-brand-medium); }
+.nv-settings-action-card:disabled { cursor: not-allowed; opacity: .58; }
+.nv-settings-option-row { align-items: center; border: 1px solid var(--c-border); border-radius: 11px; display: flex; gap: 12px; min-height: 66px; padding: 12px; }
+.nv-settings-option-icon { align-items: center; background: var(--c-surface-soft); border-radius: 9px; color: var(--c-brand-medium); display: inline-flex; flex: 0 0 34px; height: 34px; justify-content: center; }
+.nv-settings-option-copy { display: grid; flex: 1 1 auto; gap: 3px; min-width: 0; }
+.nv-settings-option-copy strong { color: var(--c-text-primary); font-size: 11px; }
+.nv-settings-option-copy small { color: var(--c-text-secondary); font-size: 9px; line-height: 1.4; }
+.nv-settings-option-row input[type="checkbox"] { accent-color: var(--c-brand-medium); flex: 0 0 auto; height: 17px; width: 17px; }
+.nv-settings-security-list { display: grid; gap: 10px; }
+.nv-settings-security-list article { align-items: center; border: 1px solid var(--c-border); border-radius: 10px; display: flex; gap: 12px; padding: 13px; }
+.nv-settings-security-list article > i { color: var(--c-brand-medium); flex: 0 0 18px; }
+.nv-settings-security-list article > span { display: grid; flex: 1 1 auto; gap: 4px; min-width: 0; }
+.nv-settings-security-list strong { color: var(--c-text-primary); font-size: 11px; }
+.nv-settings-security-list small { color: var(--c-text-secondary); font-size: 9px; line-height: 1.45; }
+.nv-settings-security-list b { background: var(--c-success-soft); border-radius: 99px; color: var(--c-success); font-size: 9px; padding: 4px 8px; white-space: nowrap; }
+.nv-settings-items { display: grid; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.nv-settings-items li { align-items: center; color: var(--c-text-secondary); display: flex; font-size: 11px; gap: 8px; }
+.nv-settings-items i { color: var(--c-success); }
+html.avenera-reduced-motion *, html.avenera-reduced-motion *::before, html.avenera-reduced-motion *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
+@media (min-width: 960px) { .nv-settings-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .nv-settings-grid, .nv-settings-action-grid, .nv-settings-field-grid { grid-template-columns: 1fr; } .nv-settings-panel { padding: 16px; } .nv-settings-option-row { align-items: flex-start; flex-wrap: wrap; } .nv-settings-option-row input[type="checkbox"] { margin-left: 46px; } .nv-settings-security-list article { align-items: flex-start; } }
+@media (prefers-reduced-motion: reduce) { .nv-settings-card, .nv-settings-action-card, .nv-settings-primary-action, .nv-settings-secondary-action { transition: none; } }
+
+/* Three-step beta onboarding checklist. */
+.nv-onboarding-checklist { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); margin: 0 0 20px; padding: 20px; }
+.nv-onboarding-checklist__header { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+.nv-onboarding-checklist__header h2 { color: var(--c-text-primary); font-size: clamp(18px, 2vw, 23px); font-weight: 800; letter-spacing: -.03em; margin: 0; }
+.nv-onboarding-checklist__header p:last-child { color: var(--c-text-secondary); font-size: 11px; line-height: 1.5; margin: 5px 0 0; }
+.nv-onboarding-checklist__count { background: var(--c-brand-soft); border-radius: 999px; color: var(--c-brand-medium); flex: 0 0 auto; font-size: 10px; font-weight: 800; padding: 6px 10px; }
+.nv-onboarding-checklist__progress { background: var(--c-surface-soft); border-radius: 99px; height: 6px; margin: 16px 0; overflow: hidden; }
+.nv-onboarding-checklist__progress span { background: var(--c-brand-medium); border-radius: inherit; display: block; height: 100%; transition: width .2s ease; }
+.nv-onboarding-steps { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 0; padding: 0; }
+.nv-onboarding-step { align-items: flex-start; border: 1px solid var(--c-border); border-radius: 12px; display: flex; gap: 10px; min-width: 0; padding: 13px; }
+.nv-onboarding-step.is-complete { background: color-mix(in srgb, var(--c-success) 6%, var(--c-surface)); }
+.nv-onboarding-step__number { align-items: center; background: var(--c-brand-soft); border-radius: 50%; color: var(--c-brand-medium); display: inline-flex; flex: 0 0 26px; font-size: 10px; font-weight: 800; height: 26px; justify-content: center; }
+.nv-onboarding-step.is-complete .nv-onboarding-step__number { background: var(--c-success-soft); color: var(--c-success); }
+.nv-onboarding-step__copy { flex: 1 1 auto; min-width: 0; }
+.nv-onboarding-step__copy strong { color: var(--c-text-primary); display: block; font-size: 11px; line-height: 1.4; }
+.nv-onboarding-step__copy p { color: var(--c-text-secondary); font-size: 9px; line-height: 1.45; margin: 4px 0 0; }
+.nv-onboarding-step__action { background: transparent; border: 0; color: var(--c-brand-medium); cursor: pointer; flex: 0 0 auto; font: inherit; font-size: 9px; font-weight: 800; margin-top: 2px; padding: 2px 0; }
+.nv-onboarding-step__action:hover { text-decoration: underline; text-underline-offset: 3px; }
+.nv-onboarding-step__status { color: var(--c-success); flex: 0 0 auto; font-size: 9px; font-weight: 800; margin-top: 3px; }
+@media (max-width: 900px) { .nv-onboarding-steps { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .nv-onboarding-checklist { padding: 15px; } .nv-onboarding-step { flex-wrap: wrap; } .nv-onboarding-step__action { margin-left: 36px; } }
+@media (prefers-reduced-motion: reduce) { .nv-onboarding-checklist__progress span { transition: none; } }

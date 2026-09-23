@@ -1,6 +1,7 @@
 import { Utils } from './utils.js';
 import { db } from './db.js';
 import { getCategoriaIcon } from './categorias-padrao.js';
+import { isIncome, isTransfer } from './financial-ledger.js';
 
 export const CoreComponents = {
     // Synchronous screens do not render this by default. The helper is kept
@@ -263,10 +264,10 @@ export const CoreComponents = {
             
             items.forEach(t => {
                 const isSelected = appState.selectedTransactions && appState.selectedTransactions.includes(t.id);
-                const isTransfer = !!t.transferenciaInterna || t.tipo === 'transferencia';
+                const transfer = isTransfer(t);
                 // Na lista, a perna de destino é uma entrada e a de origem é uma saída.
                 // Os totais continuam ignorando ambas por serem transferência interna.
-                const isRec = isTransfer ? !!t.transferenciaEntrada : t.tipo === 'receita';
+                const isRec = transfer ? !!t.transferenciaEntrada : isIncome(t);
                 const valColor = isRec ? 'text-success' : 'text-danger';
                 const sign = isRec ? '+' : '-';
                 

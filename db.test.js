@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { db, BankRepo, CardRepo, CategoryRepo, TransactionsRepo, BudgetRepo } from './db.js';
+import { db, Database, BankRepo, CardRepo, CategoryRepo, TransactionsRepo, BudgetRepo, GoalRepo } from './db.js';
+import { toCents } from './money-math.js';
 
 // Mock do localStorage para garantir um ambiente limpo isolado do navegador real
 const localStorageMock = (() => {
@@ -25,6 +26,19 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         ];
         db.cartoes = [];
         db.orcamentos = [];
+        db.metas = [];
+    });
+
+    it('usa o razão central para receitas e despesas agregadas sem contar transferência ou pagamento de fatura como despesa comum', () => {
+        db.transacoes = [
+            { tipo: 'receita', valor: 1000 },
+            { tipo: 'despesa', valor: 200 },
+            { tipo: 'despesa', valor: 300, transferenciaInterna: true },
+            { tipo: 'pagamento-fatura', valor: 100, transferenciaInterna: true },
+            { tipo: 'despesa', valor: 70, categoria: 'Pagamento de Fatura', formaPagamento: 'Automático (Agendamento)' },
+        ];
+
+        expect(Database.getTotals()).toMatchObject({ receitas: 1000, despesas: 200, saldo: 1000 });
     });
 
     it('Deve manter limites de orçamento separados por mês', () => {
@@ -33,6 +47,8 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(db.orcamentos).toHaveLength(2);
         expect(db.orcamentos.find(o => o.mes === 7).limite).toBe(800);
         expect(db.orcamentos.find(o => o.mes === 8).limite).toBe(1000);
+        BudgetRepo.updateLimit('Serviços', 0.1 + 0.2, 2026, 8);
+        expect(toCents(db.orcamentos.find(o => o.categoria === 'Serviços').limite)).toBe(30);
     });
 
     it('Deve recalcular corretamente o saldo da conta bancária (Soma de Receitas e Despesas)', () => {
@@ -46,6 +62,20 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
 
         // O saldo esperado deve ser: 1000 (Inicial) + 5000 (Receita) - 1500 (Despesa) = 4500
         expect(db.bancos[0].saldo).toBe(4500);
+    });
+
+    it('não reaplica nem reverte transações já incluídas no saldo final confirmado do OFX', () => {
+        TransactionsRepo.add({
+            id: 'ofx-anchored-1', desc: 'Compra do extrato', valor: 100, tipo: 'despesa', bancoId: 1,
+            isCartao: false, saldoIncluidoNoSaldoDoExtrato: true, data: '2026-08-02'
+        });
+        expect(db.bancos[0].saldo).toBe(1000);
+
+        TransactionsRepo.update('ofx-anchored-1', { valor: 150 });
+        expect(db.bancos[0].saldo).toBe(1000);
+
+        TransactionsRepo.delete('ofx-anchored-1');
+        expect(db.bancos[0].saldo).toBe(1000);
     });
 
     it('Deve isolar transações de cartão de crédito do recálculo de saldo da conta corrente', () => {
@@ -84,6 +114,41 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         
         expect(t1.valor + t2.valor + t3.valor).toBe(1000);
     });
+    it('divide valores pequenos de compra no cartão sem perder centavos', () => {
+        TransactionsRepo.addCardExpense({
+            id: 'small-purchase', desc: 'Compra pequena', total: 0.1, parcelas: 3,
+            cartaoId: 99, categoria: 'Compras', data: '2026-08-10'
+        });
+        const parcelas = db.transacoes
+            .filter(t => t.grupoId === 'small-purchase')
+            .sort((a, b) => a.parcelaAtual - b.parcelaAtual);
+
+        expect(parcelas.map(t => t.valor)).toEqual([0.04, 0.03, 0.03]);
+        expect(parcelas.reduce((sum, t) => sum + toCents(t.valor), 0)).toBe(10);
+    });
+
+    it('repete o valor por ocorrência da recorrência, normalizado em centavos', () => {
+        TransactionsRepo.addRecurrent({
+            desc: 'Mensalidade', valor: 0.1, tipo: 'despesa', bancoId: 1,
+            isCartao: false, data: '2026-08-31'
+        }, 3);
+        const parcelas = db.transacoes.filter(t => t.desc === 'Mensalidade');
+
+        expect(parcelas).toHaveLength(3);
+        expect(parcelas.map(t => t.valor)).toEqual([0.1, 0.1, 0.1]);
+        expect(parcelas.reduce((sum, t) => sum + toCents(t.valor), 0)).toBe(30);
+        expect(db.bancos[0].saldo).toBe(999.7);
+    });
+
+    it('normaliza o valor atual e o alvo da meta e deposita sem erro decimal', () => {
+        GoalRepo.add({ id: 'goal-cents', nome: 'Reserva', atual: 0.1, alvo: 2.345 });
+        GoalRepo.deposit('goal-cents', 0.2);
+
+        const goal = db.metas.find(item => item.id === 'goal-cents');
+        expect(toCents(goal.atual)).toBe(30);
+        expect(toCents(goal.alvo)).toBe(235);
+    });
+
     it('não deve excluir conta bancária que possui dados vinculados', () => {
         db.transacoes = [{ id: 10, bancoId: 1, isCartao: false, valor: 10, tipo: 'despesa' }];
         expect(BankRepo.remove(1)).toBe(false);

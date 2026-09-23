@@ -3,6 +3,49 @@ import { Database, db } from './db.js';
 import { getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { CoreComponents } from './cmp-core.js';
 import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, invoiceReconciliationKey } from './reconciliation.js';
+import { loadAnoraPreferences } from './anora-preferences.js';
+import { calculatePeriodTotals, isExpense, isIncome, isInvoicePayment, isTransfer as isTransferTransaction } from './financial-ledger.js';
+import { addMoney } from './money-math.js';
+
+export const accountPortfolioSummary = ({
+    banks = [],
+    cards = [],
+    cardPurchases = [],
+} = {}) => {
+    const cashBalance = (Array.isArray(banks) ? banks : []).reduce(
+        (total, bank) => addMoney(total, bank?.saldo),
+        0
+    );
+
+    const credit = (Array.isArray(cards) ? cards : []).map(card => {
+        const limit = addMoney(card?.limite || card?.limiteTotal || 0);
+        const used = (Array.isArray(cardPurchases) ? cardPurchases : [])
+            .filter(item => String(item?.cartaoId || item?.bancoId) === String(card?.id))
+            .reduce((total, item) => addMoney(total, item?.valor), 0);
+
+        return {
+            ...card,
+            limit,
+            used,
+            available: Math.max(0, addMoney(limit, -used)),
+            utilization: limit ? (used / limit) * 100 : 0,
+        };
+    });
+
+    return {
+        cashBalance,
+        totalCreditLimit: credit.reduce((total, card) => addMoney(total, card.limit), 0),
+        totalCreditUsed: credit.reduce((total, card) => addMoney(total, card.used), 0),
+        totalCreditAvailable: credit.reduce((total, card) => addMoney(total, card.available), 0),
+        credit,
+    };
+};
+
+const cardTone = utilization => {
+    if (utilization >= 100) return 'danger';
+    if (utilization >= 80) return 'warning';
+    return 'success';
+};
 
 const transactionDateInfo = value => {
     const raw = String(value || '').slice(0, 10);
@@ -49,16 +92,17 @@ export const PageComponents = {
             const record = (db.conciliacoesFaturas || []).find(item => item.chave === invoiceReconciliationKey(card.id, anoAtual, mesAtual));
             return calculateReconciliation(items, record?.valorFaturaReal, record?.ajustes || []);
         };
-        const totalBalance = bancos.reduce((sum, bank) => sum + (Number(bank.saldo) || 0), 0);
+        const cardPurchases = (Array.isArray(transacoes) ? transacoes : [])
+            .filter(item => item?.isCartao && !item.transferenciaInterna);
+        const portfolio = accountPortfolioSummary({ banks: bancos, cards: cartoes, cardPurchases });
         const cardsData = cartoes.map(card => {
-            // Keep the existing committed/available calculation: it is based on
-            // every persisted card transaction, not only the current invoice.
-            const committed = transacoes.filter(t => t?.isCartao && String(t.bancoId) === String(card.id)).reduce((sum, t) => sum + (Number(t.valor) || 0), 0);
-            const limit = Number(card.limite ?? card.limiteTotal) || 0;
+            const portfolioCard = portfolio.credit.find(item => String(item.id) === String(card.id));
+            const committed = portfolioCard?.used || 0;
+            const limit = portfolioCard?.limit || 0;
             const invoice = invoiceFor(card);
-            return { card, committed, limit, hasLimit: limit > 0, available: Math.max(limit - committed, 0), invoice, dueDate: dueDateFor(card) };
+            return { card, committed, limit, hasLimit: limit > 0, available: portfolioCard?.available || 0, utilization: portfolioCard?.utilization || 0, invoice, dueDate: dueDateFor(card) };
         });
-        const openInvoiceAmount = cardsData.reduce((sum, item) => sum + (Number(item.invoice.explainedTotal) || 0), 0);
+        const openInvoiceAmount = cardsData.reduce((sum, item) => addMoney(sum, item.invoice.explainedTotal), 0);
         const nextDue = cardsData.map(item => item.dueDate).filter(Boolean).sort((a, b) => a - b)[0] || null;
         const firstBankId = bancos.length ? Utils.escapeHTML(String(bancos[0].id)) : '';
         // A card can only be linked to an existing bank. Keep the CTA useful in
@@ -98,26 +142,28 @@ export const PageComponents = {
             </article>`).join('') : `
             <div class="nv-accounts-empty"><div class="nv-accounts-empty-icon"><i class="fa-solid fa-building-columns" aria-hidden="true"></i></div><div><strong>Nenhuma conta cadastrada</strong><p>Adicione uma conta para acompanhar saldos e importar movimentações.</p></div><button type="button" data-action="openModal" data-modal="modal-banco" class="nv-accounts-empty-action">Adicionar conta</button></div>`;
 
-        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, hasLimit, available, invoice, dueDate }) => {
+        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, hasLimit, available, utilization, invoice, dueDate }) => {
             const bank = bankFor(card);
-            const usagePercent = limit > 0 ? (committed / limit) * 100 : null;
+            const usagePercent = hasLimit ? utilization : null;
             const visualUsagePercent = usagePercent == null ? 0 : Math.min(Math.max(usagePercent, 0), 100);
-            const usageState = usagePercent == null ? 'unknown' : usagePercent >= 100 ? 'danger' : usagePercent >= 80 ? 'warning' : 'success';
+            const usageState = usagePercent == null ? 'unknown' : cardTone(usagePercent);
             const usageClass = `is-${usageState}`;
             const usageLabel = usagePercent == null ? 'Limite não informado' : `${usagePercent.toFixed(0)}% utilizado`;
             return `
-            <article class="nv-accounts-card nv-accounts-card--credit" data-key="cartao_${Utils.escapeHTML(String(card.id))}">
-                <div class="nv-credit-card-top">
-                    <div><span class="nv-accounts-overline">Cartão de crédito</span><h3>${Utils.escapeHTML(card.nome || 'Cartão sem nome')}</h3><p>${Utils.escapeHTML(bank?.instituicao || bank?.nome || 'Conta vinculada')} · ${Utils.escapeHTML(cardFinal(card))}</p></div>
-                    <div class="nv-credit-card-mark"><i class="fa-regular fa-credit-card" aria-hidden="true"></i></div>
+            <article class="nv-accounts-card nv-accounts-card--credit nv-credit-card nv-credit-card--outlined" data-key="cartao_${Utils.escapeHTML(String(card.id))}">
+                <div class="nv-credit-card__header nv-credit-card-top">
+                    <div><p class="nv-credit-card__eyebrow nv-accounts-overline">Cartão</p><h3>${Utils.escapeHTML(card.nome || 'Cartão sem nome')}</h3><p>${Utils.escapeHTML(bank?.instituicao || bank?.nome || 'Conta vinculada')} · ${Utils.escapeHTML(cardFinal(card))}</p></div>
+                    <span class="nv-credit-status is-${usageState}">${Utils.escapeHTML(usageLabel)}</span>
                 </div>
-                <div class="nv-credit-card-details"><div><span>Fechamento</span><strong>Dia ${Utils.escapeHTML(String(card.fechamento || card.diaFechamento || '—'))}</strong></div><div><span>Vencimento</span><strong>Dia ${Utils.escapeHTML(String(card.vencimento || card.diaVencimento || '—'))}</strong></div><div><span>Próximo vencimento</span><strong>${dateLabel(dueDate)}</strong></div></div>
-                <div class="nv-credit-card-metrics"><div><span>Fatura em aberto</span><strong class="money">${money(invoice.explainedTotal)}</strong></div><div><span>Comprometido</span><strong class="money">${money(committed)}</strong></div><div><span>Disponível</span><strong class="money is-positive">${hasLimit ? money(available) : '—'}</strong></div><div><span>Limite total</span><strong class="money">${hasLimit ? money(limit) : 'Limite não informado'}</strong></div></div>
-                <div class="nv-credit-card-progress" data-usage-state="${usageState}"><div class="nv-credit-card-progress-label"><span>Limite comprometido</span><strong>${Utils.escapeHTML(usageLabel)}</strong></div><div class="nv-credit-card-progress-track" role="progressbar" aria-label="Limite comprometido de ${Utils.escapeHTML(card.nome || 'cartão')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usagePercent == null ? 0 : visualUsagePercent.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(usageLabel)}"><span class="${usageClass}" style="width:${visualUsagePercent}%"></span></div></div>
+                <div class="nv-credit-card__body">
+                <div class="nv-credit-card-highlight"><strong>${hasLimit ? money(available) : '—'}</strong><p>Limite disponível</p></div>
+                <div class="nv-credit-card-progress nv-credit-progress" data-usage-state="${usageState}"><div class="nv-credit-card-progress-label"><span>Utilizado ${hasLimit ? `· ${money(committed)} de ${money(limit)}` : ''}</span><strong>${Utils.escapeHTML(usageLabel)}</strong></div><div class="nv-credit-card-progress-track" role="progressbar" aria-label="Limite comprometido de ${Utils.escapeHTML(card.nome || 'cartão')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usagePercent == null ? 0 : visualUsagePercent.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(usageLabel)}"><span class="${usageClass}" style="width:${visualUsagePercent}%"></span></div></div>
+                <footer class="nv-credit-card__footer"><span>Fatura atual: ${money(invoice.explainedTotal)}</span><span>Vencimento: dia ${Utils.escapeHTML(String(card.vencimento || card.diaVencimento || '—'))}</span></footer>
                 <div class="nv-accounts-card-actions">
                     ${actionButton('openInvoiceDetails', 'Abrir fatura', 'fa-solid fa-file-invoice-dollar', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}
                     ${actionButton('openCardExpenseModal', 'Lançar despesa', 'fa-solid fa-plus', `data-id="${Utils.escapeHTML(String(card.id))}" data-nome="${Utils.escapeHTML(card.nome || 'Cartão')}"`, 'primary')}
                     <button type="button" data-action="delete" data-col="cartoes" data-id="${Utils.escapeHTML(String(card.id))}" class="nv-accounts-icon-action nv-accounts-icon-action--danger" title="Excluir cartão" aria-label="Excluir cartão"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+                </div>
                 </div>
             </article>`;
         }).join('') : `
@@ -125,7 +171,8 @@ export const PageComponents = {
 
         return `<div class="nv-accounts-page">
             <header class="nv-accounts-header"><div><p class="nv-accounts-eyebrow">Visão financeira</p><h1>Contas e cartões</h1><p class="nv-accounts-subtitle">Acompanhe saldos, faturas e limites em um só lugar.</p></div><div class="nv-accounts-header-actions"><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Importar OFX</span></button><button type="button" data-action="iniciarImportacaoCSV" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span>Importar CSV</span></button><details class="nv-accounts-add"><summary class="nv-accounts-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Adicionar</span><i class="fa-solid fa-chevron-down nv-accounts-add-chevron" aria-hidden="true"></i></summary><div class="nv-accounts-add-menu"><button type="button" data-action="openModal" data-modal="modal-banco"><i class="fa-solid fa-building-columns" aria-hidden="true"></i><span><strong>Conta</strong><small>Saldo e movimentações</small></span></button><button type="button" ${cardCtaAction}><i class="fa-regular fa-credit-card" aria-hidden="true"></i><span><strong>${cardMenuTitle}</strong><small>${cardMenuDescription}</small></span></button></div></details></div></header>
-            <section class="nv-accounts-overview" aria-labelledby="nv-accounts-overview-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Resumo</p><h2 id="nv-accounts-overview-title">Panorama financeiro</h2></div></div><div class="nv-accounts-summary-grid"><div class="nv-accounts-summary-card nv-accounts-summary-card--balance"><div class="nv-accounts-summary-icon"><i class="fa-solid fa-wallet" aria-hidden="true"></i></div><div><span>Saldo total das contas</span><strong class="money money--large">${money(totalBalance)}</strong><small>${bancos.length} ${bancos.length === 1 ? 'conta cadastrada' : 'contas cadastradas'}</small></div></div><div class="nv-accounts-summary-card nv-accounts-summary-card--invoice"><div class="nv-accounts-summary-icon"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></div><div><span>Faturas em aberto</span><strong class="money money--large">${money(openInvoiceAmount)}</strong><small>${nextDue ? `Próximo vencimento · ${dateLabel(nextDue)}` : 'Nenhum vencimento informado'}</small></div></div></div></section>
+            <section class="nv-account-overview" aria-label="Separação entre patrimônio e crédito"><div class="nv-account-overview__cash"><span>Dinheiro disponível</span><strong>${money(portfolio.cashBalance)}</strong><small>Saldo somado das suas contas</small></div><div class="nv-account-overview__credit"><span>Crédito disponível</span><strong>${money(portfolio.totalCreditAvailable)}</strong><small>${money(portfolio.totalCreditUsed)} usados de ${money(portfolio.totalCreditLimit)}</small></div></section>
+            <section class="nv-accounts-overview" aria-labelledby="nv-accounts-overview-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Resumo</p><h2 id="nv-accounts-overview-title">Panorama financeiro</h2></div></div><div class="nv-accounts-summary-grid nv-accounts-summary-grid--single"><div class="nv-accounts-summary-card nv-accounts-summary-card--invoice"><div class="nv-accounts-summary-icon"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></div><div><span>Faturas em aberto</span><strong class="money money--large">${money(openInvoiceAmount)}</strong><small>${nextDue ? `Próximo vencimento · ${dateLabel(nextDue)}` : 'Nenhum vencimento informado'}</small></div></div></div></section>
             <section class="nv-accounts-section" aria-labelledby="nv-accounts-bank-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Patrimônio</p><h2 id="nv-accounts-bank-title">Contas</h2><p>Saldo disponível e origem de cada movimentação.</p></div><span class="nv-accounts-count">${bancos.length}</span></div><div class="nv-accounts-grid">${accountsHtml}</div></section>
             <section class="nv-accounts-section nv-accounts-section--cards" aria-labelledby="nv-accounts-card-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Crédito</p><h2 id="nv-accounts-card-title">Cartões</h2><p>Faturas abertas, comprometimento e limite disponível.</p></div><span class="nv-accounts-count">${cartoes.length}</span></div><div class="nv-accounts-grid">${cardsHtml}</div></section>
         </div>`;
@@ -276,8 +323,9 @@ export const PageComponents = {
     },
 
     transactionSummary: (transacoes = []) => {
-        const receitas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita').reduce((s,t) => s + (Number(t.valor)||0), 0);
-        const despesas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa').reduce((s,t) => s + (Number(t.valor)||0), 0);
+        const totals = calculatePeriodTotals(transacoes);
+        const receitas = totals.income;
+        const despesas = totals.expense;
         const saldo = receitas - despesas;
         const card = (label, value, tone, icon) => `<article class="nv-tx-summary-card ${tone}"><span class="nv-tx-summary-icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></span><div><p>${label}</p><strong class="money">${value}</strong></div></article>`;
         return `<section class="nv-tx-summary" aria-label="Resumo da consulta">${card('Receitas', Utils.formatMoney(receitas), 'is-income', 'fa-arrow-trend-up')}${card('Despesas', Utils.formatMoney(despesas), 'is-expense', 'fa-arrow-trend-down')}${card('Saldo', Utils.formatMoney(saldo), saldo >= 0 ? 'is-balance-positive' : 'is-balance-negative', 'fa-scale-balanced')}<div class="nv-tx-summary-count"><span>Movimentações</span><strong>${transacoes.length}</strong></div></section>`;
@@ -299,8 +347,8 @@ export const PageComponents = {
         }
 
         return `<div class="nv-tx-list-head"><label class="nv-tx-select-all"><input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} aria-label="Selecionar todas as movimentações visíveis"><span>Selecionar página</span></label>${selected.length > 0 ? `<button type="button" data-action="deleteSelectedTx" class="nv-tx-bulk-delete"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Apagar selecionadas (${selected.length})</button>` : ''}</div><div class="nv-tx-list">${list.map((t, index) => {
-            const isTransfer = !!t.transferenciaInterna || t.tipo === 'transferencia';
-            const isRec = isTransfer ? !!t.transferenciaEntrada : t.tipo === 'receita';
+            const isTransfer = isTransferTransaction(t);
+            const isRec = isTransfer ? !!t.transferenciaEntrada : isIncome(t);
             const valColor = isRec ? 'is-income' : 'is-expense';
             const sign = isRec ? '+' : '-';
             const dateInfo = transactionDateInfo(t.data);
@@ -318,7 +366,7 @@ export const PageComponents = {
             const catObj = CoreComponents._getCategoryConfig(t.categoria);
             const catColor = Utils.escapeHTML(String(catObj.cor || 'var(--c-text-secondary)'));
             const isSelected = selected.includes(String(t.id));
-            const typeLabel = isTransfer ? 'Transferência' : (t.tipo === 'receita' ? 'Receita' : 'Despesa');
+            const typeLabel = isInvoicePayment(t) ? 'Pagamento de fatura' : isTransfer ? 'Transferência' : (isIncome(t) ? 'Receita' : 'Despesa');
             const uncategorized = !String(t.categoria || '').trim() || String(t.categoria).trim().toLocaleLowerCase('pt-BR') === 'sem categoria';
             const categoryLabel = uncategorized ? 'Sem categoria' : t.categoria;
             return `${dateHeading}<div class="swipe-container nv-tx-row ${isSelected ? 'is-selected' : ''} ${uncategorized ? 'is-uncategorized' : ''}" data-id="${Utils.escapeHTML(String(t.id))}"><div class="swipe-front nv-tx-row-front"><div class="nv-tx-row-main"><label class="nv-tx-check"><input type="checkbox" data-change="toggleSelectTx" value="${Utils.escapeHTML(String(t.id))}" ${isSelected ? 'checked' : ''} aria-label="Selecionar ${Utils.escapeHTML(t.desc || typeLabel)}"><span></span></label><span class="nv-tx-category-icon" style="background-color: ${catColor}"><i class="fa-solid ${Utils.escapeHTML(catObj.icone)}" aria-hidden="true"></i></span><div class="nv-tx-description"><div class="nv-tx-title-line"><strong>${Utils.escapeHTML(t.desc || typeLabel)}</strong><span class="nv-tx-reference">#${Utils.escapeHTML(String(txId))}</span></div><div class="nv-tx-meta"><span class="nv-tx-type" style="--tx-category-color: ${catColor}">${Utils.escapeHTML(categoryLabel || typeLabel)}${uncategorized ? ' <span class="sr-only">Sem categoria</span>' : ''}</span><span><i class="fa-regular fa-calendar" aria-hidden="true"></i>${Utils.escapeHTML(dateInfo.label)}</span>${contaLabel ? `<span><i class="fa-solid fa-building-columns" aria-hidden="true"></i>${Utils.escapeHTML(contaLabel)}</span>` : ''}${t.isCartao ? `<span><i class="fa-regular fa-credit-card" aria-hidden="true"></i>Cartão${t.parcelaAtual ? ` · ${Utils.escapeHTML(String(t.parcelaAtual))}/${Utils.escapeHTML(String(t.totalParcelas))}` : ''}</span>` : ''}${t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="nv-tx-meta-optional">${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}${t.recorrente && !t.isCartao ? '<span><i class="fa-solid fa-repeat" aria-hidden="true"></i>Fixa</span>' : ''}${contato ? `<span class="nv-tx-meta-optional"><i class="fa-regular fa-address-book" aria-hidden="true"></i>${Utils.escapeHTML(contato.nome)}</span>` : ''}</div></div></div><div class="nv-tx-row-value"><strong class="money ${valColor}">${sign} ${Utils.formatMoney(t.valor)}</strong><span class="nv-tx-row-kind">${typeLabel}</span><div class="nv-tx-row-actions"><button type="button" data-action="openEditModal" data-id="${Utils.escapeHTML(String(t.id))}" title="Editar transação" aria-label="Editar transação"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Editar</span></button><button type="button" data-action="deleteExpense" data-id="${Utils.escapeHTML(String(t.id))}" title="Apagar transação" aria-label="Apagar transação"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Apagar</span></button></div></div></div></div>`;
@@ -681,9 +729,10 @@ export const PageComponents = {
         const tresMesesAtras = new Date(); 
         tresMesesAtras.setMonth(hoje.getMonth() - 3);
         const transacoesRecentes = transacoes.filter(t => t.id >= tresMesesAtras.getTime()); 
-        const receitas = transacoesRecentes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b) => a+b.valor, 0); 
-        const despesas = transacoesRecentes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b) => a+b.valor, 0);
-        const mediaPoupanca = (receitas - despesas) / 3; 
+        const recentTotals = calculatePeriodTotals(transacoesRecentes);
+        const receitas = recentTotals.income;
+        const despesas = recentTotals.expense;
+        const mediaPoupanca = addMoney(receitas, -despesas) / 3; 
         const capacidadeFormatada = mediaPoupanca > 0 ? Utils.formatMoney(mediaPoupanca) : "R$ 0,00";
 
         const emptyState = `
@@ -711,12 +760,12 @@ export const PageComponents = {
         const orcamentosDoMes = (orcamentos || []).filter(o => o.ano == null || (Number(o.ano) === Number(anoSelecionado) && Number(o.mes) === Number(mesSelecionado)));
         const gastosPorCat = {};
         const transacoesMes = Database.getTransacoesPorMes(anoSelecionado, mesSelecionado);
-        transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => {
+        transacoesMes.filter(isExpense).forEach(t => {
             const categoria = t.categoria || 'Outros';
-            gastosPorCat[categoria] = (gastosPorCat[categoria] || 0) + (Number(t.valor) || 0);
+            gastosPorCat[categoria] = addMoney(gastosPorCat[categoria] || 0, t.valor);
         });
-        const totalOrcado = orcamentosDoMes.reduce((total, item) => total + (Number(item.limite) || 0), 0);
-        const totalGastoMes = Object.values(gastosPorCat).reduce((total, value) => total + value, 0);
+        const totalOrcado = orcamentosDoMes.reduce((total, item) => addMoney(total, item.limite), 0);
+        const totalGastoMes = Object.values(gastosPorCat).reduce((total, value) => addMoney(total, value), 0);
         return {
             ano: Number(anoSelecionado),
             mes: Number(mesSelecionado),
@@ -724,7 +773,7 @@ export const PageComponents = {
             gastosPorCat,
             totalOrcado,
             totalGastoMes,
-            disponivelGeral: totalOrcado - totalGastoMes
+            disponivelGeral: addMoney(totalOrcado, -totalGastoMes)
         };
     },
 
@@ -757,65 +806,54 @@ export const PageComponents = {
         <div>${orcamentosDoMes.length > 0 ? listHTML : emptyState}</div>`;
     }, 
 
-    settingsPage: (db) => {
-        return `
-        <div class="grid grid-cols-1 gap-8 mb-8">
-            <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft">
-                <h3 class="font-bold text-text-primary text-lg mb-4 font-primary">Meu Perfil</h3>
-                <form data-submit="usuario" class="flex flex-col gap-4 max-w-xl">
-                    <div class="flex gap-4 items-center mb-2">
-                        <img src="${db.usuario?.fotoUrl || 'assets/perfil.svg'}" id="preview-foto-perfil" class="w-16 h-16 rounded-full object-cover border-2 border-border shadow-sm">
-                        <div>
-                            <input type="file" id="input-foto-perfil" accept="image/*" class="hidden" data-change="processarFotoPerfil">
-                            <button type="button" onclick="document.getElementById('input-foto-perfil').click()" class="bg-bg text-text-primary px-4 py-2 rounded-[12px] text-xs font-bold hover:bg-border transition-colors border border-border shadow-sm"><i class="fa-solid fa-camera mr-2"></i>Alterar Foto</button>
-                            <p class="text-[10px] text-text-secondary mt-2">Formatos: JPG, PNG. Máx: 2MB.</p>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Nome de Exibição</label>
-                        <input type="text" id="input-usuario-nome" value="${Utils.escapeHTML(db.usuario?.nome || 'Usuário')}" required class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Subtítulo / Cargo</label>
-                        <input type="text" id="input-usuario-subtitulo" value="${Utils.escapeHTML(db.usuario?.subtitulo || '')}" class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
-                    </div>
-                    
-                    <div class="mt-4 border-t border-border pt-4">
-                        <h4 class="text-sm font-bold text-text-primary mb-3">Dados para Mentoria (Anora)</h4>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Objetivo Principal</label>
-                                <input type="text" id="input-usuario-objetivoPrincipal" value="${Utils.escapeHTML(db.usuario?.objetivoPrincipal || '')}" placeholder="Ex: Viajar, Fundo de Reserva..." class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Renda Mensal Média (R$)</label>
-                                    <input type="number" step="0.01" id="input-usuario-rendaMensalMedia" value="${db.usuario?.rendaMensalMedia || ''}" placeholder="0.00" class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors font-mono">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Limite Cartão Global (R$)</label>
-                                    <input type="number" step="0.01" id="input-usuario-limiteCartaoGlobal" value="${db.usuario?.limiteCartaoGlobal || ''}" placeholder="0.00" class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors font-mono">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" class="w-full bg-brand-medium text-white px-5 py-3 mt-2 rounded-[12px] font-bold text-sm hover:bg-brand-dark transition-colors shadow-soft hover:-translate-y-0.5"><i class="fa-solid fa-floppy-disk mr-2"></i> Salvar Perfil</button>
-                </form>
-            </div>
+    settingsPage: (db, settingsGroups = []) => {
+        const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+        const groups = Array.isArray(settingsGroups) ? settingsGroups : [];
+        const preferences = loadAnoraPreferences();
+        let reducedMotion = false;
+        try { reducedMotion = globalThis.localStorage?.getItem('avenera:reduced-motion') === 'true'; } catch { reducedMotion = false; }
+        const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+        const bankId = db.bancos?.[0]?.id ?? '';
+        const itemsList = (items, icon = 'fa-check') => `<ul class="nv-settings-items">${(Array.isArray(items) ? items : []).map(item => `<li><i class="fa-solid ${icon}" aria-hidden="true"></i>${escape(item)}</li>`).join('')}</ul>`;
+        const groupCards = groups.map(group => `
+            <button type="button" data-action="openSettingsGroup" data-group="${escape(group.id)}" class="nv-settings-card" aria-controls="settings-group-${escape(group.id)}">
+                <i class="fa-solid ${escape(group.icon)} nv-settings-card__icon" aria-hidden="true"></i>
+                <span class="nv-settings-card__copy"><strong>${escape(group.title)}</strong><small>${escape(group.description)}</small><span class="nv-settings-card__items">${(group.items || []).length} tópicos</span></span>
+                <i class="fa-solid fa-chevron-right nv-settings-card__chevron" aria-hidden="true"></i>
+            </button>`).join('');
 
-            <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft h-fit">
-                <h3 class="font-bold text-text-primary text-lg mb-4 font-primary">Sobre o Sistema</h3>
-                <div class="space-y-4">
-                    <div class="flex items-center gap-4 p-4 bg-bg rounded-[12px] border border-border hover:-translate-y-0.5 transition-transform">
-                        <div class="w-12 h-12 bg-surface rounded-[12px] flex items-center justify-center text-text-primary shadow-sm text-xl border border-border"><i class="fa-solid fa-shield-halved"></i></div>
-                        <div>
-                            <h4 class="font-bold text-text-primary">Offline-First Funcional</h4>
-                            <p class="text-xs text-text-secondary mt-1">Os seus dados ficam salvos apenas neste navegador, garantindo total privacidade e velocidade.</p>
-                        </div>
+        const contentByGroup = {
+            profile: `
+                <form data-submit="usuario" class="nv-settings-profile-form">
+                    <div class="nv-settings-photo-row"><img src="${escape(db.usuario?.fotoUrl || 'assets/perfil.svg')}" id="preview-foto-perfil" alt="Foto do perfil"><div><input type="file" id="input-foto-perfil" accept="image/*" class="hidden" data-change="processarFotoPerfil"><button type="button" data-action="chooseProfilePhoto" class="nv-settings-secondary-action"><i class="fa-solid fa-camera" aria-hidden="true"></i> Alterar foto</button><small>JPG ou PNG · até 2 MB</small></div></div>
+                    <label class="nv-settings-field"><span>Nome de exibição</span><input type="text" id="input-usuario-nome" value="${escape(db.usuario?.nome || 'Usuário')}" required></label>
+                    <label class="nv-settings-field"><span>Subtítulo / cargo</span><input type="text" id="input-usuario-subtitulo" value="${escape(db.usuario?.subtitulo || '')}"></label>
+                    <label class="nv-settings-field"><span>Moeda</span><select disabled aria-describedby="settings-currency-note"><option selected>Real brasileiro (BRL)</option></select><small id="settings-currency-note">A moeda base atual do Avenera é o real brasileiro.</small></label>
+                    <div class="nv-settings-subsection"><h3>Preferências pessoais e perfil financeiro</h3>
+                        <label class="nv-settings-field"><span>Objetivo principal</span><input type="text" id="input-usuario-objetivoPrincipal" value="${escape(db.usuario?.objetivoPrincipal || '')}" placeholder="Ex.: viagem, reserva de emergência"></label>
+                        <div class="nv-settings-field-grid"><label class="nv-settings-field"><span>Renda mensal média (R$)</span><input type="number" step="0.01" id="input-usuario-rendaMensalMedia" value="${escape(db.usuario?.rendaMensalMedia || '')}" placeholder="0,00"></label><label class="nv-settings-field"><span>Limite global dos cartões (R$)</span><input type="number" step="0.01" id="input-usuario-limiteCartaoGlobal" value="${escape(db.usuario?.limiteCartaoGlobal || '')}" placeholder="0,00"></label></div>
                     </div>
-                </div>
-            </div>
-        </div>`;
+                    <button type="submit" class="nv-settings-primary-action"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Salvar perfil</button>
+                </form>`,
+            appearance: `
+                <div class="nv-settings-option-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i></span><div class="nv-settings-option-copy"><strong>Tema claro ou escuro</strong><small data-settings-theme-state>Modo atual: ${isDark ? 'escuro' : 'claro'}</small></div><button type="button" data-action="toggleTheme" class="nv-settings-secondary-action">Alternar tema</button></div>
+                <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Redução de movimento</strong><small>Reduz animações e transições da interface neste navegador.</small></span><input type="checkbox" data-change="setReducedMotion" ${reducedMotion ? 'checked' : ''} aria-label="Ativar redução de movimento"></label>`,
+            data: `
+                <div class="nv-settings-action-grid"><button type="button" data-action="exportBackup" class="nv-settings-action-card"><i class="fa-solid fa-download" aria-hidden="true"></i><span><strong>Exportar backup</strong><small>Baixar uma cópia dos seus dados.</small></span></button><button type="button" data-action="importBackupPicker" class="nv-settings-action-card"><i class="fa-solid fa-upload" aria-hidden="true"></i><span><strong>Importar backup</strong><small>Restaurar dados de um arquivo JSON.</small></span></button>
+                    <button type="button" data-action="iniciarImportacaoCSV" data-banco-id="${escape(bankId)}" class="nv-settings-action-card" ${bankId === '' ? 'disabled' : ''}><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span><strong>Importar CSV</strong><small>${bankId === '' ? 'Cadastre uma conta antes da importação.' : 'Importar movimentações para uma conta.'}</small></span></button><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${escape(bankId)}" class="nv-settings-action-card" ${bankId === '' ? 'disabled' : ''}><i class="fa-solid fa-file-import" aria-hidden="true"></i><span><strong>Importar OFX</strong><small>${bankId === '' ? 'Cadastre uma conta antes da importação.' : 'Importar movimentações para uma conta.'}</small></span></button></div>`,
+            security: `
+                <div class="nv-settings-security-list"><article><i class="fa-solid fa-hard-drive" aria-hidden="true"></i><span><strong>Proteção local</strong><small>Os dados ficam armazenados neste navegador; não são enviados por esta tela.</small></span><b>Ativa</b></article><article><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span><strong>Confirmação de exclusão</strong><small>A exclusão de registros já pede confirmação antes de prosseguir.</small></span><b>Ativa</b></article><article><i class="fa-solid fa-broom" aria-hidden="true"></i><span><strong>Limpeza de dados</strong><small>A limpeza integral não está disponível nesta tela. Nenhum dado será apagado aqui.</small></span><b>Protegida</b></article></div>`,
+            anora: `
+                <div class="nv-settings-anora-form"><label class="nv-settings-field"><span>Estilo de recomendação</span><select data-change="updateAnoraPreference" data-preference="style" aria-label="Estilo de recomendação da Anora"><option value="suave" ${preferences.style === 'suave' ? 'selected' : ''}>Suave</option><option value="equilibrado" ${preferences.style === 'equilibrado' ? 'selected' : ''}>Equilibrado</option><option value="rigoroso" ${preferences.style === 'rigoroso' ? 'selected' : ''}>Rigoroso</option></select></label>
+                    <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-regular fa-bell" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Alertas financeiros</strong><small>Permitir que o Avenera gere alertas de contas, orçamento e metas.</small></span><input type="checkbox" data-change="updateAnoraPreference" data-preference="notifications" ${preferences.notifications ? 'checked' : ''} aria-label="Ativar alertas financeiros"></label>
+                    <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-solid fa-lock" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Telemetria local</strong><small>Registra apenas interações genéricas neste navegador. Desativada por padrão; nada é enviado à rede.</small></span><input type="checkbox" data-change="updateAnoraPreference" data-preference="localTelemetry" ${preferences.localTelemetry ? 'checked' : ''} aria-label="Ativar telemetria local"></label></div>`
+        };
+
+        const groupSections = groups.map(group => {
+            const id = escape(group.id);
+            return `<section class="nv-settings-panel" id="settings-group-${id}" tabindex="-1" aria-labelledby="settings-title-${id}"><header class="nv-settings-panel__header"><span class="nv-settings-panel__icon"><i class="fa-solid ${escape(group.icon)}" aria-hidden="true"></i></span><div><p class="nv-settings-eyebrow">Configuração</p><h2 id="settings-title-${id}">${escape(group.title)}</h2><p>${escape(group.description)}</p></div></header>${contentByGroup[group.id] || `<div class="nv-settings-empty">${itemsList(group.items, 'fa-circle-info')}</div>`}</section>`;
+        }).join('');
+
+        return `<div class="nv-settings-page"><nav class="nv-settings-grid" aria-label="Grupos de configurações">${groupCards}</nav><div class="nv-settings-sections">${groupSections}</div></div>`;
     }
 };

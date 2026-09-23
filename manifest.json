@@ -1,12 +1,12 @@
 {
   "name": "Avenera",
   "short_name": "Avenera",
-  "description": "Controle financeiro pessoal inteligente e offline-first.",
-  "start_url": "./index.html",
-  "scope": "./",
+  "description": "Organize sua vida financeira com clareza.",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#F8F9FD",
-  "theme_color": "#111827",
+  "background_color": "#F7F6F2",
+  "theme_color": "#4C3C70",
   "orientation": "portrait",
   "icons": [
     {

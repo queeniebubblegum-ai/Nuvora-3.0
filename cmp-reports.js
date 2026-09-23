@@ -2,6 +2,7 @@ import { Utils } from './utils.js';
 import { Database } from './db.js';
 import { buildCashflowModel, reportPeriodLabel, formatReportDateRange, signedPeriodVariation } from './report-data.js';
 import { financialValueClass } from './financial-refinements.js';
+import { calculatePeriodTotals } from './financial-ledger.js';
 
 const reportSource = text => `<details class="nv-report-source"><summary>Fonte dos dados</summary><p>${Utils.escapeHTML(text)}</p></details>`;
 const estimatedBadge = (explanation = 'Valor calculado a partir de previsões e compromissos futuros; não representa uma movimentação realizada.') => `<span class="nv-estimated-badge" title="${Utils.escapeHTML(explanation)}" aria-label="Estimado. ${Utils.escapeHTML(explanation)}">Estimado</span>`;
@@ -84,8 +85,8 @@ export const ReportComponents = {
                 </select></label>
             </div>
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 nv-report-metrics">
-                <div class="nv-report-metric is-income"><p><i class="fa-solid fa-arrow-trend-up"></i> Entradas</p><h3 data-currency-value="${model.entradas}" class="${financialValueClass(model.entradas)}">${Utils.formatMoney(model.entradas)}</h3>${reportSource('Soma das receitas não classificadas como transferência nas transações do período selecionado.')}</div>
-                <div class="nv-report-metric is-expense"><p><i class="fa-solid fa-arrow-trend-down"></i> Saídas</p><h3 data-currency-value="${model.saidas}" class="${financialValueClass(-model.saidas)}">${Utils.formatMoney(model.saidas)}</h3>${reportSource('Soma das despesas não classificadas como transferência nas transações do período selecionado.')}</div>
+                <div class="nv-report-metric is-income"><p><i class="fa-solid fa-arrow-trend-up"></i> Entradas</p><h3 data-currency-value="${model.entradas}" class="${financialValueClass(model.entradas)}">${Utils.formatMoney(model.entradas)}</h3>${reportSource('Soma das receitas realizadas, excluindo transferências e pagamentos de fatura das receitas comuns.')}</div>
+                <div class="nv-report-metric is-expense"><p><i class="fa-solid fa-arrow-trend-down"></i> Saídas</p><h3 data-currency-value="${model.saidas}" class="${financialValueClass(-model.saidas)}">${Utils.formatMoney(model.saidas)}</h3>${reportSource('Soma das despesas realizadas, excluindo transferências e pagamentos de fatura das despesas comuns.')}</div>
                 <div class="nv-report-metric is-net"><p><i class="fa-solid fa-arrow-right-arrow-left"></i> Fluxo líquido</p><h3 data-currency-value="${liquido}" class="${financialValueClass(liquido)}">${Utils.formatMoney(liquido)}</h3>${reportSource('Entradas menos saídas, calculadas a partir das transações do período selecionado.')}</div>
             </div>
             <div class="nv-report-panel mb-6"><div class="nv-report-panel-heading"><div><h4>Evolução do fluxo</h4><p>${model.isDaily ? 'Acompanhamento diário' : 'Acompanhamento mensal'} · fluxo acumulado no período</p></div></div>
@@ -109,8 +110,9 @@ export const ReportComponents = {
         for (let i = period - 1; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const tr = Database.getTransacoesPorMes(d.getFullYear(), d.getMonth());
-            const rec = tr.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0);
-            const des = tr.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0);
+            const periodTotals = calculatePeriodTotals(tr);
+            const rec = periodTotals.income;
+            const des = periodTotals.expense;
             totalRec += rec; totalDes += des;
             
             const saldo = rec - des;
@@ -156,12 +158,12 @@ export const ReportComponents = {
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média de Receitas</p>
                     <h3 class="text-2xl font-bold text-success font-mono">${Utils.formatMoney(totalRec/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das receitas nas transações do período comparado; transferências são excluídas.')}
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das receitas comuns realizadas no período comparado; transferências e pagamentos de fatura são excluídos.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média de Despesas</p>
                     <h3 class="text-2xl font-bold text-danger font-mono">${Utils.formatMoney(totalDes/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das despesas nas transações do período comparado; transferências são excluídas.')}
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das despesas comuns realizadas no período comparado; transferências e pagamentos de fatura são excluídos.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Saldo Médio</p>

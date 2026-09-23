@@ -600,7 +600,7 @@ export const Modals = {
                     </div>
                     <label class="flex items-center gap-2 cursor-pointer group bg-surface px-2 py-1.5 border border-border rounded-[6px]">
                         <input type="checkbox" id="ofx-confirmar-saldo" class="w-3.5 h-3.5 text-brand-medium bg-bg border-border rounded">
-                        <span class="text-[10px] font-bold text-text-secondary">Atualizar conta</span>
+                        <span class="text-[10px] font-bold text-text-secondary">Substituir saldo atual</span>
                     </label>
                 </div>
 

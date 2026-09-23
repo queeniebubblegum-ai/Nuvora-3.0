@@ -1,6 +1,8 @@
 /** Fase 1: conciliação de faturas de cartão.
  * Mantém a conferência separada do status de pagamento da fatura/agendamento.
  */
+import { addMoney, fromCents, toCents } from './money-math.js';
+
 export const RECONCILIATION_STATUS = Object.freeze({
     OPEN: 'em aberto',
     PENDING: 'aguardando conferência',
@@ -34,7 +36,7 @@ export const RECONCILIATION_ADJUSTMENT_TYPES = Object.freeze({
     UNRECOGNIZED_PURCHASE: 'unrecognized_purchase', REFUND: 'refund', MANUAL: 'manual'
 });
 
-const roundCurrency = (value) => Math.round((Number(value || 0) + 1e-9) * 100) / 100;
+const roundCurrency = value => fromCents(toCents(value));
 export { roundCurrency };
 
 /**
@@ -42,26 +44,29 @@ export { roundCurrency };
  * `amount` is always a positive magnitude; `effect`/`sign` express its impact.
  */
 export function normalizeAdjustment(adjustment = {}) {
-    const amount = Math.abs(Number(adjustment.amount ?? adjustment.valor) || 0);
+    const amount = fromCents(Math.abs(toCents(adjustment.amount ?? adjustment.valor)));
     const effect = adjustment.effect === 'credit' || adjustment.sign === -1 || adjustment.sign === '-' || adjustment.sign === '-1'
         ? 'credit' : 'charge';
     return { ...adjustment, amount: roundCurrency(amount), effect, sign: effect === 'credit' ? -1 : 1 };
 }
 
 export function calculateAdjustmentTotal(adjustments = []) {
-    return roundCurrency((adjustments || []).reduce((sum, adjustment) => {
+    const totalCents = (adjustments || []).reduce((sum, adjustment) => {
         const item = normalizeAdjustment(adjustment);
-        return sum + (item.effect === 'credit' ? -item.amount : item.amount);
-    }, 0));
+        const amountCents = toCents(item.amount);
+        return sum + (item.effect === 'credit' ? -amountCents : amountCents);
+    }, 0);
+    return fromCents(totalCents);
 }
 
 export function calculateReconciliation(transactions, realInvoiceAmount = null, adjustments = []) {
-    const totalRecorded = roundCurrency((transactions || []).reduce((sum, t) => sum + (Number(t.valor) || 0), 0));
+    const totalRecordedCents = (transactions || []).reduce((sum, t) => sum + toCents(t?.valor), 0);
+    const totalRecorded = fromCents(totalRecordedCents);
     const totalAdjustments = calculateAdjustmentTotal(adjustments);
-    const explainedTotal = roundCurrency(totalRecorded + totalAdjustments);
+    const explainedTotal = addMoney(totalRecorded, totalAdjustments);
     const hasRealAmount = realInvoiceAmount !== null && realInvoiceAmount !== undefined && realInvoiceAmount !== '' && Number.isFinite(Number(realInvoiceAmount));
     const realAmount = hasRealAmount ? roundCurrency(realInvoiceAmount) : null;
-    const difference = realAmount === null ? null : roundCurrency(realAmount - explainedTotal);
+    const difference = realAmount === null ? null : addMoney(realAmount, -explainedTotal);
     let status;
     if (realAmount === null) status = totalRecorded > 0 || adjustments.length ? RECONCILIATION_STATUS.PENDING : RECONCILIATION_STATUS.OPEN;
     else status = Math.abs(difference) <= 0.01 ? RECONCILIATION_STATUS.RECONCILED : RECONCILIATION_STATUS.DIFFERENCE;

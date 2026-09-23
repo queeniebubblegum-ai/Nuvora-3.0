@@ -4,6 +4,7 @@ import { App } from './app.js';
 import { SubmitGuard } from './submit-guard.js';
 import { SubmitFeedback } from './submit-feedback.js';
 import { trackUIEvent } from './ui-tracking.js';
+import { fromCents, toCents } from './money-math.js';
 
 // HELPER DE UX/UI: mantém o loading existente e acrescenta um estado acessível.
 // O lock de duplicidade fica no delegated submit guard; não há um segundo lock
@@ -188,14 +189,14 @@ export const TransacoesController = {
                 showTransactionSavedToast(`Despesa lançada no cartão em ${parcelas}x!`);
             } else {
                 if (isRecorrente) {
-                    const valorParcela = Math.round((valor / parcelasRecorrentes) * 100) / 100;
-                    const diferenca = parseFloat((valor - (valorParcela * parcelasRecorrentes)).toFixed(2));
-                    const valorPrimeira = parseFloat((valorParcela + diferenca).toFixed(2));
+                    // Repeating monthly duplicates this per-occurrence amount; it is
+                    // not an installment plan that divides one total across months.
+                    const valorRecorrente = fromCents(toCents(valor));
 
                     const novaTransacao = {
                         id: Date.now(),
                         desc: desc + (parcelasRecorrentes > 1 ? ` (1/${parcelasRecorrentes})` : ''), 
-                        valor: valorPrimeira, 
+                        valor: valorRecorrente, 
                         tipo, categoria, bancoId,
                         isCartao: false,
                         formaPagamento: formaPagamento || 'Não informada',
@@ -217,7 +218,7 @@ export const TransacoesController = {
                         Database.add('agendamentos', {
                             id: Date.now() + i,
                             desc: desc + ` (${i + 1}/${parcelasRecorrentes})`,
-                            valor: valorParcela,
+                            valor: valorRecorrente,
                             dataVencimento: dataParcela.toISOString().split('T')[0],
                             categoria: categoria,
                             tipo: tipo, 

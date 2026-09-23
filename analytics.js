@@ -1,24 +1,23 @@
+import { calculatePeriodTotals, isExpense } from './financial-ledger.js';
+
 const isDateInMonth = (date, year, month) => {
     if (!date) return false;
     const value = String(date).slice(0, 10);
     return value.startsWith(`${year}-${String(month + 1).padStart(2, '0')}-`);
 };
 
-const isInternalTransfer = (t) => t.tipo === 'transferencia' || t.tipoTransferencia === 'interna' || t.transferenciaInterna === true;
-const isCardInvoicePayment = (t) => t.categoria === 'Pagamento de Fatura' && t.formaPagamento === 'Automático (Agendamento)';
-
 export const FinancialAnalytics = {
     monthTransactions: (transactions, year, month) => (transactions || []).filter(t => isDateInMonth(t.data, year, month)),
     totals: (transactions, year, month) => {
-        const items = FinancialAnalytics.monthTransactions(transactions, year, month).filter(t => !isInternalTransfer(t));
+        const totals = calculatePeriodTotals(FinancialAnalytics.monthTransactions(transactions, year, month));
         return {
-            receitas: items.filter(t => !t.transferenciaInterna && t.tipo === 'receita').reduce((sum, t) => sum + (Number(t.valor) || 0), 0),
-            despesas: items.filter(t => t.tipo === 'despesa' && !isCardInvoicePayment(t)).reduce((sum, t) => sum + (Number(t.valor) || 0), 0),
-            pagamentosFatura: items.filter(isCardInvoicePayment).reduce((sum, t) => sum + (Number(t.valor) || 0), 0)
+            receitas: totals.income,
+            despesas: totals.expense,
+            pagamentosFatura: totals.invoicePayments
         };
     },
     categoryTotals: (transactions, year, month) => FinancialAnalytics.monthTransactions(transactions, year, month)
-        .filter(t => t.tipo === 'despesa' && !isInternalTransfer(t) && !isCardInvoicePayment(t))
+        .filter(isExpense)
         .reduce((result, t) => {
             const category = t.categoria || 'Sem categoria';
             result[category] = (result[category] || 0) + (Number(t.valor) || 0);
@@ -54,7 +53,7 @@ export const FinancialAnalytics = {
         const days = new Date(year, month + 1, 0).getDate();
         const values = Array.from({ length: days }, (_, index) => ({ dia: index + 1, valor: 0 }));
         FinancialAnalytics.monthTransactions(transactions, year, month)
-            .filter(t => t.tipo === 'despesa' && !isInternalTransfer(t) && !isCardInvoicePayment(t))
+            .filter(isExpense)
             .forEach(t => { const day = Number(String(t.data).slice(8, 10)); if (day >= 1 && day <= days) values[day - 1].valor += Number(t.valor) || 0; });
         return values;
     }

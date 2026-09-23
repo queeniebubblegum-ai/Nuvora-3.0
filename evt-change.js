@@ -122,6 +122,8 @@ export const ChangeEvents = {
                 },
                 'processarFotoPerfil': () => Controllers.processarFotoPerfil(e),
                 'changeAnoraRigor': () => Utils.showToast(`Modo da Anora alterado para: ${target.value}.`, 'success'),
+                'updateAnoraPreference': () => App.updateAnoraPreference(target.getAttribute('data-preference'), target.type === 'checkbox' ? target.checked : target.value),
+                'setReducedMotion': () => App.setReducedMotion(target.checked),
                 'setDashboardDate': () => {
                     const val = target.value;
                     if (val) App.setDashboardPeriod(val);

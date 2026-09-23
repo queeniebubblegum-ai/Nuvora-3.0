@@ -13,7 +13,9 @@ import { Classification } from './classification.js';
 import { isCategoriaPadrao } from './categorias-padrao.js';
 import { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
 import { loadViewContext, saveViewContext, isValidViewContextTab, isValidReportPeriod, isValidCashflowPeriod, isValidPage, isValidPlanningPeriod } from './view-context.js';
-import { trackUIEvent } from './ui-tracking.js';
+import { configureUITracking, trackUIEvent } from './ui-tracking.js';
+import { ANORA_SETTINGS_KEY, loadAnoraPreferences, saveAnoraPreferences } from './anora-preferences.js';
+import { isExpense, isIncome, isTransfer } from './financial-ledger.js';
 export { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
 
 const validMonth = value => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 11;
@@ -235,6 +237,51 @@ export const App = {
         if (App.scheduleRender) App.scheduleRender();
     }),
 
+    openSettingsGroup: groupId => {
+        const allowed = new Set(['profile', 'appearance', 'data', 'security', 'anora']);
+        if (!allowed.has(String(groupId))) return false;
+        const section = document.getElementById(`settings-group-${groupId}`);
+        if (!section) return false;
+        document.querySelectorAll('.nv-settings-card[data-group]').forEach(button => {
+            button.setAttribute('aria-pressed', String(button.getAttribute('data-group') === String(groupId)));
+        });
+        section.scrollIntoView?.({ behavior: document.documentElement.classList.contains('avenera-reduced-motion') ? 'auto' : 'smooth', block: 'start' });
+        section.focus?.({ preventScroll: true });
+        return true;
+    },
+
+    toggleTheme: () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('nuvora_theme', isDark ? 'dark' : 'light');
+        const themeState = document.querySelector('[data-settings-theme-state]');
+        if (themeState) themeState.textContent = `Modo atual: ${isDark ? 'escuro' : 'claro'}`;
+        return isDark;
+    },
+
+    setReducedMotion: enabled => {
+        const value = enabled === true;
+        document.documentElement.classList.toggle('avenera-reduced-motion', value);
+        try { localStorage.setItem('avenera:reduced-motion', String(value)); } catch { /* Keep the current-session preference. */ }
+        return value;
+    },
+
+    updateAnoraPreference: (key, value) => {
+        const allowed = new Set(['style', 'notifications', 'localTelemetry']);
+        if (!allowed.has(String(key))) return false;
+        const prefs = saveAnoraPreferences({ [key]: value });
+        if (key === 'style') {
+            Database.updateUser({ mentorStyle: prefs.style });
+            if (App.currentPage === 'Dashboard') App.scheduleRender();
+        }
+        if (key === 'localTelemetry') configureUITracking(prefs.localTelemetry);
+        if (key === 'notifications' && prefs.notifications) Notifications.engine();
+        Utils.showToast('Preferência da Anora atualizada.', 'success');
+        return prefs;
+    },
+
+    chooseProfilePhoto: () => document.getElementById('input-foto-perfil')?.click(),
+    importBackupPicker: () => document.getElementById('backup-input')?.click(),
+
     init: () => {
         if (App.isInitialized) return;
         App.isInitialized = true;
@@ -250,6 +297,16 @@ export const App = {
         };
         
         checkSystemTheme();
+        let hasStoredAnoraPreferences = false;
+        try { hasStoredAnoraPreferences = Boolean(localStorage.getItem(ANORA_SETTINGS_KEY)); } catch { hasStoredAnoraPreferences = false; }
+        if (!hasStoredAnoraPreferences && db.usuario?.mentorStyle) saveAnoraPreferences({ style: db.usuario.mentorStyle });
+        const anoraPreferences = loadAnoraPreferences();
+        const anoraStyleControl = document.getElementById('anora-rigor-select');
+        if (anoraStyleControl) anoraStyleControl.value = anoraPreferences.style;
+        configureUITracking(anoraPreferences.localTelemetry);
+        let reducedMotion = false;
+        try { reducedMotion = localStorage.getItem('avenera:reduced-motion') === 'true'; } catch { reducedMotion = false; }
+        App.setReducedMotion(reducedMotion);
 
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
             if (!localStorage.getItem('nuvora_theme')) {
@@ -257,10 +314,7 @@ export const App = {
             }
         });
         
-        window.toggleDarkMode = () => {
-            const isDark = document.documentElement.classList.toggle('dark');
-            localStorage.setItem('nuvora_theme', isDark ? 'dark' : 'light');
-        };
+        window.toggleDarkMode = () => App.toggleTheme();
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' }).catch(err => {
@@ -289,7 +343,7 @@ export const App = {
             
             App.currentPage = startPage;
 
-            Notifications.engine();
+            if (loadAnoraPreferences().notifications) Notifications.engine();
             App.autoProvisionInvoices(); 
             App.scheduleRender();
             Renderer.updateBankSelect(); 
@@ -369,17 +423,24 @@ export const App = {
             txCategoria = 'Pagamento de Fatura';
         }
 
-        Database.add('transacoes', {
+        const isInvoicePayment = agendamento.categoria === 'Fatura Cartão';
+        const transaction = {
             id: Date.now(),
             desc: txDesc,
             valor: agendamento.valor,
-            tipo: agendamento.tipo || 'despesa',
+            tipo: isInvoicePayment ? 'pagamento-fatura' : (agendamento.tipo || 'despesa'),
             categoria: txCategoria,
             bancoId: agendamento.bancoId || (db.bancos.length > 0 ? db.bancos[0].id : null),
             isCartao: false,
             formaPagamento: 'Automático (Agendamento)',
             data: Utils.localISODate()
-        });
+        };
+        if (transaction.tipo === 'pagamento-fatura') {
+            transaction.transferenciaInterna = true;
+            transaction.afetaReceita = false;
+            transaction.afetaDespesa = false;
+        }
+        Database.add('transacoes', transaction);
 
         Utils.showToast('Conta marcada como paga!', 'success');
         App.scheduleRender();
@@ -440,7 +501,10 @@ export const App = {
         if (f.categoria) transacoes = transacoes.filter(t => t.categoria === f.categoria);
         if (f.mes !== '') transacoes = transacoes.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes));
         if (f.bancoId) { const [type, id] = f.bancoId.split('_'); transacoes = transacoes.filter(t => type === 'banco' ? (!t.isCartao && t.bancoId == id) : (t.isCartao && t.bancoId == id)); }
-        const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => [t.data, t.tipo === 'despesa' && !t.transferenciaInterna ? -t.valor : t.valor, t.codigoRef || '', t.desc, t.tipo, t.categoria || ''])];
+        const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => {
+            const valor = isTransfer(t) ? (t.transferenciaEntrada ? t.valor : -t.valor) : (isIncome(t) ? t.valor : -t.valor);
+            return [t.data, valor, t.codigoRef || '', t.desc, t.tipo, t.categoria || ''];
+        })];
         const csv = rows.map(row => row.map(escape).join(';')).join('\n');
         const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob); const link = document.createElement('a');
@@ -521,8 +585,8 @@ export const App = {
             if (!orcamento) return null;
 
             const hoje = new Date();
-            const despesasCategoria = db.transacoes.filter(t => 
-                t.tipo === 'despesa' && !t.transferenciaInterna && 
+            const despesasCategoria = db.transacoes.filter(t =>
+                isExpense(t) &&
                 t.categoria === categoriaNome && 
                 new Date(t.data || t.id).getFullYear() === hoje.getFullYear() && 
                 new Date(t.data || t.id).getMonth() === hoje.getMonth()

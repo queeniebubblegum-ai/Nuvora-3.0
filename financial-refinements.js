@@ -3,6 +3,71 @@ const asFiniteNumber = value => {
     return Number.isFinite(number) ? number : null;
 };
 
+const number = value => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+};
+
+/**
+ * Calculates the amount that can still be spent without treating forecasts as
+ * realized cash. Budget room is applied only when at least one valid limit is
+ * configured; invalid limits do not manufacture an artificial zero ceiling.
+ */
+export const calculateSpendableAmount = ({
+    currentBalance,
+    futureIncome = [],
+    pendingExpenses = [],
+    budgets = [],
+    spentByCategory = {},
+} = {}) => {
+    const balance = number(currentBalance);
+
+    if (balance === null) {
+        return {
+            available: false,
+            value: null,
+            reason: 'Saldo atual indisponível.',
+        };
+    }
+
+    const expectedIncome = (Array.isArray(futureIncome) ? futureIncome : []).reduce(
+        (total, item) => total + (number(item?.valor) || 0),
+        0
+    );
+
+    const committedExpenses = (Array.isArray(pendingExpenses) ? pendingExpenses : []).reduce(
+        (total, item) => total + (number(item?.valor) || 0),
+        0
+    );
+
+    const cashAfterCommitments = balance + expectedIncome - committedExpenses;
+
+    const validBudgets = (Array.isArray(budgets) ? budgets : []).filter(item => number(item?.limite) !== null);
+    const budgetRoom = validBudgets.length
+        ? validBudgets.reduce((total, item) => {
+            const limit = number(item?.limite) || 0;
+            const spent = number(spentByCategory?.[item?.categoria]) || 0;
+            return total + Math.max(0, limit - spent);
+        }, 0)
+        : null;
+
+    const value = budgetRoom === null
+        ? cashAfterCommitments
+        : Math.min(cashAfterCommitments, budgetRoom);
+
+    return {
+        available: true,
+        value,
+        cashAfterCommitments,
+        budgetRoom,
+        expectedIncome,
+        committedExpenses,
+        reason: budgetRoom === null
+            ? 'Calculado com saldo, receitas previstas e compromissos pendentes.'
+            : 'Limitado pelo menor valor entre caixa disponível e orçamento restante.',
+    };
+};
+
 const parseDate = value => {
     if (!value) return null;
     const raw = String(value);

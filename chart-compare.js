@@ -1,4 +1,5 @@
 import { Database } from './db.js';
+import { calculatePeriodTotals } from './financial-ledger.js';
 
 const cssToken = (name, fallback) => {
     if (typeof document === 'undefined') return fallback;
@@ -23,8 +24,9 @@ export const ChartCompare = {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             months.push(`${monthNames[d.getMonth()]}/${d.getFullYear().toString().substr(-2)}`);
             const tr = Database.getTransacoesPorMes(d.getFullYear(), d.getMonth());
-            incomes.push(tr.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0));
-            expenses.push(tr.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0));
+            const totals = calculatePeriodTotals(tr);
+            incomes.push(totals.income);
+            expenses.push(totals.expense);
         }
         if (instances.reportsCompare) instances.reportsCompare.destroy();
         const text = cssToken('--c-text-secondary', '#65716B');

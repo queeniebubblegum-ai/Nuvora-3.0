@@ -34,6 +34,10 @@ export const ClickEvents = {
 
             const actionsMap = {
                 'navigate': () => App.navigate(btn.getAttribute('data-payload')),
+                'openSettingsGroup': () => App.openSettingsGroup(btn.getAttribute('data-group')),
+                'toggleTheme': () => App.toggleTheme(),
+                'chooseProfilePhoto': () => App.chooseProfilePhoto(),
+                'importBackupPicker': () => App.importBackupPicker(),
                 'openModal': () => {
                     const prerequisiteMessage = btn.getAttribute('data-prerequisite-message');
                     if (prerequisiteMessage) Utils.showToast(prerequisiteMessage, 'warning');

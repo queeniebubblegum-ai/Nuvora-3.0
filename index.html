@@ -4,9 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Avenera</title>
+    <meta name="description" content="Avenera: organização financeira pessoal com planejamento, contas e insights claros.">
+    <meta property="og:title" content="Avenera">
+    <meta property="og:description" content="Organize sua vida financeira com clareza.">
+    <meta property="og:type" content="website">
 
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#1F0F42">
+    <meta name="theme-color" content="#4C3C70">
     <link rel="icon" href="assets/icon-192.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="assets/icon-192.svg">
 
@@ -80,7 +84,7 @@
                 <div id="anora-menu" class="hidden absolute right-0 top-[120%] w-64 bg-surface border border-border rounded-[16px] shadow-medium overflow-hidden transform origin-top-right transition-all" style="z-index: 998;">
                     <div class="p-4 border-b border-border bg-brand-deep text-white">
                         <p class="text-[11px] font-bold font-primary uppercase tracking-wider mb-2 text-brand-soft">Perfil da Mentoria</p>
-                        <select id="anora-rigor-select" onclick="event.stopPropagation()" onchange="import('./db.js').then(m => m.Database.updateUser({ mentorStyle: this.value })); import('./utils.js').then(m => m.Utils.showToast('Personalidade da Anora atualizada!', 'success')); if(window.App) window.App.scheduleRender();" class="w-full bg-white/10 border border-white/20 rounded-[8px] text-xs p-2 outline-none focus:border-brand-medium text-white cursor-pointer font-medium">
+                        <select id="anora-rigor-select" data-change="updateAnoraPreference" data-preference="style" onclick="event.stopPropagation()" class="w-full bg-white/10 border border-white/20 rounded-[8px] text-xs p-2 outline-none focus:border-brand-medium text-white cursor-pointer font-medium">
                             <option class="text-text-primary" value="suave">🍃 Modo Suave</option>
                             <option class="text-text-primary" value="equilibrado" selected>⚖️ Modo Equilibrado</option>
                             <option class="text-text-primary" value="rigoroso">🎯 Foco Extremo (Rigoroso)</option>

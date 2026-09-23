@@ -1,5 +1,7 @@
 import { CATEGORIAS_PADRAO, getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment } from './reconciliation.js';
+import { calculatePeriodTotals, isIncome, isTransfer } from './financial-ledger.js';
+import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -259,12 +261,16 @@ const persist = (col) => {
 };
 
 const applyBalanceDelta = (t, isReverse = false) => {
-    if (t.isCartao) return; 
+    // A confirmed statement balance is an absolute anchor that already includes
+    // these imported ledger rows. Keep their history without applying them twice.
+    if (t.isCartao || t.saldoIncluidoNoSaldoDoExtrato === true) return; 
     const b = db.bancos.find(x => String(x.id) === String(t.bancoId));
     if (b) {
-        // Internal transfers have a debit and credit leg; never classify them as expense/income.
-        const amount = t.transferenciaInterna ? (t.transferenciaEntrada ? t.valor : -t.valor) : (t.tipo === 'receita' && !t.transferenciaInterna ? t.valor : -t.valor);
-        b.saldo += isReverse ? -amount : amount;
+        // Use the same movement rules as reports and analytics when applying account deltas.
+        const amount = isTransfer(t)
+            ? (t.transferenciaEntrada ? t.valor : -t.valor)
+            : (isIncome(t) ? t.valor : -t.valor);
+        b.saldo = addMoney(b.saldo, isReverse ? -amount : amount);
         persist('bancos');
     }
 };
@@ -294,6 +300,7 @@ export const BankRepo = {
     add: (item) => { 
         const novoBanco = {
             ...item,
+            saldo: fromCents(toCents(item.saldo)),
             dataCriacao: item.dataCriacao || new Date().toISOString().split('T')[0]
         };
         db.bancos.unshift(novoBanco); 
@@ -340,8 +347,10 @@ export const TransactionsRepo = {
         const diaOriginal = dataOriginal.getDate();
         const grupoId = Date.now();
         const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        const quantidade = Math.max(1, Number.parseInt(parcelas, 10) || 1);
+        const valorParcela = fromCents(toCents(t.valor));
 
-        for (let i = 0; i < parcelas; i++) {
+        for (let i = 0; i < quantidade; i++) {
             let dataParcela = new Date(dataOriginal);
             dataParcela.setMonth(dataOriginal.getMonth() + i);
             if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
@@ -349,9 +358,10 @@ export const TransactionsRepo = {
             const newT = {
                 ...t,
                 id: grupoId + i,
+                valor: valorParcela,
                 data: dataParcela.toISOString().split('T')[0],
                 parcelaAtual: i + 1,
-                totalParcelas: parcelas,
+                totalParcelas: quantidade,
                 grupoId: grupoId,
                 codigoRef: `${baseRef}-${i + 1}`
             };
@@ -362,26 +372,22 @@ export const TransactionsRepo = {
     },
     
     addCardExpense: (compra) => {
-        const valorBaseParcela = Math.round((compra.total / compra.parcelas) * 100) / 100;
-        const diferenca = parseFloat((compra.total - (valorBaseParcela * compra.parcelas)).toFixed(2));
-        
+        const quantidade = Math.max(1, Number.parseInt(compra.parcelas, 10) || 1);
+        const valoresParcelas = splitInstallments(compra.total, quantidade);
         const dataOriginal = new Date(compra.data + 'T12:00:00');
         const diaOriginal = dataOriginal.getDate();
         const grupoId = Date.now();
         const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         
-        for (let i = 0; i < compra.parcelas; i++) {
+        for (let i = 0; i < quantidade; i++) {
             let dataParcela = new Date(dataOriginal);
             dataParcela.setMonth(dataOriginal.getMonth() + i);
             if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
             
-            let valorFinal = valorBaseParcela;
-            if (i === 0) valorFinal = parseFloat((valorFinal + diferenca).toFixed(2));
-
             db.transacoes.unshift({
                 id: grupoId + i,
                 desc: compra.desc,
-                valor: valorFinal,
+                valor: valoresParcelas[i],
                 tipo: 'despesa',
                 categoria: compra.categoria,
                 bancoId: compra.cartaoId,
@@ -389,10 +395,10 @@ export const TransactionsRepo = {
                 formaPagamento: 'Cartão de Crédito',
                 data: dataParcela.toISOString().split('T')[0],
                 parcelaAtual: i + 1,
-                totalParcelas: compra.parcelas,
-                recorrente: compra.parcelas > 1,
+                totalParcelas: quantidade,
+                recorrente: quantidade > 1,
                 grupoId: compra.id || grupoId,
-                codigoRef: compra.parcelas > 1 ? `${baseRef}-${i + 1}` : baseRef,
+                codigoRef: quantidade > 1 ? `${baseRef}-${i + 1}` : baseRef,
                 contatoId: compra.contatoId || null
             });
         }
@@ -523,9 +529,11 @@ export const ReconciliationRepo = {
         if (!Array.isArray(db.conciliacoesFaturas)) db.conciliacoesFaturas = [];
         const chave = invoiceReconciliationKey(cardId, year, month);
         const numeric = realInvoiceAmount === '' || realInvoiceAmount === null ? null : Number(realInvoiceAmount);
+        const validAmount = Number.isFinite(numeric);
+        const normalizedAmount = validAmount ? fromCents(toCents(numeric)) : null;
         const index = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
         const current = index >= 0 ? db.conciliacoesFaturas[index] : { chave, cardId, ano: year, mes: month };
-        const value = { ...current, valorFaturaReal: Number.isFinite(numeric) ? numeric : null, statusConciliacao: Number.isFinite(numeric) ? 'aguardando conferência' : 'em aberto', atualizadoEm: new Date().toISOString() };
+        const value = { ...current, valorFaturaReal: normalizedAmount, statusConciliacao: validAmount ? 'aguardando conferência' : 'em aberto', atualizadoEm: new Date().toISOString() };
         if (index >= 0) db.conciliacoesFaturas[index] = value;
         else db.conciliacoesFaturas.unshift(value);
         persist('conciliacoesFaturas');
@@ -539,21 +547,34 @@ export const ReconciliationRepo = {
 };
 
 export const GoalRepo = {
-    add: (item) => { db.metas.unshift(item); persist('metas'); return true; },
+    add: (item) => {
+        db.metas.unshift({
+            ...item,
+            atual: fromCents(toCents(item.atual)),
+            alvo: fromCents(toCents(item.alvo))
+        });
+        persist('metas');
+        return true;
+    },
     remove: (id) => { db.metas = db.metas.filter(i => i.id.toString() !== id.toString()); persist('metas'); },
     deposit: (id, val) => {
         const g = db.metas.find(x => String(x.id) === String(id));
-        if(g) { g.atual += val; persist('metas'); }
+        if (g) { g.atual = addMoney(g.atual, val); persist('metas'); }
     }
 };
 
 export const BudgetRepo = {
-    add: (item) => { db.orcamentos.unshift(item); persist('orcamentos'); return true; },
+    add: (item) => {
+        db.orcamentos.unshift({ ...item, limite: fromCents(toCents(item.limite)) });
+        persist('orcamentos');
+        return true;
+    },
     remove: (id) => { db.orcamentos = db.orcamentos.filter(i => i.id.toString() !== id.toString()); persist('orcamentos'); },
     updateLimit: (categoria, limite, ano = null, mes = null) => {
+        const amount = fromCents(toCents(limite));
         const existe = db.orcamentos.findIndex(o => o.categoria === categoria && o.ano === ano && o.mes === mes);
-        if (existe >= 0) db.orcamentos[existe].limite = limite;
-        else db.orcamentos.push({ id: Date.now(), categoria, limite, ano, mes });
+        if (existe >= 0) db.orcamentos[existe].limite = amount;
+        else db.orcamentos.push({ id: Date.now(), categoria, limite: amount, ano, mes });
         persist('orcamentos');
     }
 };
@@ -861,9 +882,12 @@ export const Database = {
     updateUser: UserRepo.update,
     markNotificationRead: NotificationRepo.markRead,
     markAllNotificationsRead: NotificationRepo.markAllRead,
-    getTotals: () => ({
-        receitas: db.transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + (b.valor || 0), 0),
-        despesas: db.transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + (b.valor || 0), 0),
-        saldo: db.bancos.reduce((a, b) => a + (b.saldo || 0), 0)
-    })
+    getTotals: () => {
+        const totals = calculatePeriodTotals(db.transacoes);
+        return {
+            receitas: totals.income,
+            despesas: totals.expense,
+            saldo: db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0)
+        };
+    }
 };

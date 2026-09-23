@@ -9,11 +9,14 @@ describe('modelo do relatório de Fluxo de Caixa', () => {
             { data: '2026-09-03', tipo: 'receita', valor: 1000 },
             { data: '2026-09-05', tipo: 'despesa', valor: 250 },
             { data: '2026-08-20', tipo: 'receita', valor: 999 },
-            { data: '2026-09-08', tipo: 'transferencia', valor: 700, transferenciaInterna: true }
+            { data: '2026-09-08', tipo: 'transferencia', valor: 700, transferenciaInterna: true },
+            { data: '2026-09-09', tipo: 'despesa', valor: 70, categoria: 'Pagamento de Fatura', formaPagamento: 'Automático (Agendamento)' },
+            { data: '2026-09-10', tipo: 'pagamento-fatura', valor: 100, transferenciaInterna: true }
         ] }, 1, referenceDate);
 
         expect(model.entradas).toBe(1000);
         expect(model.saidas).toBe(250);
+        expect(model.movements).toHaveLength(2);
         expect(model.activeBuckets).toHaveLength(2);
         expect(model.buckets.at(-1).acumulado).toBe(750);
     });

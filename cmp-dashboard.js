@@ -1,6 +1,7 @@
 import { Utils } from './utils.js';
 import { CoreComponents } from './cmp-core.js';
 import { financialValueClass } from './financial-refinements.js';
+import { isExpense, isIncome, isTransfer as isTransferTransaction } from './financial-ledger.js';
 import { PRIORITY_KEYS, resolvePriority } from './priority.js';
 
 /**
@@ -17,6 +18,18 @@ export const calculateDashboardTrend = (current, previous) => {
     const diff = ((currentValue - previousValue) / previousValue) * 100;
     return { val: Math.abs(diff).toFixed(1), label: `${Math.abs(diff).toFixed(1)}%`, direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral', isUp: diff >= 0, isNeutral: false };
 };
+
+export const onboardingSteps = Object.freeze([
+    { id: 'account', title: 'Adicione uma conta', description: 'Comece pelo saldo que você tem hoje.', action: 'openModal', modal: 'modal-banco' },
+    { id: 'transaction', title: 'Registre o primeiro lançamento', description: 'Isso permite calcular seu resultado do mês.', action: 'openModal', modal: 'modal-transacao' },
+    { id: 'budget', title: 'Defina um limite', description: 'Transforme seus gastos em um plano claro.', action: 'openModal', modal: 'modal-orcamento' },
+]);
+
+const onboardingStepStatus = (database = {}) => ({
+    account: (database.bancos || []).length > 0,
+    transaction: (database.transacoes || []).some(item => isIncome(item) || isExpense(item)),
+    budget: (database.orcamentos || []).some(item => Number.isFinite(Number(item?.limite)) && Number(item.limite) > 0),
+});
 
 export const DashboardComponents = {
     dashboardCards: (atual = {}, anterior = {}) => {
@@ -76,6 +89,18 @@ export const DashboardComponents = {
             ${vencimentosCard}
             ${projectionCard}
         </div>`;
+    },
+
+    onboardingChecklist: (database = {}) => {
+        const completed = onboardingStepStatus(database);
+        const completedCount = onboardingSteps.filter(step => completed[step.id]).length;
+        if (completedCount === onboardingSteps.length) return '';
+        const steps = onboardingSteps.map((step, index) => {
+            const isComplete = completed[step.id];
+            return `<li class="nv-onboarding-step ${isComplete ? 'is-complete' : ''}"><span class="nv-onboarding-step__number" aria-hidden="true">${isComplete ? '<i class="fa-solid fa-check"></i>' : index + 1}</span><div class="nv-onboarding-step__copy"><strong>${Utils.escapeHTML(step.title)}</strong><p>${Utils.escapeHTML(step.description)}</p></div>${isComplete ? '<span class="nv-onboarding-step__status">Concluído</span>' : `<button type="button" data-action="${Utils.escapeHTML(step.action)}" data-modal="${Utils.escapeHTML(step.modal)}" class="nv-onboarding-step__action">Começar</button>`}</li>`;
+        }).join('');
+        const progress = Math.round((completedCount / onboardingSteps.length) * 100);
+        return `<section class="nv-onboarding-checklist" aria-labelledby="nv-onboarding-title"><div class="nv-onboarding-checklist__header"><div><p class="nv-dashboard-eyebrow">Primeiros passos</p><h2 id="nv-onboarding-title">Comece com três passos simples</h2><p>Monte sua base financeira para acompanhar o mês com clareza.</p></div><span class="nv-onboarding-checklist__count">${completedCount} de ${onboardingSteps.length}</span></div><div class="nv-onboarding-checklist__progress" role="progressbar" aria-label="Progresso da configuração inicial" aria-valuemin="0" aria-valuemax="${onboardingSteps.length}" aria-valuenow="${completedCount}"><span style="width:${progress}%"></span></div><ol class="nv-onboarding-steps">${steps}</ol></section>`;
     },
 
     // Chooses one next action so the dashboard has a single prioritized
@@ -260,7 +285,7 @@ export const DashboardComponents = {
         // compact CTA remains available when it is the winning recommendation.
         const candidate = higherPriority ? null : anoraCandidate;
         const validNavigation = candidate?.action === 'navigate' && ['Dashboard', 'Planejamento', 'Agendamentos'].includes(candidate.payload);
-        const validOnboarding = candidate?.action === 'openModal' && ['modal-banco', 'modal-transacao'].includes(candidate.modal);
+        const validOnboarding = candidate?.action === 'openModal' && ['modal-banco', 'modal-transacao', 'modal-orcamento'].includes(candidate.modal);
         if (validNavigation) {
             btnHtml = `<button type="button" data-action="navigate" data-payload="${Utils.escapeHTML(candidate.payload)}" class="nv-onboarding-action" aria-label="${Utils.escapeHTML(candidate.label)}"><i class="fa-solid fa-bolt" aria-hidden="true"></i> ${Utils.escapeHTML(candidate.label)}</button>`;
         } else if (validOnboarding) {
@@ -441,7 +466,7 @@ export const DashboardComponents = {
 
     dashboardCategories: (transacoesPeriodoAtual, periodLabel = 'Este ano') => {
         const cats = {};
-        transacoesPeriodoAtual.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => { 
+        transacoesPeriodoAtual.filter(isExpense).forEach(t => { 
             cats[t.categoria] = (cats[t.categoria] || 0) + t.valor; 
         });
         
@@ -517,7 +542,9 @@ export const DashboardComponents = {
             listHtml += `<div class="mt-6 first:mt-0" data-key="group_${data}"><h4 class="text-[10px] font-bold text-text-secondary tracking-wider mb-3 uppercase">${Utils.escapeHTML(data)}</h4>`;
             
             items.forEach(t => {
-                const isRec = t.transferenciaInterna ? (t.transferenciaEntrada === true || (t.transferenciaInterna && String(t.bancoId) === String(t.contaDestinoId))) : t.tipo === 'receita';
+                const isRec = isTransferTransaction(t)
+                    ? (t.transferenciaEntrada === true || String(t.bancoId) === String(t.contaDestinoId))
+                    : isIncome(t);
                 const signal = isRec ? '+' : '-';
                 const valColor = isRec ? 'text-success' : 'text-danger'; 
                 const txId = t.codigoRef || `TX-${t.id.toString(36).substring(0,6).toUpperCase()}`;

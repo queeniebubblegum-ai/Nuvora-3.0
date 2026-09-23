@@ -27,4 +27,17 @@ describe('Postagem idempotente dos ajustes de fatura', () => {
     expect(result.transaction).toMatchObject({ tipo: 'receita', valor: 5, isCartao: false, origem: 'conciliacao_fatura' });
     expect(db.bancos[0].saldo).toBe(1005);
   });
+
+  it('normalizes saved invoice amounts and adjustments to exact cents before posting', () => {
+    ReconciliationRepo.saveAmount('card-1', 2026, 7, 0.1 + 0.2);
+    const saved = ReconciliationRepo.saveAdjustment('card-1', 2026, 7, {
+      id: 'aj-cents', type: 'interest', description: 'Juros', amount: 0.1 + 0.2, effect: 'charge'
+    });
+
+    expect(ReconciliationRepo.get('card-1', 2026, 7).valorFaturaReal).toBe(0.3);
+    expect(saved.amount).toBe(0.3);
+    const posted = ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, 'aj-cents');
+    expect(posted.transaction.valor).toBe(0.3);
+    expect(db.bancos[0].saldo).toBe(999.7);
+  });
 });

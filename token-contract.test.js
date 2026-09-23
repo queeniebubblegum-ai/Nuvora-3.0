@@ -153,6 +153,7 @@ const themeAliases = [
 ];
 
 const nonThemeTokens = [...contract.typography, ...contract.spacing, ...contract.shape];
+const normalizeForComparison = value => String(value || '').replace(/["']/g, '"');
 
 const expectTokens = (tokens, names, context) => names.forEach(name => {
     expect(tokens.get(name), `${name} missing in ${context}`).toBeTruthy();
@@ -177,7 +178,7 @@ describe('Avenera token contract', () => {
         const source = blockTokens(read('input.css'), ':root');
         const runtime = blockTokens(read('styles.css'), ':root');
         nonThemeTokens.forEach(name => {
-            expect(runtime.get(name), `${name} missing in styles.css`).toBe(source.get(name));
+            expect(normalizeForComparison(runtime.get(name)), `${name} missing in styles.css`).toBe(normalizeForComparison(source.get(name)));
         });
     });
 

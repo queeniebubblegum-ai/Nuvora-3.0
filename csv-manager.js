@@ -52,7 +52,11 @@ export const CSVManager = {
                 const saldoLabel = document.getElementById('ofx-saldo-final-lbl');
                 if (saldoLabel) saldoLabel.innerText = 'Não informado';
                 const confirmarSaldo = document.getElementById('ofx-confirmar-saldo');
-                if (confirmarSaldo) confirmarSaldo.checked = false;
+                if (confirmarSaldo) {
+                    confirmarSaldo.checked = false;
+                    confirmarSaldo.disabled = true;
+                    confirmarSaldo.title = 'Arquivos CSV não fornecem um saldo final de extrato.';
+                }
                 openModalCallback('modal-revisao-ofx');
                 window.App?.renderOFXReviewList();
             } catch (error) {

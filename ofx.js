@@ -1,6 +1,7 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { ImportError, IMPORT_ERROR_CODES, asImportError } from './import-errors.js';
+import { shouldAnchorImportedTransactionsToStatementBalance, statementBalanceAnchorMetadata, normalizeStatementBalance, statementBalanceAdjustment, reverseStatementBalanceAdjustment } from './ofx-balance.js';
 
 export const OFXManager = {
     iniciarImportacaoOFX: (bancoId, viewState) => {
@@ -74,7 +75,11 @@ export const OFXManager = {
         }
 
         const chkSaldo = document.getElementById('ofx-confirmar-saldo');
-        if (chkSaldo) chkSaldo.checked = false;
+        if (chkSaldo) {
+            chkSaldo.checked = false;
+            chkSaldo.disabled = parsedData.balance === null;
+            chkSaldo.title = parsedData.balance === null ? 'Este arquivo não contém saldo final.' : 'Substituir o saldo atual pelo saldo final do extrato.';
+        }
 
         let transacoesExistentes = [];
         let dataCriacaoBanco = null;
@@ -240,17 +245,29 @@ export const OFXManager = {
             return;
         }
 
-        if (chkSaldo && chkSaldo.checked && viewState.ofxPendenteSaldoFinal !== null) {
-            const banco = db.bancos.find(b => b.id.toString() === bancoId.toString());
-            if (banco) {
-                banco.saldo = viewState.ofxPendenteSaldoFinal;
-                Database.save('bancos');
+        const statementBalance = viewState.ofxPendenteSaldoFinal;
+        const anchorMetadata = statementBalanceAnchorMetadata({
+            importType: viewState.tipoImportacao,
+            balanceConfirmed: chkSaldo?.checked === true,
+            statementBalance,
+        });
+        const saldoFinalAplicado = anchorMetadata.saldoIncluidoNoSaldoDoExtrato === true;
+        const itensParaSalvar = viewState.ofxPendente.filter(i => i.selecionado);
+        const bancoAlvo = db.bancos.find(b => String(b.id) === String(bancoId));
+        let saldoAjusteReversivel = 0;
+
+        if (saldoFinalAplicado) {
+            if (!bancoAlvo) {
+                Utils.showToast('Não foi possível localizar a conta selecionada.', 'error');
+                return;
             }
+            const saldoAnterior = normalizeStatementBalance(bancoAlvo.saldo);
+            bancoAlvo.saldo = normalizeStatementBalance(statementBalance);
+            saldoAjusteReversivel = statementBalanceAdjustment(bancoAlvo.saldo, saldoAnterior);
+            Database.save('bancos');
         }
 
-        const itensParaSalvar = viewState.ofxPendente.filter(i => i.selecionado);
-
-        if (itensParaSalvar.length === 0 && (!chkSaldo || !chkSaldo.checked)) {
+        if (itensParaSalvar.length === 0 && !saldoFinalAplicado) {
             Utils.showToast('Nenhum item selecionado e saldo não atualizado.', 'warning');
             return;
         }
@@ -279,7 +296,8 @@ export const OFXManager = {
                 data: item.data,
                 codigoRef: item.identificador || `OFX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
                 importadoOFX: viewState.tipoImportacao === 'OFX',
-                importadoCSV: viewState.tipoImportacao === 'CSV'
+                importadoCSV: viewState.tipoImportacao === 'CSV',
+                ...anchorMetadata
             };
             Database.add('transacoes', transacaoImportada);
             transacoesImportadas.push(transacaoImportada);
@@ -287,8 +305,23 @@ export const OFXManager = {
 
         const undoButton = document.createElement('button');
         undoButton.className = 'fixed bottom-10 left-1/2 -translate-x-1/2 bg-brand-deep text-white px-5 py-3 rounded-xl shadow-2xl z-[9999] text-sm font-bold';
-        undoButton.innerHTML = `${transacoesImportadas.length} importadas · Desfazer`;
-        undoButton.onclick = () => { Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id)); undoButton.remove(); Utils.showToast('Importação desfeita.', 'success'); if (scheduleRenderCallback) scheduleRenderCallback(); };
+        const undoDescription = transacoesImportadas.length
+            ? `${transacoesImportadas.length} importadas`
+            : (saldoFinalAplicado ? 'Saldo atualizado' : 'Importação');
+        undoButton.innerHTML = `${undoDescription} · Desfazer`;
+        undoButton.onclick = () => {
+            Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id));
+            if (saldoFinalAplicado && saldoAjusteReversivel !== 0) {
+                const bancoAtual = db.bancos.find(b => String(b.id) === String(bancoId));
+                if (bancoAtual) {
+                    bancoAtual.saldo = reverseStatementBalanceAdjustment({ currentBalance: bancoAtual.saldo, adjustment: saldoAjusteReversivel });
+                    Database.save('bancos');
+                }
+            }
+            undoButton.remove();
+            Utils.showToast('Importação desfeita.', 'success');
+            if (scheduleRenderCallback) scheduleRenderCallback();
+        };
         document.body.appendChild(undoButton);
         setTimeout(() => undoButton.remove(), 8000);
         const historico = JSON.parse(localStorage.getItem('nuvora_importacoes') || '[]');
