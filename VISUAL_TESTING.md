@@ -10,7 +10,9 @@ npx playwright install chromium
 npm run test:visual
 ```
 
-The suite starts a local Python HTTP server and covers Dashboard, Transactions, Planning, Accounts/Cards, Reports, and Categories at 1440px, 768px, 400px, and 375px. It asserts that the rendered main content is visible and that document/main scroll width does not exceed the viewport. Each run writes named screenshots into Playwright's ignored test output; screenshots are evidence for manual review, not fake pixel assertions.
+The suite starts a local Node.js static server (so it works on Windows, macOS, and Linux without Python) and covers Dashboard, Transactions, Planning, Accounts/Cards, Reports, and Categories at 1440px, 768px, 400px, and 375px. It asserts that the rendered main content is visible and that document/main scroll width does not exceed the viewport. Each run writes named screenshots into Playwright's ignored test output; screenshots are evidence for manual review, not fake pixel assertions.
+
+On Windows, use the same npm commands shown above. `playwright.config.js` selects `npm.cmd` automatically for its local server; no shell-specific server command is required. `npm test` remains the unit/contract suite and never starts the visual server or browser specs.
 
 To run one viewport or route:
 

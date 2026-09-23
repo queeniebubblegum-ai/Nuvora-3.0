@@ -1,5 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// npm is named npm.cmd on Windows; keeping the server behind an npm script
+// also avoids relying on shell-specific Python commands.
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 export default defineConfig({
     testDir: './visual',
     timeout: 30_000,
@@ -11,7 +15,7 @@ export default defineConfig({
         screenshot: 'only-on-failure'
     },
     webServer: {
-        command: 'python3 -m http.server 4173',
+        command: `${npmCommand} run serve:visual -- 4173`,
         url: 'http://127.0.0.1:4173/index.html',
         reuseExistingServer: true,
         timeout: 15_000

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { buildDemoFixture, buildDemoDatabase, cloneDemoFixture, DEMO_SCENARIOS } from './demo-fixtures.js';
 import { resolvePriority, PRIORITY_KEYS } from './priority.js';
 import { DashboardComponents } from './cmp-dashboard.js';
@@ -69,7 +70,10 @@ describe('deterministic demo fixtures', () => {
     });
 
     it('is storage-free and contains no automatic demo bootstrap', () => {
-        const source = readFileSync(new URL('./demo-fixtures.js', import.meta.url), 'utf8');
+        // Resolve from the project root instead of converting import.meta.url;
+        // the latter can be treated as a literal path by Vitest on Windows.
+        const fixturePath = resolve(process.cwd(), 'demo-fixtures.js');
+        const source = readFileSync(fixturePath, 'utf8');
         expect(source).not.toMatch(/localStorage|indexedDB|IDBDatabase/);
         expect(source).not.toMatch(/window\.|document\./);
         const fixture = cloneDemoFixture(buildDemoFixture('empty'));

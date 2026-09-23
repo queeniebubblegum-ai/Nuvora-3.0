@@ -10,5 +10,6 @@ if (probe.status !== 0) {
 }
 
 const args = process.argv.slice(2);
-const result = spawnSync('npx', ['playwright', 'test', '-c', 'playwright.config.js', ...args], { stdio: 'inherit', shell: process.platform === 'win32' });
+const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
+const result = spawnSync(npxCommand, ['playwright', 'test', '-c', 'playwright.config.js', ...args], { stdio: 'inherit' });
 process.exit(result.status ?? 1);
