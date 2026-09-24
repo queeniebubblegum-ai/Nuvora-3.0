@@ -27,10 +27,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         db.cartoes = [];
         db.orcamentos = [];
         db.metas = [];
-<<<<<<< HEAD
         db.reservas = [];
-=======
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     });
 
     it('usa o razão central para receitas e despesas agregadas sem contar transferência ou pagamento de fatura como despesa comum', () => {
@@ -144,7 +141,6 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(db.bancos[0].saldo).toBe(999.7);
     });
 
-<<<<<<< HEAD
     it('deposita na meta como transferência da conta bancária para sua reserva sem criar receita/despesa', async () => {
         db.bancos[0].saldo = 1000;
         GoalRepo.add({ id: 'goal-cents', nome: 'Reserva', atual: 0, alvo: 2.345 });
@@ -258,15 +254,6 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(db.reservas[0]).toMatchObject({ goalId: 'legacy-goal', saldo: 1 });
         expect(db.metas[0].reservaId).toBe(db.reservas[0].id);
         expect(Database.getTotals()).toMatchObject({ saldo: 999, saldoReservado: 1, saldoTotal: 1000 });
-=======
-    it('normaliza o valor atual e o alvo da meta e deposita sem erro decimal', () => {
-        GoalRepo.add({ id: 'goal-cents', nome: 'Reserva', atual: 0.1, alvo: 2.345 });
-        GoalRepo.deposit('goal-cents', 0.2);
-
-        const goal = db.metas.find(item => item.id === 'goal-cents');
-        expect(toCents(goal.atual)).toBe(30);
-        expect(toCents(goal.alvo)).toBe(235);
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     });
 
     it('não deve excluir conta bancária que possui dados vinculados', () => {
