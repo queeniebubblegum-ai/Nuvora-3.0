@@ -1,6 +1,7 @@
 import { MentorMath } from './mnt-math.js';
 import { MentorSemantics } from './mnt-semantics.js';
 import { isExpense, isIncome } from './financial-ledger.js';
+import { parseLocalDate } from './util-date.js';
 
 export const MentorEngine = {
     calculateMentorScore: (data) => {
@@ -133,11 +134,10 @@ export const MentorEngine = {
         const hoje = new Date();
         const dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1);
 
-        const despesasRecentes = db.transacoes.filter(t =>
-            isExpense(t) &&
-            !t.recorrente &&
-            new Date(t.data || t.id) >= dataLimite
-        );
+        const despesasRecentes = db.transacoes.filter(t => {
+            const data = parseLocalDate(t.data || t.id);
+            return isExpense(t) && !t.recorrente && data && data >= dataLimite;
+        });
 
         const map = {};
         despesasRecentes.forEach(t => {
@@ -150,7 +150,7 @@ export const MentorEngine = {
 
             const key = `${firstWord}_${t.valor}`;
             if(!map[key]) map[key] = { desc: t.desc, valor: t.valor, datas: [], categoria: t.categoria, firstWord };
-            map[key].datas.push(new Date(t.data || t.id));
+            map[key].datas.push(parseLocalDate(t.data || t.id));
         });
 
         const ghosts = [];
@@ -184,7 +184,8 @@ export const MentorEngine = {
         let pastIncome = 0; let pastExpenses = 0; let expensesByCategory = {};
 
         db.transacoes.forEach(t => {
-            const dataTransacao = new Date((t.data || t.id) + 'T12:00:00');
+            const dataTransacao = parseLocalDate(t.data || t.id);
+            if (!dataTransacao) return;
             const mesTrans = dataTransacao.getMonth(); const anoTrans = dataTransacao.getFullYear();
             const income = isIncome(t);
             const expense = isExpense(t);

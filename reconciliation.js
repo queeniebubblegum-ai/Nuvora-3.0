@@ -15,9 +15,11 @@ const asDate = value => new Date(`${value}T12:00:00`);
 /** Período de uma fatura: dia seguinte ao fechamento anterior até o fechamento atual. */
 export function getInvoicePeriod(card, year, month) {
     const closingDay = Math.max(1, Math.min(31, Number(card?.fechamento || card?.diaFechamento || 31)));
-    const end = new Date(year, month, closingDay, 12);
-    // Date(year, month - 1, closingDay + 1) também trata meses curtos corretamente.
-    const start = new Date(year, month - 1, closingDay + 1, 12);
+    const currentMonthLastDay = new Date(year, month + 1, 0).getDate();
+    const previousMonthLastDay = new Date(year, month, 0).getDate();
+    const end = new Date(year, month, Math.min(closingDay, currentMonthLastDay), 12);
+    const previousClosingDay = Math.min(closingDay, previousMonthLastDay);
+    const start = new Date(year, month - 1, previousClosingDay + 1, 12);
     return { start, end };
 }
 

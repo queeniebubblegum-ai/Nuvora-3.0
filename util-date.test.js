@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { UtilDate } from './util-date.js';
+import { parseLocalDate, UtilDate } from './util-date.js';
 
 describe('UtilDate - Controle de Tempo e Agendamentos', () => {
     it('formatToBR: deve converter formato ISO (YYYY-MM-DD) para formato BR (DD/MM/YYYY)', () => {
@@ -9,6 +9,16 @@ describe('UtilDate - Controle de Tempo e Agendamentos', () => {
     it('formatToBR: deve retornar a string original ou default se for mal formatada', () => {
         expect(UtilDate.formatToBR('')).toBe('--/--/----');
         expect(UtilDate.formatToBR('Texto Invalido')).toBe('Texto Invalido');
+    });
+
+    it('parseLocalDate: interpreta data ISO pura como data local e rejeita datas impossíveis', () => {
+        const parsed = parseLocalDate('2026-10-01');
+        expect(parsed).toBeInstanceOf(Date);
+        expect(parsed.getFullYear()).toBe(2026);
+        expect(parsed.getMonth()).toBe(9);
+        expect(parsed.getDate()).toBe(1);
+        expect(parseLocalDate('2026-02-30')).toBeNull();
+        expect(parseLocalDate('')).toBeNull();
     });
 
     it('getDaysBetween: deve calcular a diferença de dias exata entre duas datas', () => {

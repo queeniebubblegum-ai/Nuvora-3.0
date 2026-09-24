@@ -93,6 +93,38 @@ describe('separação entre patrimônio e crédito', () => {
         expect(html).toContain('Utilizado ·');
     });
 
+    it('exibe a ação de pagamento dentro do cartão para uma fatura pendente', () => {
+        const html = PageComponents.accountsPage(
+            [{ id: 'bank-pay', nome: 'Conta pagamento', saldo: 900 }],
+            [{ id: 'card-pay', nome: 'Cartão principal', bancoId: 'bank-pay', limite: 2000, fechamento: 20, vencimento: 10 }],
+            [],
+            [],
+            [
+                { id: 'invoice-pending', categoria: 'Fatura Cartão', cartaoId: 'card-pay', status: 'pendente', dataVencimento: '2026-09-25', valor: 123.45 },
+                { id: 'invoice-cancelled', categoria: 'Fatura Cartão', cartaoId: 'card-pay', status: 'cancelado', dataVencimento: '2026-10-25', valor: 88 },
+            ]
+        );
+
+        expect(html).toContain('data-action="openInvoicePaymentForCard" data-id="card-pay"');
+        expect(html).toContain('aria-label="Registrar pagamento da fatura de Cartão principal"');
+        expect(html).toContain('Registrar pagamento da fatura');
+        expect(html).toContain('123,45');
+        expect(html).not.toContain('invoice-cancelled');
+    });
+
+    it('mantém o acesso visível no cartão mesmo sem agendamento pendente', () => {
+        const html = PageComponents.accountsPage(
+            [{ id: 'bank-no-invoice', nome: 'Conta' }],
+            [{ id: 'card-no-invoice', nome: 'Cartão sem agenda', bancoId: 'bank-no-invoice', limite: 1000 }],
+            [],
+            [],
+            []
+        );
+
+        expect(html).toContain('data-action="openInvoicePaymentForCard" data-id="card-no-invoice"');
+        expect(html).toContain('Registrar pagamento da fatura');
+    });
+
     it('mostra total, reservado e disponível também na página de metas', () => {
         const html = PageComponents.goalsPage([], [], {
             bancos: [{ saldo: 2700 }],

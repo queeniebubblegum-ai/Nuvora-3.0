@@ -1,5 +1,6 @@
 import { Database } from './db.js';
 import { isExpense } from './financial-ledger.js';
+import { parseLocalDate } from './util-date.js';
 
 export const ChartCategorias = {
     renderReportChart: (instances) => {
@@ -37,8 +38,8 @@ export const ChartCategorias = {
         const hoje = new Date();
         const trMes = db.transacoes.filter(t => {
             if (!isExpense(t)) return false;
-            const d = new Date(t.data || t.id);
-            return d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
+            const d = parseLocalDate(t.data || t.id);
+            return d && d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
         });
 
         const gastosPorCat = {};

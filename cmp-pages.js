@@ -6,6 +6,8 @@ import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, inv
 import { loadAnoraPreferences } from './anora-preferences.js';
 import { calculatePeriodTotals, isExpense, isIncome, isInvoicePayment, isTransfer as isTransferTransaction } from './financial-ledger.js';
 import { addMoney } from './money-math.js';
+import { cardInvoiceDueDate } from './invoice-provisioning.js';
+import { isInvoiceSchedulePending } from './invoice-payment.js';
 
 export const accountPortfolioSummary = ({
     banks = [],
@@ -78,7 +80,7 @@ export const PageComponents = {
      * Avenera accounts workspace: keeps the existing bank/card records and action
      * hooks, but presents them as two independent, scannable collections.
      */
-    accountsPage: (bancos = [], cartoes = [], transacoes = [], reservas = []) => {
+    accountsPage: (bancos = [], cartoes = [], transacoes = [], reservas = [], agendamentos = db.agendamentos) => {
         const hoje = new Date();
         const anoAtual = hoje.getFullYear();
         const mesAtual = hoje.getMonth();
@@ -110,7 +112,10 @@ export const PageComponents = {
             const committed = portfolioCard?.used || 0;
             const limit = portfolioCard?.limit || 0;
             const invoice = invoiceFor(card);
-            return { card, committed, limit, hasLimit: limit > 0, available: portfolioCard?.available || 0, utilization: portfolioCard?.utilization || 0, invoice, dueDate: dueDateFor(card) };
+            const paymentSchedule = (Array.isArray(agendamentos) ? agendamentos : [])
+                .filter(item => item?.categoria === 'Fatura Cartão' && String(item?.cartaoId) === String(card.id) && isInvoiceSchedulePending(item))
+                .sort((a, b) => String(a?.dataVencimento || '').localeCompare(String(b?.dataVencimento || '')) || String(a?.id || '').localeCompare(String(b?.id || '')))[0] || null;
+            return { card, committed, limit, hasLimit: limit > 0, available: portfolioCard?.available || 0, utilization: portfolioCard?.utilization || 0, invoice, paymentSchedule, dueDate: dueDateFor(card) };
         });
         const openInvoiceAmount = cardsData.reduce((sum, item) => addMoney(sum, item.invoice.explainedTotal), 0);
         const nextDue = cardsData.map(item => item.dueDate).filter(Boolean).sort((a, b) => a - b)[0] || null;
@@ -152,13 +157,15 @@ export const PageComponents = {
             </article>`).join('') : `
             <div class="nv-accounts-empty"><div class="nv-accounts-empty-icon"><i class="fa-solid fa-building-columns" aria-hidden="true"></i></div><div><strong>Nenhuma conta cadastrada</strong><p>Adicione uma conta para acompanhar saldos e importar movimentações.</p></div><button type="button" data-action="openModal" data-modal="modal-banco" class="nv-accounts-empty-action">Adicionar conta</button></div>`;
 
-        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, hasLimit, available, utilization, invoice, dueDate }) => {
+        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, hasLimit, available, utilization, invoice, paymentSchedule, dueDate }) => {
             const bank = bankFor(card);
             const usagePercent = hasLimit ? utilization : null;
             const visualUsagePercent = usagePercent == null ? 0 : Math.min(Math.max(usagePercent, 0), 100);
             const usageState = usagePercent == null ? 'unknown' : cardTone(usagePercent);
             const usageClass = `is-${usageState}`;
             const usageLabel = usagePercent == null ? 'Limite não informado' : `${usagePercent.toFixed(0)}% utilizado`;
+            const paymentDueDate = paymentSchedule?.dataVencimento ? new Date(`${String(paymentSchedule.dataVencimento).slice(0, 10)}T12:00:00`) : null;
+            const paymentDueLabel = paymentDueDate && !Number.isNaN(paymentDueDate.getTime()) ? dateLabel(paymentDueDate) : 'Data não informada';
             return `
             <article class="nv-accounts-card nv-accounts-card--credit nv-credit-card nv-credit-card--outlined" data-key="cartao_${Utils.escapeHTML(String(card.id))}">
                 <div class="nv-credit-card__header nv-credit-card-top">
@@ -169,6 +176,10 @@ export const PageComponents = {
                 <div class="nv-credit-card-highlight"><strong>${hasLimit ? money(available) : '—'}</strong><p>Limite disponível</p></div>
                 <div class="nv-credit-card-progress nv-credit-progress" data-usage-state="${usageState}"><div class="nv-credit-card-progress-label"><span>Utilizado ${hasLimit ? `· ${money(committed)} de ${money(limit)}` : ''}</span><strong>${Utils.escapeHTML(usageLabel)}</strong></div><div class="nv-credit-card-progress-track" role="progressbar" aria-label="Limite comprometido de ${Utils.escapeHTML(card.nome || 'cartão')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usagePercent == null ? 0 : visualUsagePercent.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(usageLabel)}"><span class="${usageClass}" style="width:${visualUsagePercent}%"></span></div></div>
                 <footer class="nv-credit-card__footer"><span>Fatura atual: ${money(invoice.explainedTotal)}</span><span>Vencimento: dia ${Utils.escapeHTML(String(card.vencimento || card.diaVencimento || '—'))}</span></footer>
+                ${paymentSchedule ? `
+                <div class="mt-3 flex items-center justify-between gap-2 rounded-lg border border-border bg-bg px-3 py-2"><div><p class="text-[10px] font-bold uppercase tracking-wider text-text-secondary">Fatura pendente</p><p class="text-xs text-text-secondary">Vencimento ${Utils.escapeHTML(paymentDueLabel)}</p></div><strong class="font-mono text-sm text-text-primary">${money(paymentSchedule.valor)}</strong></div>
+                ` : ''}
+                <button type="button" data-action="openInvoicePaymentForCard" data-id="${Utils.escapeHTML(String(card.id))}" aria-label="Registrar pagamento da fatura de ${Utils.escapeHTML(card.nome || 'cartão')}" class="mt-3 w-full py-2.5 rounded-lg bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors"><i class="fa-solid fa-money-bill-transfer mr-2" aria-hidden="true"></i>Registrar pagamento da fatura</button>
                 <div class="nv-accounts-card-actions">
                     ${actionButton('openInvoiceDetails', 'Abrir fatura', 'fa-solid fa-file-invoice-dollar', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}
                     ${actionButton('openCardExpenseModal', 'Lançar despesa', 'fa-solid fa-plus', `data-id="${Utils.escapeHTML(String(card.id))}" data-nome="${Utils.escapeHTML(card.nome || 'Cartão')}"`, 'primary')}
@@ -455,8 +466,31 @@ export const PageComponents = {
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]; 
         const mesAtualNome = meses[state.invoiceMonth];
         
-        const vencimento = Number(card.vencimento || card.diaVencimento || 1);
-        const vencimentoStr = `${String(vencimento).padStart(2, '0')}/${(state.invoiceMonth + 1).toString().padStart(2, '0')}/${state.invoiceYear}`;
+        const invoiceDueDate = cardInvoiceDueDate(card, state.invoiceYear, state.invoiceMonth);
+        const vencimentoStr = invoiceDueDate ? invoiceDueDate.toLocaleDateString('pt-BR') : 'Não informado';
+        const invoiceDueDateKey = invoiceDueDate ? `${invoiceDueDate.getFullYear()}-${String(invoiceDueDate.getMonth() + 1).padStart(2, '0')}-${String(invoiceDueDate.getDate()).padStart(2, '0')}` : '';
+        const matchingInvoiceSchedules = (db.agendamentos || []).filter(item =>
+            item?.categoria === 'Fatura Cartão' &&
+            String(item?.cartaoId) === String(card.id) &&
+            String(item?.dataVencimento || '').slice(0, 10) === invoiceDueDateKey
+        );
+        const invoiceSchedule = matchingInvoiceSchedules.find(item => item.status === 'pago')
+            || matchingInvoiceSchedules.find(item => item.status === 'pendente')
+            || matchingInvoiceSchedules[0];
+        const invoicePaymentRecord = invoiceSchedule
+            ? (db.transacoes || []).find(item => String(item.invoicePaymentAgendamentoId ?? '') === String(invoiceSchedule.id))
+            : null;
+        const invoicePaymentBank = (db.bancos || []).find(item => String(item.id) === String(invoiceSchedule?.bancoId || invoicePaymentRecord?.bancoId || ''));
+        const invoicePaymentDate = invoiceSchedule?.dataPagamento || invoicePaymentRecord?.data || '';
+        const invoicePaymentDetails = [
+            invoicePaymentDate ? Utils.formatToBR(String(invoicePaymentDate).slice(0, 10)) : '',
+            invoicePaymentBank ? Utils.formatBankName(invoicePaymentBank) : ''
+        ].filter(Boolean).join(' · ');
+        const invoicePaymentAction = invoiceSchedule?.status === 'pendente'
+            ? `<button type="button" data-action="openInvoicePayment" data-id="${Utils.escapeHTML(String(invoiceSchedule.id))}" class="px-3 py-2 rounded-lg bg-brand-medium text-white text-xs font-bold hover:bg-brand-dark">Registrar pagamento</button>`
+            : invoiceSchedule?.status === 'pago'
+                ? `<span class="text-xs font-bold text-success" role="status" aria-label="Pagamento registrado${invoicePaymentDetails ? ` em ${Utils.escapeHTML(invoicePaymentDetails)}` : ''}">Pagamento registrado${invoicePaymentDetails ? ` · ${Utils.escapeHTML(invoicePaymentDetails)}` : ''}</span>`
+                : '';
 
         const provisaoMeses = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
         let provisaoHtml = '';
@@ -525,6 +559,7 @@ export const PageComponents = {
                     <button type="button" data-action="switchInvoiceTab" data-tab="ajustes" class="text-brand-medium font-bold hover:text-brand-dark">Gerenciar ajustes <span aria-hidden="true">→</span></button>
                 </div>
                 <div class="mt-4 flex items-center justify-between gap-3"><span class="inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${statusClasses[reconciliation.status]}">${reconciliation.status}</span><span class="text-xs ${reconciliation.difference !== null && Math.abs(reconciliation.difference) > 0.01 ? 'text-danger' : 'text-success'}">Diferença: ${reconciliation.difference === null ? '—' : Utils.formatMoney(reconciliation.difference)}</span><button data-action="saveInvoiceReconciliation" class="px-3 py-2 rounded-lg bg-brand-deep text-white text-xs font-bold">Salvar conferência</button></div>
+                ${invoicePaymentAction ? `<div class="mt-3 pt-3 border-t border-border flex justify-end">${invoicePaymentAction}</div>` : ''}
             </div>
         </div>
         </div>
@@ -664,7 +699,7 @@ export const PageComponents = {
             }
 
             return `
-            <div data-key="${conta.id}" class="p-4 flex items-center gap-4 hover:bg-bg transition-colors border-t border-border first:border-0 group">
+            <div data-key="${conta.id}" class="p-4 flex flex-wrap items-center gap-4 hover:bg-bg transition-colors border-t border-border first:border-0 group">
                 <div class="w-10 h-10 rounded-xl flex items-center justify-center border border-border" style="background-color: ${catObj.cor}20">
                     <i class="fa-solid ${catObj.icone}" style="color: ${catObj.cor}"></i>
                 </div>
@@ -678,15 +713,14 @@ export const PageComponents = {
                         ${badgeText}
                     </span>
                 </div>
-                <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    ${conta.status !== 'pago' ? `
-                    <button onclick="App.markAgendamentoPaid('${conta.id}')" class="w-8 h-8 rounded-lg flex items-center justify-center text-success border border-border hover:bg-success/10 transition-colors" title="Marcar como Paga">
-                        <i class="fa-solid fa-check"></i>
-                    </button>
-                    ` : ''}
+                <div class="flex items-center justify-end gap-2 w-full md:w-auto">
+                    ${conta.status === 'pendente' ? (conta.categoria === 'Fatura Cartão'
+                        ? `<button type="button" data-action="openInvoicePayment" data-id="${Utils.escapeHTML(String(conta.id))}" aria-label="Registrar pagamento de ${Utils.escapeHTML(conta.desc || 'fatura de cartão')}" class="px-3 py-2 rounded-lg text-xs font-bold text-white bg-brand-medium hover:bg-brand-dark transition-colors whitespace-nowrap">Registrar pagamento</button>`
+                        : `<button type="button" data-action="markAgendaPaid" data-col="agendamentos" data-id="${Utils.escapeHTML(String(conta.id))}" class="px-3 py-2 rounded-lg text-xs font-bold text-success border border-success/30 hover:bg-success/10 transition-colors whitespace-nowrap">Dar baixa</button>`
+                    ) : ''}
                     ${conta.categoria !== 'Fatura Cartão' ? `
-                    <button data-action="delete" data-col="agendamentos" data-id="${conta.id}" class="w-8 h-8 rounded-lg flex items-center justify-center text-danger border border-transparent hover:border-border hover:bg-danger/10 transition-colors" title="Excluir">
-                        <i class="fa-solid fa-xmark"></i>
+                    <button type="button" data-action="delete" data-col="agendamentos" data-id="${Utils.escapeHTML(String(conta.id))}" aria-label="Excluir ${Utils.escapeHTML(conta.desc || 'conta')}" class="w-8 h-8 rounded-lg flex items-center justify-center text-danger border border-transparent hover:border-border hover:bg-danger/10 transition-colors" title="Excluir">
+                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                     </button>
                     ` : ''}
                 </div>

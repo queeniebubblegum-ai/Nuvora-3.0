@@ -97,6 +97,28 @@ export const Modals = {
         </div>
     </div>
 
+    <div id="modal-pagar-fatura" role="dialog" aria-modal="true" aria-hidden="true" inert aria-labelledby="invoice-payment-title" aria-describedby="invoice-payment-disclaimer" class="fixed inset-0 bg-brand-deep/70 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1004;">
+        <div class="bg-surface w-full max-w-md rounded-[16px] p-5 sm:p-6 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-y-auto">
+            <header class="flex items-start justify-between gap-4 mb-5">
+                <div><p class="text-[10px] font-bold uppercase tracking-wider text-brand-medium">Fatura de cartão</p><h2 id="invoice-payment-title" class="text-lg font-bold text-text-primary">Registrar pagamento</h2></div>
+                <button type="button" data-action="cancelInvoicePayment" class="text-text-secondary hover:text-text-primary w-8 h-8" aria-label="Cancelar registro"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+            </header>
+            <input type="hidden" id="invoice-payment-schedule-id" value="">
+            <div class="rounded-xl border border-border bg-bg p-4 mb-4">
+                <p id="invoice-payment-description" class="font-bold text-text-primary"></p>
+                <p class="text-xs text-text-secondary mt-1">Vencimento: <span id="invoice-payment-due-date" class="font-semibold text-text-primary"></span></p>
+                <p class="text-xs text-text-secondary mt-3">Valor a registrar</p>
+                <p id="invoice-payment-amount" class="text-2xl font-bold font-mono text-text-primary"></p>
+            </div>
+            <div class="space-y-4">
+                <div><label for="invoice-payment-bank" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Conta de onde pagou</label><select id="invoice-payment-bank" required class="w-full p-3 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Selecione a conta usada</option></select><p id="invoice-payment-account-hint" class="text-[10px] text-text-secondary mt-1" role="status"></p></div>
+                <div><label for="invoice-payment-date" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Data do pagamento</label><input id="invoice-payment-date" type="date" required class="w-full p-3 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
+                <p id="invoice-payment-disclaimer" class="text-xs text-text-secondary leading-relaxed">Este formulário registra um pagamento que você já fez em outro lugar. Ele atualiza somente o saldo e o histórico do Avenera; não inicia uma transferência bancária. Confira se o valor corresponde ao que você pagou.</p>
+            </div>
+            <div class="flex flex-col gap-2 mt-6"><button type="button" data-action="cancelInvoicePayment" class="w-full py-3 rounded-[10px] border border-border text-text-secondary font-bold text-sm">Cancelar</button><button type="button" id="invoice-payment-confirm" data-action="confirmInvoicePayment" class="w-full py-3 rounded-[10px] bg-brand-medium text-white font-bold text-sm disabled:opacity-50">Registrar pagamento</button></div>
+        </div>
+    </div>
+
     <div id="modal-editar-transacao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1002;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-4 shrink-0">

@@ -16,6 +16,10 @@ import { loadViewContext, saveViewContext, isValidViewContextTab, isValidReportP
 import { configureUITracking, trackUIEvent } from './ui-tracking.js';
 import { ANORA_SETTINGS_KEY, loadAnoraPreferences, saveAnoraPreferences } from './anora-preferences.js';
 import { isExpense, isIncome, isTransfer } from './financial-ledger.js';
+import { planCardInvoiceSchedules } from './invoice-provisioning.js';
+import { buildInvoicePaymentTransaction, isInvoiceSchedulePending, isValidInvoicePaymentDate, preferredInvoicePaymentBankId } from './invoice-payment.js';
+import { parseLocalDate } from './util-date.js';
+import { createBackupDocument, normalizeBackupDocument } from './backup-format.js';
 export { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
 
 const validMonth = value => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 11;
@@ -84,19 +88,19 @@ const FechamentoManager = {
                 `;
             } else {
                 let list = FechamentoManager.state.pendencias.map(a => `
-                    <div class="flex items-center justify-between p-3.5 bg-bg border border-border rounded-[12px] mb-3 transition-opacity">
+                    <div class="p-3.5 bg-bg border border-border rounded-[12px] mb-3 transition-opacity">
                         <div class="flex items-center gap-3">
                             <div class="w-10 h-10 rounded-[8px] ${a.tipo === 'despesa' ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'} flex items-center justify-center shrink-0">
                                 <i class="fa-solid ${a.tipo === 'despesa' ? 'fa-arrow-trend-down' : 'fa-arrow-trend-up'}"></i>
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <p class="text-sm font-bold text-text-primary truncate max-w-[150px] sm:max-w-[200px]">${Utils.escapeHTML(a.desc)}</p>
                                 <p class="text-[10px] font-bold text-text-secondary uppercase mt-0.5 tracking-wider">Vence: ${a.dataVencimento.split('-').reverse().join('/')}</p>
                             </div>
                         </div>
-                        <div class="text-right shrink-0">
+                        <div class="mt-2 flex items-center justify-between gap-3">
                             <p class="text-sm font-bold font-mono ${a.tipo === 'despesa' ? 'text-danger' : 'text-success'}">${Utils.formatMoney(a.valor)}</p>
-                            <button onclick="App.markAgendamentoPaid('${a.id}'); this.parentElement.parentElement.style.opacity='0.4'; this.disabled=true; this.innerHTML='<i class=\\'fa-solid fa-check\\'></i> Confirmado';" class="text-[10px] font-bold bg-surface border border-border px-2 py-1 rounded text-text-primary hover:text-brand-medium hover:border-brand-medium uppercase tracking-wider mt-1.5 transition-colors">Dar Baixa</button>
+                            <button type="button" data-action="${a.categoria === 'Fatura Cartão' ? 'openInvoicePayment' : 'markCloseAgendaPaid'}" data-id="${Utils.escapeHTML(String(a.id))}" class="text-[10px] font-bold bg-surface border border-border px-2 py-2 rounded text-text-primary hover:text-brand-medium hover:border-brand-medium uppercase tracking-wider transition-colors">${a.categoria === 'Fatura Cartão' ? 'Registrar pagamento' : 'Dar baixa'}</button>
                         </div>
                     </div>
                 `).join('');
@@ -370,92 +374,214 @@ export const App = {
     },
 
     autoProvisionInvoices: () => {
-        if (!db.cartoes || db.cartoes.length === 0 || !db.comprasCartao || db.comprasCartao.length === 0) return;
-        
-        const hoje = new Date();
+        const plans = planCardInvoiceSchedules({
+            cards: db.cartoes,
+            transactions: db.transacoes,
+            existingSchedules: db.agendamentos,
+            reconciliations: db.conciliacoesFaturas,
+            now: new Date(),
+            monthsAhead: 6,
+        });
         let mudou = false;
 
-        for (let i = 0; i < 6; i++) {
-            const mesAlvo = new Date(hoje.getFullYear(), hoje.getMonth() + i, 1);
-            const refMonth = `${mesAlvo.getFullYear()}-${String(mesAlvo.getMonth() + 1).padStart(2, '0')}`;
-
-            db.cartoes.forEach(cartao => {
-                const parcelasDoMes = db.comprasCartao.filter(c => {
-                    if (c.cartaoId !== cartao.id) return false;
-                    const dataParcela = new Date(c.data + 'T12:00:00');
-                    return dataParcela.getMonth() === mesAlvo.getMonth() && dataParcela.getFullYear() === mesAlvo.getFullYear();
+        plans.forEach(plan => {
+            if (plan.action === 'create') {
+                const created = Database.add('agendamentos', {
+                    id: Date.now() + Math.random(),
+                    desc: `Fatura ${plan.cardName}`,
+                    valor: plan.valor,
+                    dataVencimento: plan.dataVencimento,
+                    categoria: 'Fatura Cartão',
+                    status: 'pendente',
+                    cartaoId: plan.cardId,
+                    mesReferencia: plan.mesReferencia,
+                    tipo: 'despesa',
                 });
+                if (created) mudou = true;
+            } else if (plan.action === 'update') {
+                const updated = Database.updateAgendamento(plan.existingId, {
+                    valor: plan.valor,
+                    dataVencimento: plan.dataVencimento,
+                });
+                if (updated) mudou = true;
+            }
+        });
 
-                const invoiceTotal = parcelasDoMes.reduce((acc, curr) => acc + curr.valor, 0);
-
-                if (invoiceTotal > 0) {
-                    const agendamentoExistente = db.agendamentos.find(a => 
-                        a.cartaoId === cartao.id && 
-                        a.mesReferencia === refMonth && 
-                        a.categoria === 'Fatura Cartão'
-                    );
-
-                    let diaVencimento = cartao.vencimento;
-                    let dataVenc = new Date(mesAlvo.getFullYear(), mesAlvo.getMonth(), diaVencimento);
-                    
-                    if (!agendamentoExistente) {
-                        Database.add('agendamentos', {
-                            id: Date.now() + Math.random(),
-                            desc: `Fatura ${cartao.nome}`,
-                            valor: invoiceTotal,
-                            dataVencimento: dataVenc.toISOString().split('T')[0],
-                            categoria: 'Fatura Cartão',
-                            status: 'pendente',
-                            cartaoId: cartao.id,
-                            mesReferencia: refMonth,
-                            tipo: 'despesa'
-                        });
-                        mudou = true;
-                    } else if (Math.abs(agendamentoExistente.valor - invoiceTotal) > 0.01) {
-                        Database.updateAgendamento(agendamentoExistente.id, { valor: invoiceTotal });
-                        mudou = true;
-                    }
-                }
-            });
-        }
-        
         if (mudou) App.scheduleRender();
     },
 
-    markAgendamentoPaid: (id) => {
-        const agendamento = db.agendamentos.find(a => a.id.toString() === id.toString());
-        if(!agendamento || agendamento.status === 'pago') return;
+    openInvoicePaymentForCard: (cardId) => {
+        const findPendingSchedule = () => (Array.isArray(db.agendamentos) ? db.agendamentos : [])
+            .filter(item => item?.categoria === 'Fatura Cartão' && String(item?.cartaoId) === String(cardId) && isInvoiceSchedulePending(item))
+            .sort((a, b) => String(a?.dataVencimento || '').localeCompare(String(b?.dataVencimento || '')) || String(a?.id || '').localeCompare(String(b?.id || '')))[0] || null;
+        let schedule = findPendingSchedule();
+        if (!schedule) {
+            App.autoProvisionInvoices();
+            schedule = findPendingSchedule();
+        }
+        if (schedule) return App.openInvoicePayment(schedule.id);
+        Utils.showToast('Não há uma fatura pendente registrada para este cartão. Confira os detalhes da fatura.', 'info');
+        App.openInvoiceDetails(cardId);
+        return false;
+    },
 
-        Database.updateAgendamento(id, { status: 'pago' });
-
-        let txCategoria = agendamento.categoria;
-        let txDesc = agendamento.desc;
-
-        if (agendamento.categoria === 'Fatura Cartão') {
-            txCategoria = 'Pagamento de Fatura';
+    openInvoicePayment: (id) => {
+        const agendamento = db.agendamentos.find(item => String(item.id) === String(id));
+        if (!agendamento || agendamento.categoria !== 'Fatura Cartão' || !isInvoiceSchedulePending(agendamento)) {
+            Utils.showToast('Não encontrei uma fatura pendente para registrar.', 'error');
+            return false;
+        }
+        const card = db.cartoes.find(item => String(item.id) === String(agendamento.cartaoId));
+        const select = document.getElementById('invoice-payment-bank');
+        const scheduleId = document.getElementById('invoice-payment-schedule-id');
+        const description = document.getElementById('invoice-payment-description');
+        const amount = document.getElementById('invoice-payment-amount');
+        const dueDate = document.getElementById('invoice-payment-due-date');
+        const paymentDate = document.getElementById('invoice-payment-date');
+        const hint = document.getElementById('invoice-payment-account-hint');
+        const confirmButton = document.getElementById('invoice-payment-confirm');
+        if (!select || !scheduleId || !description || !amount || !dueDate || !paymentDate || !hint || !confirmButton) {
+            Utils.showToast('Não foi possível abrir o registro de pagamento.', 'error');
+            return false;
         }
 
-        const isInvoicePayment = agendamento.categoria === 'Fatura Cartão';
+        const banks = (Array.isArray(db.bancos) ? db.bancos : []).filter(bank => bank?.id !== null && bank?.id !== undefined && String(bank.id).trim() !== '');
+        const preferredBankId = preferredInvoicePaymentBankId(card, agendamento, banks);
+        select.innerHTML = `<option value="">Selecione a conta usada</option>${banks.map(bank => `<option value="${Utils.escapeHTML(String(bank.id))}">${Utils.escapeHTML(Utils.formatBankName(bank))}</option>`).join('')}`;
+        select.value = preferredBankId === null ? '' : String(preferredBankId);
+        scheduleId.value = String(agendamento.id);
+        description.textContent = agendamento.desc || `Fatura ${card?.nome || 'Cartão'}`;
+        amount.textContent = Utils.formatMoney(agendamento.valor);
+        dueDate.textContent = Utils.formatToBR(String(agendamento.dataVencimento || '').slice(0, 10));
+        paymentDate.value = Utils.localISODate();
+        const preferredBank = banks.find(bank => String(bank.id) === String(preferredBankId));
+        hint.textContent = banks.length === 0
+            ? 'Cadastre uma conta bancária antes de registrar o pagamento.'
+            : preferredBank
+                ? `Conta sugerida pelo cartão: ${Utils.formatBankName(preferredBank)}. Você pode escolher outra.`
+                : 'Escolha a conta de onde você pagou a fatura.';
+        confirmButton.disabled = banks.length === 0;
+        confirmButton.setAttribute('aria-disabled', banks.length === 0 ? 'true' : 'false');
+        App.openModal('modal-pagar-fatura');
+        if (banks.length > 0) select.focus({ preventScroll: true });
+        return true;
+    },
+
+    confirmInvoicePayment: () => {
+        const id = document.getElementById('invoice-payment-schedule-id')?.value;
+        const bankId = document.getElementById('invoice-payment-bank')?.value;
+        const paymentDate = document.getElementById('invoice-payment-date')?.value;
+        if (!id) {
+            Utils.showToast('Fatura inválida. Feche e abra novamente.', 'error');
+            return false;
+        }
+        const schedule = db.agendamentos.find(item => String(item.id) === String(id));
+        if (!schedule || schedule.categoria !== 'Fatura Cartão' || !isInvoiceSchedulePending(schedule)) {
+            Utils.showToast('Esta fatura não está mais pendente e não pode receber um novo pagamento.', 'warning');
+            App.closeModal(false, 'modal-pagar-fatura');
+            return false;
+        }
+        if (!Array.isArray(db.bancos) || !db.bancos.some(bank => bank?.id !== null && bank?.id !== undefined && String(bank.id).trim() !== '' && String(bank.id) === String(bankId))) {
+            Utils.showToast('Selecione a conta bancária usada no pagamento.', 'error');
+            return false;
+        }
+        if (!isValidInvoicePaymentDate(paymentDate)) {
+            Utils.showToast('Informe uma data válida para o pagamento.', 'error');
+            return false;
+        }
+        return App.markAgendamentoPaid(id, bankId, paymentDate);
+    },
+
+    cancelInvoicePayment: () => App.closeModal(false, 'modal-pagar-fatura'),
+
+    markAgendamentoPaid: (id, bankId = null, paymentDate = null) => {
+        const agendamento = db.agendamentos.find(item => String(item.id) === String(id));
+        if (!agendamento) return false;
+
+        if (agendamento.categoria === 'Fatura Cartão') {
+            if (!isInvoiceSchedulePending(agendamento)) {
+                Utils.showToast('Esta fatura não está pendente e não pode receber um novo pagamento.', 'warning');
+                return false;
+            }
+            if (bankId === null || bankId === undefined || String(bankId).trim() === '') {
+                App.openInvoicePayment(id);
+                return false;
+            }
+            const bank = (Array.isArray(db.bancos) ? db.bancos : []).find(item => item?.id !== null && item?.id !== undefined && String(item.id).trim() !== '' && String(item.id) === String(bankId));
+            if (!bank) {
+                Utils.showToast('Selecione uma conta bancária válida para registrar o pagamento.', 'error');
+                return false;
+            }
+
+            const existingPayment = db.transacoes.find(item => String(item.invoicePaymentAgendamentoId ?? '') === String(agendamento.id));
+            if (existingPayment) {
+                if (!Database.updateAgendamento(id, { status: 'pago', bancoId: existingPayment.bancoId, dataPagamento: existingPayment.data })) {
+                    Utils.showToast('O pagamento já existe no histórico, mas a Agenda não foi atualizada.', 'warning');
+                    return false;
+                }
+                Utils.showToast('Este pagamento já estava registrado; evitei lançá-lo novamente.', 'info');
+                App.closeModal(false, 'modal-pagar-fatura');
+                App.scheduleRender();
+                if (document.getElementById('modal-fatura-detalhes')?.classList.contains('flex')) App.renderInvoiceModal();
+                if (document.getElementById('modal-fechamento-mes')?.classList.contains('flex') && FechamentoManager.state.step === 1) {
+                    FechamentoManager.state.pendencias = FechamentoManager.state.pendencias.filter(item => String(item.id) !== String(id));
+                    FechamentoManager.renderStep();
+                }
+                return true;
+            }
+
+            const transaction = buildInvoicePaymentTransaction({
+                schedule: agendamento,
+                bankId: bank.id,
+                paymentDate: paymentDate || Utils.localISODate(),
+            });
+            const transactionIdCollision = transaction && db.transacoes.some(item => String(item.id) === String(transaction.id));
+            if (!transaction || transactionIdCollision || !Database.add('transacoes', transaction)) {
+                Utils.showToast(transactionIdCollision
+                    ? 'Já existe um lançamento com este identificador; nenhum novo pagamento foi criado.'
+                    : 'Não foi possível registrar o pagamento da fatura.', 'error');
+                return false;
+            }
+            if (!Database.updateAgendamento(id, { status: 'pago', bancoId: bank.id, dataPagamento: transaction.data })) {
+                Utils.showToast('Pagamento lançado; confira a situação da fatura na Agenda.', 'warning');
+                return false;
+            }
+            Utils.showToast('Pagamento registrado no Avenera. Nenhuma transferência bancária foi iniciada.', 'success');
+            App.closeModal(false, 'modal-pagar-fatura');
+            App.scheduleRender();
+            if (document.getElementById('modal-fatura-detalhes')?.classList.contains('flex')) App.renderInvoiceModal();
+            if (document.getElementById('modal-fechamento-mes')?.classList.contains('flex') && FechamentoManager.state.step === 1) {
+                FechamentoManager.state.pendencias = FechamentoManager.state.pendencias.filter(item => String(item.id) !== String(id));
+                FechamentoManager.renderStep();
+            }
+            return true;
+        }
+
+        if (agendamento.status !== 'pendente') return false;
+        Database.updateAgendamento(id, { status: 'pago' });
         const transaction = {
             id: Date.now(),
-            desc: txDesc,
+            desc: agendamento.desc,
             valor: agendamento.valor,
-            tipo: isInvoicePayment ? 'pagamento-fatura' : (agendamento.tipo || 'despesa'),
-            categoria: txCategoria,
+            tipo: agendamento.tipo || 'despesa',
+            categoria: agendamento.categoria,
             bancoId: agendamento.bancoId || (db.bancos.length > 0 ? db.bancos[0].id : null),
             isCartao: false,
             formaPagamento: 'Automático (Agendamento)',
             data: Utils.localISODate()
         };
-        if (transaction.tipo === 'pagamento-fatura') {
-            transaction.transferenciaInterna = true;
-            transaction.afetaReceita = false;
-            transaction.afetaDespesa = false;
-        }
         Database.add('transacoes', transaction);
-
         Utils.showToast('Conta marcada como paga!', 'success');
         App.scheduleRender();
+        return true;
+    },
+
+    markCloseAgendaPaid: (id) => {
+        const recorded = App.markAgendamentoPaid(String(id));
+        if (!recorded) return false;
+        FechamentoManager.state.pendencias = FechamentoManager.state.pendencias.filter(item => String(item.id) !== String(id));
+        FechamentoManager.renderStep();
+        return true;
     },
 
     updateDOM: (id, html) => Renderer.updateDOM(id, html),
@@ -511,7 +637,7 @@ export const App = {
         const f = App.viewState.filters || {};
         let transacoes = db.transacoes.filter(t => !f.desc || String(t.desc || '').toLowerCase().includes(f.desc.toLowerCase()) || String(t.codigoRef || '').toLowerCase().includes(f.desc.toLowerCase()));
         if (f.categoria) transacoes = transacoes.filter(t => t.categoria === f.categoria);
-        if (f.mes !== '') transacoes = transacoes.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes));
+        if (f.mes !== '') transacoes = transacoes.filter(t => parseLocalDate(t.data || t.id)?.getMonth() === parseInt(f.mes, 10));
         if (f.bancoId) { const [type, id] = f.bancoId.split('_'); transacoes = transacoes.filter(t => type === 'banco' ? (!t.isCartao && t.bancoId == id) : (t.isCartao && t.bancoId == id)); }
         const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => {
             const valor = isTransfer(t) ? (t.transferenciaEntrada ? t.valor : -t.valor) : (isIncome(t) ? t.valor : -t.valor);
@@ -548,10 +674,14 @@ export const App = {
 
     checkAutoBackup: () => {
         const hojeStr = Utils.localISODate();
-        const lastBackup = localStorage.getItem('nuvora_last_backup');
+        let lastBackup = '';
+        try { lastBackup = localStorage.getItem('avenera_last_manual_backup_v1') || ''; } catch (_error) {}
         if (lastBackup !== hojeStr && db.transacoes.length > 0) {
-            Utils.showToast('Gerando backup automático diário...', 'success');
-            setTimeout(() => { App.exportBackup(true); }, 2000);
+            Utils.showToast('Lembrete: salve uma cópia dos seus dados financeiros em local seguro.', 'warning', {
+                id: 'daily-backup-reminder',
+                duration: 10000,
+                action: { action: 'exportBackup', label: 'Baixar backup', ariaLabel: 'Baixar backup dos dados financeiros' }
+            });
         }
     },
 
@@ -597,12 +727,13 @@ export const App = {
             if (!orcamento) return null;
 
             const hoje = new Date();
-            const despesasCategoria = db.transacoes.filter(t =>
-                isExpense(t) &&
-                t.categoria === categoriaNome && 
-                new Date(t.data || t.id).getFullYear() === hoje.getFullYear() && 
-                new Date(t.data || t.id).getMonth() === hoje.getMonth()
-            ).reduce((acc, curr) => acc + curr.valor, 0);
+            const despesasCategoria = db.transacoes.filter(t => {
+                const date = parseLocalDate(t.data || t.id);
+                return isExpense(t) &&
+                    t.categoria === categoriaNome &&
+                    date?.getFullYear() === hoje.getFullYear() &&
+                    date?.getMonth() === hoje.getMonth();
+            }).reduce((acc, curr) => acc + curr.valor, 0);
 
             const percentualGasto = (despesasCategoria / orcamento.limite) * 100;
             return { percentual: percentualGasto, limite: orcamento.limite, gasto: despesasCategoria };
@@ -1078,8 +1209,19 @@ export const App = {
         if (lista) lista.innerHTML = items.length ? items.map(i => {
             const colecao = db.agendamentos.includes(i) ? 'agendamentos' : 'receitasFuturas';
             const pago = i.status === 'pago' || i.status === 'recebida';
-            const baixa = !pago ? `<button type="button" data-action="markAgendaPaid" data-col="${colecao}" data-id="${i.id}" class="px-2 py-1 text-[9px] font-bold text-success border border-success/30 rounded hover:bg-success/10">Dar baixa</button>` : `<span class="text-[9px] font-bold text-success">${i.status === 'recebida' ? 'Recebida' : 'Paga'}</span>`;
-            return `<div class="flex items-center gap-2 p-3 rounded-lg bg-bg border border-border"><span class="flex-1 min-w-0 text-sm text-text-primary truncate"><i class="fa-solid ${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? 'fa-arrow-trend-up text-success' : 'fa-arrow-trend-down text-danger'} mr-2"></i>${Utils.escapeHTML(i.desc || i.nome || 'Lançamento')}</span><strong class="text-sm font-mono ${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? 'text-success' : 'text-danger'}">${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? '+' : '-'}${Utils.formatMoney(i.valor)}</strong>${baixa}<button type="button" data-action="editAgenda" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-brand-medium hover:bg-brand-medium/10 rounded" title="Editar previsão" aria-label="Editar previsão"><i class="fa-solid fa-pen text-xs"></i></button><button type="button" data-action="delete" data-col="${colecao}" data-id="${i.id}" class="w-7 h-7 shrink-0 text-danger hover:bg-danger/10 rounded" title="Apagar previsão" aria-label="Apagar previsão"><i class="fa-solid fa-trash-can text-xs"></i></button></div>`;
+            const isPending = i.status === 'pendente';
+            const isInvoice = colecao === 'agendamentos' && i.categoria === 'Fatura Cartão';
+            const safeId = Utils.escapeHTML(String(i.id));
+            const baixa = isPending
+                ? isInvoice
+                    ? `<button type="button" data-action="openInvoicePayment" data-id="${safeId}" class="px-3 py-2 text-xs font-bold text-white bg-brand-medium rounded-lg hover:bg-brand-dark">Registrar pagamento</button>`
+                    : `<button type="button" data-action="markAgendaPaid" data-col="${colecao}" data-id="${safeId}" class="px-3 py-2 text-xs font-bold text-success border border-success/30 rounded-lg hover:bg-success/10">Dar baixa</button>`
+                : pago
+                    ? `<span class="text-xs font-bold text-success" role="status">${i.status === 'recebida' ? 'Recebida' : 'Paga'}</span>`
+                    : i.status === 'cancelado' || i.status === 'cancelada'
+                        ? '<span class="text-xs text-text-secondary" role="status">Cancelada</span>'
+                        : '';
+            return `<div class="grid grid-cols-2 gap-2 p-3 rounded-lg bg-bg border border-border"><span class="min-w-0 text-sm text-text-primary truncate"><i class="fa-solid ${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? 'fa-arrow-trend-up text-success' : 'fa-arrow-trend-down text-danger'} mr-2"></i>${Utils.escapeHTML(i.desc || i.nome || 'Lançamento')}</span><strong class="text-sm font-mono ${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? 'text-success' : 'text-danger'}">${(i.transferenciaInterna ? i.transferenciaEntrada : i.tipo === 'receita') ? '+' : '-'}${Utils.formatMoney(i.valor)}</strong><div class="col-span-2 flex items-center justify-end gap-2">${baixa}<button type="button" data-action="editAgenda" data-col="${colecao}" data-id="${safeId}" class="w-8 h-8 shrink-0 text-brand-medium hover:bg-brand-medium/10 rounded" title="Editar previsão" aria-label="Editar previsão"><i class="fa-solid fa-pen text-xs" aria-hidden="true"></i></button><button type="button" data-action="delete" data-col="${colecao}" data-id="${safeId}" class="w-8 h-8 shrink-0 text-danger hover:bg-danger/10 rounded" title="Apagar previsão" aria-label="Apagar previsão"><i class="fa-solid fa-trash-can text-xs" aria-hidden="true"></i></button></div></div>`;
         }).join('') : '<p class="text-sm text-text-secondary text-center py-6">Nenhuma previsão neste dia.</p>';
         if (botao) botao.dataset.date = date;
         App.openModal('modal-agenda-dia');
@@ -1403,35 +1545,54 @@ export const App = {
         UI.checkCartaoVisibility(formaPgto);
     },
 
-    exportBackup: (isAuto = false) => {
-        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(db));
-        const dlAnchorElem = document.createElement('a');
-        dlAnchorElem.setAttribute("href", dataStr);
-        dlAnchorElem.setAttribute("download", `avenera_backup_${Utils.localISODate()}.json`);
-        dlAnchorElem.click();
-        if(isAuto) localStorage.setItem('nuvora_last_backup', Utils.localISODate());
+    exportBackup: () => {
+        let objectUrl = '';
+        try {
+            const backup = createBackupDocument(db, new Date().toISOString());
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            objectUrl = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = `avenera_backup_${Utils.localISODate()}.json`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+            try { localStorage.setItem('avenera_last_manual_backup_v1', Utils.localISODate()); } catch (_error) {}
+            Utils.showToast('Backup exportado. Guarde o arquivo em um local seguro.', 'success');
+            return true;
+        } catch (_error) {
+            if (objectUrl) URL.revokeObjectURL(objectUrl);
+            Utils.showToast('Não foi possível exportar o backup. Seus dados não foram alterados.', 'error');
+            return false;
+        }
     },
 
     importBackup: (e) => {
-        const file = e.target.files[0];
+        const file = e.target.files?.[0];
         if (!file) return;
         const reader = new FileReader();
         reader.onload = async (event) => {
             try {
-                const importedDB = JSON.parse(event.target.result);
-                const colecoesArray = ['transacoes', 'bancos', 'cartoes', 'categorias', 'metas', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas', 'investimentos', 'contatos', 'notificacoes'];
-                const presentes = colecoesArray.filter(col => importedDB[col] !== undefined);
-                const valido = presentes.length > 0 && presentes.every(col => Array.isArray(importedDB[col]));
-                if (!valido) throw new Error('Estrutura inválida');
-                const total = presentes.reduce((s, col) => s + importedDB[col].length, 0);
-                if (!window.confirm(`Este backup contém ${total} registros principais e substituirá os dados atuais. Continuar?`)) return;
-                localStorage.setItem('avenera_backup_antes_importacao', JSON.stringify(db));
+                const { database: importedDB, totalRecords } = normalizeBackupDocument(JSON.parse(event.target.result));
+                if (!window.confirm(`Este backup contém ${totalRecords} registros principais e substituirá os dados atuais. Continuar?`)) return;
+                let recoveryCopySaved = false;
+                try {
+                    localStorage.setItem('avenera_backup_antes_importacao', JSON.stringify(createBackupDocument(db, new Date().toISOString())));
+                    recoveryCopySaved = true;
+                } catch (_error) {}
                 await Database.replaceAll(importedDB);
-                Utils.showToast('Backup restaurado com sucesso!', 'success');
+                Utils.showToast(recoveryCopySaved
+                    ? 'Backup restaurado com sucesso! Uma cópia local anterior foi preservada.'
+                    : 'Backup restaurado; não foi possível guardar a cópia local anterior.', recoveryCopySaved ? 'success' : 'warning');
                 setTimeout(() => window.location.reload(), 1000);
-            } catch (err) {
-                Utils.showToast('Não foi possível importar: o arquivo não tem uma estrutura válida.', 'error');
+            } catch (_error) {
+                Utils.showToast('Não foi possível restaurar o arquivo; ele pode estar incompleto ou incompatível. Os dados atuais foram mantidos.', 'error');
             } finally { e.target.value = ''; }
+        };
+        reader.onerror = () => {
+            e.target.value = '';
+            Utils.showToast('Não foi possível ler o arquivo de backup. Os dados atuais foram mantidos.', 'error');
         };
         reader.readAsText(file);
     }

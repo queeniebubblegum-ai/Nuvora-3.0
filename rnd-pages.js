@@ -1,4 +1,5 @@
 import { Utils } from './utils.js';
+import { parseLocalDate } from './util-date.js';
 import { db, Database } from './db.js';
 import { Components } from './components.js';
 import { MentorEngine } from './mentorEngine.js';
@@ -184,12 +185,12 @@ export const PageRenderers = {
         }
 
         const transacoesPeriodoAtual = db.transacoes.filter(t => {
-            const d = new Date((t.data || t.id) + 'T12:00:00');
-            return d >= dateStart && d <= dateEnd;
+            const d = parseLocalDate(t.data || t.id);
+            return d && d >= dateStart && d <= dateEnd;
         });
         const transacoesAnteriores = db.transacoes.filter(t => {
-            const d = new Date((t.data || t.id) + 'T12:00:00');
-            return d >= prevDateStart && d <= prevDateEnd;
+            const d = parseLocalDate(t.data || t.id);
+            return d && d >= prevDateStart && d <= prevDateEnd;
         });
 
         const hojeObj = new Date();
@@ -383,7 +384,7 @@ export const PageRenderers = {
         else if (f.tipo) filtered = filtered.filter(t => t.tipo === f.tipo);
         if (f.dataInicio) filtered = filtered.filter(t => String(t.data || '') >= f.dataInicio);
         if (f.dataFim) filtered = filtered.filter(t => String(t.data || '') <= f.dataFim);
-        if (f.mes !== '') filtered = filtered.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes, 10));
+        if (f.mes !== '') filtered = filtered.filter(t => parseLocalDate(t.data || t.id)?.getMonth() === parseInt(f.mes, 10));
         if (f.bancoId) {
             const [type, id] = f.bancoId.split('_');
             if (type === 'banco') filtered = filtered.filter(t => !t.isCartao && t.bancoId == id);
@@ -391,7 +392,7 @@ export const PageRenderers = {
         }
         const uncategorizedCount = filtered.filter(isUncategorized).length;
         if (appState.uncategorizedOnly) filtered = filtered.filter(isUncategorized);
-        filtered.sort((a, b) => new Date(b.data || b.id) - new Date(a.data || a.id));
+        filtered.sort((a, b) => (parseLocalDate(b.data || b.id)?.getTime() ?? -Infinity) - (parseLocalDate(a.data || a.id)?.getTime() ?? -Infinity));
 
         const totalItems = filtered.length;
         const perPage = appState.txPerPage || 10;
@@ -549,7 +550,7 @@ export const PageRenderers = {
             selectBancosCartao.innerHTML = '<option value="" disabled selected>Selecione a conta</option>' + bankOptions;
         }
 
-        UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, db.reservas));
+        UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, db.reservas, db.agendamentos));
     },
 
     Metas: (appState) => {

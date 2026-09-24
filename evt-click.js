@@ -57,6 +57,11 @@ export const ClickEvents = {
                 'acceptClassification': () => App.acceptClassification(),
                 'editClassification': () => App.editClassification(),
                 'markAgendaPaid': () => App.markAgendaPaid(btn.getAttribute('data-id'), btn.getAttribute('data-col')),
+                'markCloseAgendaPaid': () => App.markCloseAgendaPaid(btn.getAttribute('data-id')),
+                'openInvoicePayment': () => App.openInvoicePayment(btn.getAttribute('data-id')),
+                'openInvoicePaymentForCard': () => App.openInvoicePaymentForCard(btn.getAttribute('data-id')),
+                'confirmInvoicePayment': () => App.confirmInvoicePayment(),
+                'cancelInvoicePayment': () => App.cancelInvoicePayment(),
                 // Keep row IDs as DOM strings. The controller performs the
                 // canonical comparison against numeric or string persisted IDs.
                 'deleteExpense': () => Controllers.deleteExpense(actionId()),

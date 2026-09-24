@@ -3,6 +3,7 @@ import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransacti
 import { calculatePeriodTotals, isIncome, isInvoicePayment, isTransfer } from './financial-ledger.js';
 import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
 import { createTransfer, isValidTransferDate } from './financial-transfers.js';
+import { parseLocalDate } from './util-date.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -122,7 +123,8 @@ const clearCache = () => {
 const buildMonthlyCache = () => {
     Cache.transacoesPorMes = {};
     db.transacoes.forEach(t => {
-        const dt = new Date(t.data || t.id);
+        const dt = parseLocalDate(t?.data || t?.id);
+        if (!dt) return;
         const key = `${dt.getFullYear()}-${dt.getMonth()}`;
         if (!Cache.transacoesPorMes[key]) Cache.transacoesPorMes[key] = [];
         Cache.transacoesPorMes[key].push(t);
@@ -259,7 +261,10 @@ const loadData = async () => {
                 }
             });
             if (migrated) {
-                db.transacoes.sort((a,b) => new Date(b.data) - new Date(a.data));
+                db.transacoes.sort((a, b) =>
+                    (parseLocalDate(b.data || b.id)?.getTime() ?? -Infinity) -
+                    (parseLocalDate(a.data || a.id)?.getTime() ?? -Infinity)
+                );
                 IDB.set('transacoes', db.transacoes).catch(console.error);
             }
             if (typeof localStorage !== 'undefined') {
