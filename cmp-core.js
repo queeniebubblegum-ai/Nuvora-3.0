@@ -225,7 +225,7 @@ export const CoreComponents = {
                 <div class="bg-bg border border-border p-4 rounded-[12px]"><p class="text-xs text-text-secondary mb-1">Meta</p><p class="font-bold text-text-primary font-mono">${Utils.formatMoney(m.alvo)}</p></div>
             </div>
             ${temPrazo && m.atual < m.alvo ? `<div class="bg-bg border border-border rounded-[12px] p-4 mb-6"><p class="text-xs font-bold text-investment flex items-center gap-2 mb-1"><i class="fa-solid fa-arrow-trend-up"></i> Planejamento</p><p class="text-xs text-text-secondary leading-relaxed">Poupe <strong class="text-investment font-mono">${Utils.formatMoney(economiaMensal)}/mês</strong> para atingir o objetivo.</p></div>` : ''}
-            ${readOnly ? '' : `<button data-action="openDepositModal" data-id="${m.id}" data-nome="${Utils.escapeHTML(m.nome)}" class="w-full py-3 bg-brand-medium hover:bg-brand-dark text-white font-bold rounded-[12px] transition-all flex items-center justify-center gap-2 shadow-brand-glow hover:-translate-y-0.5"><i class="fa-solid fa-plus"></i> Depositar</button>`}
+            ${readOnly ? '' : `<button data-action="openDepositModal" data-id="${m.id}" data-nome="${Utils.escapeHTML(m.nome)}" class="w-full py-3 bg-brand-medium hover:bg-brand-dark text-white font-bold rounded-[12px] transition-all flex items-center justify-center gap-2 shadow-brand-glow hover:-translate-y-0.5"><i class="fa-solid fa-plus"></i> Reservar</button>`}
         </div>`;
     },
 

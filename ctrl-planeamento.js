@@ -70,7 +70,7 @@ export const PlaneamentoController = {
         const valor = Number(document.getElementById('deposito-meta-valor').value);
         const bancoId = document.getElementById('deposito-meta-banco')?.value;
         if (!db.bancos.some(bank => String(bank.id) === String(bancoId))) {
-            Utils.showToast('Selecione uma conta bancária válida para debitar o aporte.', 'error');
+            Utils.showToast('Selecione a conta onde o valor ficará reservado.', 'error');
             return;
         }
         if (!Number.isFinite(valor) || valor <= 0) {
@@ -84,7 +84,7 @@ export const PlaneamentoController = {
             App.closeModal();
             App.scheduleRender();
         } catch (error) {
-            Utils.showToast(error?.message || 'Não foi possível transferir o aporte para a reserva.', 'error');
+            Utils.showToast(error?.message || 'Não foi possível reservar o valor para a meta.', 'error');
         }
     },
 

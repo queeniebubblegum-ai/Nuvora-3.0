@@ -40,7 +40,7 @@ describe('restauração de backup', () => {
         expect(db.reservas).toHaveLength(1);
         expect(db.reservas[0]).toMatchObject({ goalId: 'legacy-goal', saldo: 15 });
         expect(db.reservas.some(item => item.id === 'stale-reserve')).toBe(false);
-        expect(Database.getTotals()).toMatchObject({ despesas: 5, saldo: 1000, saldoReservado: 15, saldoTotal: 1015 });
+        expect(Database.getTotals()).toMatchObject({ despesas: 5, saldo: 1000, saldoBancario: 1000, saldoDisponivel: 985, saldoReservado: 15, saldoTotal: 1000 });
     });
 
     it('rejeita estrutura inválida antes de alterar dados correntes', async () => {

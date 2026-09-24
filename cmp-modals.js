@@ -503,7 +503,7 @@ export const Modals = {
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome da Meta</label><input id="meta-nome" type="text" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Data Alvo</label><input id="meta-data" type="date" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor Alvo (R$)</label><input id="meta-alvo" type="number" min="0.01" step="0.01" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>
-                <p class="text-xs text-text-secondary">A meta começa sem saldo reservado. Use “Depositar” para transferir dinheiro de uma conta para a reserva.</p>
+                <p class="text-xs text-text-secondary">A meta começa sem saldo reservado. Use “Reservar” para alocar parte do saldo disponível; o dinheiro continua na conta bancária.</p>
                 <div class="shrink-0 mt-3">
                     <button type="submit" class="w-full py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft">Criar Meta</button>
                 </div>
@@ -514,23 +514,23 @@ export const Modals = {
     <div id="modal-depositar-meta" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-xs rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-3 shrink-0">
-                <h3 class="text-lg font-bold font-primary text-text-primary">Depositar</h3>
+                <h3 class="text-lg font-bold font-primary text-text-primary">Reservar para meta</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <p class="text-xs text-text-secondary mb-4 shrink-0">Destinar para <strong id="deposito-meta-nome" class="text-investment">...</strong></p>
+            <p class="text-xs text-text-secondary mb-4 shrink-0">Destinar para <strong id="deposito-meta-nome" class="text-investment">...</strong>. O dinheiro continua na conta.</p>
             <form data-submit="depositoMeta" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <input type="hidden" id="deposito-meta-id">
                 <div>
-                    <label for="deposito-meta-banco" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Debitar da conta</label>
+                    <label for="deposito-meta-banco" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Conta onde o dinheiro permanece</label>
                     <select id="deposito-meta-banco" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></select>
-                    <p id="deposito-meta-sem-contas" class="hidden mt-2 text-xs text-danger" role="status">Cadastre uma conta bancária antes de fazer um aporte.</p>
+                    <p id="deposito-meta-sem-contas" class="hidden mt-2 text-xs text-danger" role="status">Cadastre uma conta bancária antes de reservar valor para uma meta.</p>
                 </div>
                 <div>
                     <label for="deposito-meta-valor" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor do aporte (R$)</label>
                     <input id="deposito-meta-valor" type="number" min="0.01" step="0.01" required placeholder="0.00" class="w-full p-3 bg-bg border border-border rounded-[10px] text-center text-xl font-mono font-bold text-text-primary transition-all">
                 </div>
                 <div class="shrink-0 mt-3">
-                    <button type="submit" class="w-full py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft">Confirmar</button>
+                    <button type="submit" class="w-full py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft">Confirmar reserva</button>
                 </div>
             </form>
         </div>

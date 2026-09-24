@@ -121,7 +121,7 @@ const FechamentoManager = {
             const fimMes = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59);
             const pendenciasAtuais = db.agendamentos.filter(a => a.status === 'pendente' && new Date(a.dataVencimento + 'T12:00:00') <= fimMes);
             const pendenciasTotal = pendenciasAtuais.reduce((acc, a) => acc + (a.tipo === 'despesa' ? a.valor : -a.valor), 0);
-            const saldoReal = Database.getTotals().saldo - pendenciasTotal;
+            const saldoReal = Database.getTotals().saldoDisponivel - pendenciasTotal;
 
             if (saldoReal <= 0 || db.metas.length === 0) {
                 content.innerHTML = `
@@ -140,22 +140,22 @@ const FechamentoManager = {
                 content.innerHTML = `
                     <div>
                         <div class="text-center mb-6 bg-surface border border-border p-4 rounded-[16px] shadow-sm">
-                            <p class="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Saldo Livre Confirmado</p>
+                            <p class="text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Disponível após reservas e pendências</p>
                             <p class="text-3xl font-black text-brand-medium font-mono">${Utils.formatMoney(saldoReal)}</p>
                         </div>
                         <h4 class="text-sm font-bold text-text-primary mb-1 flex items-center gap-2"><i class="fa-solid fa-rocket text-investment"></i> Destinação Estratégica</h4>
-                        <p class="text-xs text-text-secondary mb-4">O dinheiro sobrou. Proteja-o. Envie parte desse saldo para uma de suas Metas agora mesmo.</p>
+                        <p class="text-xs text-text-secondary mb-4">O dinheiro sobrou. Reserve parte para uma meta; ele continua na conta e não será debitado.</p>
                         
                         <div class="space-y-4 bg-bg p-4 rounded-[12px] border border-border">
                             <div>
-                                <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Enviar para:</label>
+                                <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Meta a reservar:</label>
                                 <select id="fechamento-meta-id" class="w-full p-3 bg-surface border border-border rounded-[12px] text-sm focus:border-brand-medium outline-none transition-colors">
-                                    <option value="">Nenhuma (Manter em conta corrente)</option>
+                                    <option value="">Nenhuma (manter disponível em conta)</option>
                                     ${metaOptions}
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Debitar da conta:</label>
+                                <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Conta onde o dinheiro permanece:</label>
                                 <select id="fechamento-meta-banco" class="w-full p-3 bg-surface border border-border rounded-[12px] text-sm focus:border-brand-medium outline-none transition-colors" ${db.bancos.length ? '' : 'disabled'}>
                                     ${db.bancos.length ? bankOptions : '<option value="">Cadastre uma conta bancária</option>'}
                                 </select>
@@ -185,7 +185,7 @@ const FechamentoManager = {
                 }
                 const sourceAccountId = sourceSelect?.value;
                 if (!db.bancos.some(bank => String(bank.id) === String(sourceAccountId))) {
-                    Utils.showToast('Cadastre ou selecione uma conta bancária para debitar o aporte.', 'error');
+                    Utils.showToast('Cadastre ou selecione a conta onde o aporte ficará reservado.', 'error');
                     return;
                 }
                 if (btnNext) btnNext.disabled = true;
@@ -193,7 +193,7 @@ const FechamentoManager = {
                     const goal = db.metas.find(item => String(item.id) === String(metaSelect.value));
                     await Database.depositGoal(metaSelect.value, sourceAccountId, valorDepositado, Utils.localISODate(), `Aporte de Fechamento de Mês: ${goal?.nome || 'Meta'}`);
                 } catch (error) {
-                    Utils.showToast(error?.message || 'Não foi possível transferir o aporte para a reserva.', 'error');
+                    Utils.showToast(error?.message || 'Não foi possível reservar o valor para a meta.', 'error');
                     if (btnNext) btnNext.disabled = false;
                     return;
                 }

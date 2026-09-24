@@ -23,12 +23,12 @@ describe('separação entre patrimônio e crédito', () => {
         expect(summary.credit[1]).toMatchObject({ used: 100, available: 400, utilization: 20 });
     });
 
-    it('separa dinheiro total, reservas vinculadas a metas e disponibilidade fora das metas', () => {
+    it('trata reservas como alocação virtual dentro do saldo bancário, sem contar duas vezes', () => {
         const summary = accountPortfolioSummary({
-            banks: [{ saldo: 2700 }],
+            banks: [{ saldo: 4200 }],
             reserves: [{ saldo: 900 }, { saldo: 600 }]
         });
-        expect(summary.cashBalance).toBe(2700);
+        expect(summary.cashBalance).toBe(4200);
         expect(summary.reservedBalance).toBe(1500);
         expect(summary.totalMoney).toBe(4200);
         expect(summary.availableMoney).toBe(2700);
@@ -78,7 +78,7 @@ describe('separação entre patrimônio e crédito', () => {
         );
 
         expect(html).toContain('nv-account-overview');
-        expect(html).toContain('Disponível fora das metas');
+        expect(html).toContain('Disponível após reservas');
         expect(html).toContain('Crédito disponível');
         expect(html).toContain('nv-credit-card');
         expect(html).toContain('nv-credit-card__body');
@@ -127,25 +127,26 @@ describe('separação entre patrimônio e crédito', () => {
 
     it('mostra total, reservado e disponível também na página de metas', () => {
         const html = PageComponents.goalsPage([], [], {
-            bancos: [{ saldo: 2700 }],
+            bancos: [{ saldo: 4200 }],
             reservas: [{ saldo: 1500 }]
         });
-        expect(html).toContain('Total em contas e reservas');
+        expect(html).toContain('Saldo bancário total');
         expect(html).toContain('Reservado para metas');
-        expect(html).toContain('Disponível fora das metas');
+        expect(html).toContain('Disponível após reservas');
         expect(html).toContain('4.200,00');
+        expect(html).toContain('2.700,00');
     });
 
     it('renderiza os rótulos de total, reservado e disponível sem incluir limite do cartão no patrimônio', () => {
         const html = PageComponents.accountsPage(
-            [{ id: 'bank-summary', nome: 'Conta', saldo: 2700 }],
+            [{ id: 'bank-summary', nome: 'Conta', saldo: 4200 }],
             [{ id: 'card-summary', nome: 'Cartão', limite: 5000 }],
             [],
             [{ id: 'reserve-summary', goalId: 'goal-summary', nome: 'Reserva: Meta', saldo: 1500 }]
         );
-        expect(html).toContain('Total em contas e reservas');
+        expect(html).toContain('Saldo bancário total');
         expect(html).toContain('Reservado para metas');
-        expect(html).toContain('Disponível fora das metas');
+        expect(html).toContain('Disponível após reservas');
         expect(html).toContain('4.200,00');
         expect(html).toContain('1.500,00');
         expect(html).toContain('2.700,00');

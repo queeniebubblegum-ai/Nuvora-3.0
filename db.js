@@ -131,6 +131,25 @@ const buildMonthlyCache = () => {
     });
 };
 
+// Legacy goal deposits were stored as bank-to-reserve transfers. Tag them so
+// future edits/undo preserve the now-authoritative reconciled bank balances.
+const tagLegacyGoalReserveTransfers = () => {
+    const goalIds = new Set((db.metas || []).map(goal => String(goal.id)));
+    const reserveIds = new Set((db.reservas || [])
+        .filter(reserve => reserve?.goalId != null && goalIds.has(String(reserve.goalId)))
+        .map(reserve => String(reserve.id)));
+    let changed = false;
+    db.transacoes = (db.transacoes || []).map(item => {
+        if (!item || item.alocacaoMetaVirtual === true || !item.transferenciaId || !isTransfer(item) || isInvoicePayment(item)) return item;
+        const touchesGoalReserve = [item.bancoId, item.contaOrigemId, item.contaDestinoId]
+            .some(accountId => accountId != null && reserveIds.has(String(accountId)));
+        if (!touchesGoalReserve) return item;
+        changed = true;
+        return { ...item, alocacaoMetaVirtual: true };
+    });
+    return changed;
+};
+
 const loadData = async () => {
     await IDB.init();
 
@@ -177,20 +196,24 @@ const loadData = async () => {
         const reserveId = reserve?.id || fallbackReserveId;
         if (meta.reservaId !== reserveId) { meta.reservaId = reserveId; goalsChanged = true; }
         if (!reserve) {
-            reserve = { id: reserveId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)) };
+            reserve = { id: reserveId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)), movimentos: [] };
             db.reservas.push(reserve);
             reservesChanged = true;
         } else {
             if (String(reserve.goalId) !== String(meta.id)) { reserve.goalId = meta.id; reservesChanged = true; }
             if (!reserve.nome) { reserve.nome = `Reserva: ${meta.nome || 'Meta'}`; reservesChanged = true; }
+            if (!Array.isArray(reserve.movimentos)) { reserve.movimentos = []; reservesChanged = true; }
             const normalizedBalance = fromCents(toCents(reserve.saldo));
             if (reserve.saldo !== normalizedBalance) { reserve.saldo = normalizedBalance; reservesChanged = true; }
         }
         const reserveBalance = fromCents(toCents(reserve.saldo));
         if (toCents(meta.atual) !== toCents(reserveBalance)) { meta.atual = reserveBalance; goalsChanged = true; }
     });
+    const legacyGoalTransfersChanged = tagLegacyGoalReserveTransfers();
     if (goalsChanged || reservesChanged) {
-        await IDB.setMany([['metas', db.metas], ['reservas', db.reservas]]);
+        await IDB.setMany([['metas', db.metas], ['reservas', db.reservas], ...(legacyGoalTransfersChanged ? [['transacoes', db.transacoes]] : [])]);
+    } else if (legacyGoalTransfersChanged) {
+        await IDB.set('transacoes', db.transacoes);
     }
 
     if (db.categorias.length === 0) {
@@ -355,6 +378,7 @@ const applyBalanceDelta = (t, isReverse = false, shouldPersist = true) => {
     if (t.isCartao || t.saldoIncluidoNoSaldoDoExtrato === true) return;
     const bank = db.bancos.find(account => String(account.id) === String(t.bancoId));
     const reserve = (db.reservas || []).find(account => String(account.id) === String(t.bancoId));
+    if (bank && t.alocacaoMetaVirtual === true) return;
     const account = bank || reserve;
     if (!account) return;
 
@@ -424,10 +448,10 @@ export const TransferRepo = {
         if ((source.bank && source.reserve) || (destination.bank && destination.reserve)) {
             throw new Error('Identificador de conta ambíguo para transferência.');
         }
-        if (source.reserve && goalId != null) throw new Error('A origem do aporte deve ser uma conta bancária.');
-        if (goalId != null && (!source.bank || !destination.reserve || String(destination.reserve.goalId) !== String(goalId) || !db.metas.some(item => String(item.id) === String(goalId)))) {
-            throw new Error('A reserva não pertence à meta selecionada.');
+        if (source.reserve || destination.reserve) {
+            throw new Error('Reservas de metas são virtuais; use o fluxo de aporte ou resgate da meta.');
         }
+        if (goalId != null) throw new Error('Aporte em meta deve ser registrado como alocação virtual.');
 
         const legs = createTransfer({ sourceAccountId, destinationAccountId, amount, date, description });
         if (!isValidTransferPair(legs) || db.transacoes.some(item => String(item.transferenciaId) === String(legs[0].transferenciaId)) || legs.some(leg => db.transacoes.some(item => String(item.id) === String(leg.id)))) {
@@ -581,7 +605,10 @@ export const BankRepo = {
     remove: (id) => { 
         const hasTransactions = db.transacoes.some(t => !t.isCartao && String(t.bancoId) === String(id));
         const hasCards = db.cartoes.some(c => String(c.bancoId) === String(id));
-        if (hasTransactions || hasCards) return false;
+        const hasGoalAllocationHistory = (db.reservas || []).some(reserve =>
+            (reserve.movimentos || []).some(movement => String(movement?.contaId) === String(id))
+        );
+        if (hasTransactions || hasCards || hasGoalAllocationHistory) return false;
         db.bancos = db.bancos.filter(i => i.id.toString() !== id.toString()); 
         persist('bancos'); 
         return true;
@@ -822,6 +849,58 @@ export const ReconciliationRepo = {
     }
 };
 
+const applyGoalAllocation = async ({ goalId, accountId = null, amount, date, description = null, type }) => {
+    const goal = db.metas.find(item => String(item.id) === String(goalId));
+    if (!goal) throw new Error('Meta não encontrada.');
+    const reserve = (db.reservas || []).find(item => String(item.id) === String(goal.reservaId));
+    if (!reserve || String(reserve.goalId) !== String(goal.id)) throw new Error('Reserva da meta não encontrada.');
+    if (type === 'aporte' && !db.bancos.some(bank => String(bank.id) === String(accountId))) {
+        throw new Error('Selecione uma conta bancária válida para associar o aporte.');
+    }
+    const amountCents = toCents(amount);
+    if (amountCents <= 0) throw new Error('Informe um valor maior que zero.');
+    if (!isValidTransferDate(date)) throw new Error('Data inválida para o movimento da meta.');
+
+    if (type === 'aporte') {
+        const bankCents = db.bancos.reduce((total, bank) => total + toCents(bank?.saldo), 0);
+        const reservedCents = (db.reservas || []).reduce((total, item) => total + toCents(item?.saldo), 0);
+        if (amountCents > bankCents - reservedCents) {
+            throw new Error('O aporte ultrapassa o saldo disponível após as reservas atuais.');
+        }
+    } else if (amountCents > toCents(reserve.saldo)) {
+        throw new Error('O resgate não pode ultrapassar o valor reservado na meta.');
+    }
+
+    const previous = {
+        metas: db.metas.map(item => ({ ...item })),
+        reservas: (db.reservas || []).map(item => ({
+            ...item,
+            movimentos: Array.isArray(item.movimentos) ? item.movimentos.map(movement => ({ ...movement })) : []
+        }))
+    };
+    const movement = {
+        id: `meta-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        tipo: type,
+        contaId: accountId == null ? null : String(accountId),
+        valor: fromCents(amountCents),
+        data: date,
+        descricao: String(description || (type === 'aporte' ? `Aporte na meta: ${goal.nome || 'Meta'}` : `Resgate da meta: ${goal.nome || 'Meta'}`))
+    };
+    try {
+        if (!Array.isArray(reserve.movimentos)) reserve.movimentos = [];
+        const signedAmount = type === 'aporte' ? fromCents(amountCents) : -fromCents(amountCents);
+        reserve.saldo = addMoney(reserve.saldo, signedAmount);
+        reserve.movimentos.push(movement);
+        goal.atual = reserve.saldo;
+        await persistAtomically(['metas', 'reservas']);
+        return { ok: true, movement };
+    } catch (error) {
+        db.metas = previous.metas;
+        db.reservas = previous.reservas;
+        throw error;
+    }
+};
+
 export const GoalRepo = {
     add: item => {
         if (!Array.isArray(db.reservas)) db.reservas = [];
@@ -835,8 +914,11 @@ export const GoalRepo = {
             alvo: fromCents(toCents(item.alvo))
         };
         db.metas.unshift(goal);
-        if (!(db.reservas || []).some(reserve => String(reserve.id) === String(reserveId))) {
-            db.reservas.unshift({ id: reserveId, goalId, nome: `Reserva: ${goal.nome || 'Meta'}`, saldo: goal.atual });
+        const existingReserve = (db.reservas || []).find(reserve => String(reserve.id) === String(reserveId));
+        if (!existingReserve) {
+            db.reservas.unshift({ id: reserveId, goalId, nome: `Reserva: ${goal.nome || 'Meta'}`, saldo: goal.atual, movimentos: [] });
+        } else if (!Array.isArray(existingReserve.movimentos)) {
+            existingReserve.movimentos = [];
         }
         persist();
         return true;
@@ -846,6 +928,7 @@ export const GoalRepo = {
         if (!goal) return false;
         const reserve = (db.reservas || []).find(item => String(item.id) === String(goal.reservaId));
         if (reserve && Math.abs(toCents(reserve.saldo)) > 0) return false;
+        if (Array.isArray(reserve?.movimentos) && reserve.movimentos.length > 0) return false;
         const reserveIsReferenced = db.transacoes.some(item => [item.bancoId, item.contaOrigemId, item.contaDestinoId].some(accountId => String(accountId) === String(goal.reservaId)));
         if (reserveIsReferenced) return false;
         db.metas = db.metas.filter(item => String(item.id) !== String(id));
@@ -853,18 +936,10 @@ export const GoalRepo = {
         persist();
         return true;
     },
-    deposit: (goalId, sourceAccountId, amount, date = new Date().toISOString().slice(0, 10), description = null) => {
-        const goal = db.metas.find(item => String(item.id) === String(goalId));
-        if (!goal) return Promise.reject(new Error('Meta não encontrada.'));
-        return TransferRepo.add({
-            sourceAccountId,
-            destinationAccountId: goal.reservaId,
-            amount,
-            date,
-            description: description || `Depósito em meta: ${goal.nome || 'Meta'}`,
-            goalId: goal.id
-        });
-    }
+    deposit: (goalId, sourceAccountId, amount, date = new Date().toISOString().slice(0, 10), description = null) =>
+        applyGoalAllocation({ goalId, accountId: sourceAccountId, amount, date, description, type: 'aporte' }),
+    release: (goalId, amount, date = new Date().toISOString().slice(0, 10), description = null) =>
+        applyGoalAllocation({ goalId, amount, date, description, type: 'resgate' })
 };
 
 export const BudgetRepo = {
@@ -1134,9 +1209,9 @@ export const Database = {
             }
 
             if (hasOwn(data, 'metas') && !hasOwn(data, 'reservas')) {
-                // Legacy backups recorded goal progress after deducting deposits
-                // from bank balances. Reconstruct reserves once, without keeping
-                // stale reserve entries from the database being replaced.
+                // Legacy backups may not include the reserve collection. Rebuild
+                // the virtual reserve from goal progress, but preserve bank balances:
+                // an old backup cannot prove whether they were reconciled later.
                 db.reservas = db.metas.map(meta => ({
                     id: meta.reservaId || `reserva-meta-${String(meta.id)}`,
                     goalId: meta.id,
@@ -1154,17 +1229,20 @@ export const Database = {
                     let reserve = existingReserves.find(item => String(item.id) === String(fallbackId))
                         || existingReserves.find(item => String(item.goalId) === String(meta.id));
                     if (!reserve) {
-                        reserve = { id: fallbackId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)) };
+                        reserve = { id: fallbackId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)), movimentos: [] };
                     }
                     reserve.id = reserve.id || fallbackId;
                     reserve.goalId = meta.id;
                     reserve.nome = reserve.nome || `Reserva: ${meta.nome || 'Meta'}`;
                     reserve.saldo = fromCents(toCents(reserve.saldo));
+                    if (!Array.isArray(reserve.movimentos)) reserve.movimentos = [];
                     goalReserves.push(reserve);
                     return { ...meta, reservaId: reserve.id, atual: reserve.saldo };
                 });
-                db.reservas = [...goalReserves, ...unlinkedReserves];
+                const linkedReserveObjects = new Set(goalReserves);
+                db.reservas = [...goalReserves, ...unlinkedReserves.filter(reserve => !linkedReserveObjects.has(reserve))];
             }
+            tagLegacyGoalReserveTransfers();
 
             db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
             await IDB.setMany(collections.map(col => [col, db[col]]));
@@ -1231,20 +1309,24 @@ export const Database = {
     getCategoryUsage: CategoryRepo.usage,
     getCategoryError: CategoryRepo.getLastError,
     depositGoal: GoalRepo.deposit,
+    releaseGoal: GoalRepo.release,
     updateUser: UserRepo.update,
     markNotificationRead: NotificationRepo.markRead,
     markAllNotificationsRead: NotificationRepo.markAllRead,
     getTotals: () => {
         const totals = calculatePeriodTotals(db.transacoes);
-        const saldoDisponivel = db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0);
+        const saldoBancario = db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0);
         const saldoReservado = (db.reservas || []).reduce((total, reserve) => addMoney(total, reserve.saldo), 0);
+        const saldoDisponivel = addMoney(saldoBancario, -saldoReservado);
         return {
             receitas: totals.income,
             despesas: totals.expense,
-            saldo: saldoDisponivel,
+            saldo: saldoBancario,
+            saldoBancario,
             saldoDisponivel,
             saldoReservado,
-            saldoTotal: addMoney(saldoDisponivel, saldoReservado)
+            // A reservation is a subset of bank cash, not an additional asset.
+            saldoTotal: saldoBancario
         };
     }
 };
