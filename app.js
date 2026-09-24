@@ -130,7 +130,8 @@ const FechamentoManager = {
                     </div>
                 `;
             } else {
-                const metaOptions = db.metas.map(m => `<option value="${m.id}">${Utils.escapeHTML(m.nome)} (Faltam ${Utils.formatMoney(m.alvo - m.atual)})</option>`).join('');
+                const metaOptions = db.metas.map(m => `<option value="${Utils.escapeHTML(String(m.id))}">${Utils.escapeHTML(m.nome)} (Faltam ${Utils.formatMoney(m.alvo - m.atual)})</option>`).join('');
+                const bankOptions = db.bancos.map((bank, index) => `<option value="${Utils.escapeHTML(String(bank.id))}" ${index === 0 ? 'selected' : ''}>${Utils.escapeHTML(bank.nome || bank.instituicao || 'Conta bancária')}</option>`).join('');
                 
                 content.innerHTML = `
                     <div>
@@ -150,6 +151,12 @@ const FechamentoManager = {
                                 </select>
                             </div>
                             <div>
+                                <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Debitar da conta:</label>
+                                <select id="fechamento-meta-banco" class="w-full p-3 bg-surface border border-border rounded-[12px] text-sm focus:border-brand-medium outline-none transition-colors" ${db.bancos.length ? '' : 'disabled'}>
+                                    ${db.bancos.length ? bankOptions : '<option value="">Cadastre uma conta bancária</option>'}
+                                </select>
+                            </div>
+                            <div>
                                 <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Valor do Aporte (R$)</label>
                                 <input type="number" id="fechamento-meta-valor" max="${saldoReal}" step="0.01" placeholder="0.00" class="w-full p-3 bg-surface border border-border rounded-[12px] text-sm focus:border-brand-medium outline-none font-mono transition-colors">
                             </div>
@@ -160,30 +167,35 @@ const FechamentoManager = {
         }
     },
     
-    nextStep: () => {
+    nextStep: async () => {
         if (FechamentoManager.state.step === 2) {
             const metaSelect = document.getElementById('fechamento-meta-id');
             const metaValor = document.getElementById('fechamento-meta-valor');
-            
-            if (metaSelect && metaSelect.value && metaValor && parseFloat(metaValor.value) > 0) {
-                const idMeta = parseFloat(metaSelect.value);
-                const valorDepositado = parseFloat(metaValor.value);
-                
-                Database.depositGoal(idMeta, valorDepositado);
-                Database.add('transacoes', {
-                    id: Date.now(),
-                    desc: 'Aporte de Fechamento de Mês',
-                    valor: valorDepositado,
-                    tipo: 'despesa',
-                    categoria: 'Investimento/Meta',
-                    bancoId: db.bancos.length > 0 ? db.bancos[0].id : null,
-                    isCartao: false,
-                    formaPagamento: 'Transferência',
-                    data: Utils.localISODate(),
-                    parcelaAtual: 1, totalParcelas: 1, recorrente: false
-                });
+            const sourceSelect = document.getElementById('fechamento-meta-banco');
+            const btnNext = document.getElementById('btn-fechamento-next');
+            if (metaSelect?.value) {
+                const valorDepositado = Number(metaValor?.value);
+                if (!Number.isFinite(valorDepositado) || valorDepositado <= 0) {
+                    Utils.showToast('Informe um valor válido para o aporte ou escolha “Nenhuma”.', 'error');
+                    return;
+                }
+                const sourceAccountId = sourceSelect?.value;
+                if (!db.bancos.some(bank => String(bank.id) === String(sourceAccountId))) {
+                    Utils.showToast('Cadastre ou selecione uma conta bancária para debitar o aporte.', 'error');
+                    return;
+                }
+                if (btnNext) btnNext.disabled = true;
+                try {
+                    const goal = db.metas.find(item => String(item.id) === String(metaSelect.value));
+                    await Database.depositGoal(metaSelect.value, sourceAccountId, valorDepositado, Utils.localISODate(), `Aporte de Fechamento de Mês: ${goal?.nome || 'Meta'}`);
+                } catch (error) {
+                    Utils.showToast(error?.message || 'Não foi possível transferir o aporte para a reserva.', 'error');
+                    if (btnNext) btnNext.disabled = false;
+                    return;
+                }
+                if (btnNext) btnNext.disabled = false;
             }
-            
+
             App.closeModal();
             Utils.showToast('Mês concluído e blindado com sucesso!', 'success');
             App.scheduleRender();

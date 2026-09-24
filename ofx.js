@@ -309,18 +309,24 @@ export const OFXManager = {
             ? `${transacoesImportadas.length} importadas`
             : (saldoFinalAplicado ? 'Saldo atualizado' : 'Importação');
         undoButton.innerHTML = `${undoDescription} · Desfazer`;
-        undoButton.onclick = () => {
-            Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id));
-            if (saldoFinalAplicado && saldoAjusteReversivel !== 0) {
-                const bancoAtual = db.bancos.find(b => String(b.id) === String(bancoId));
-                if (bancoAtual) {
-                    bancoAtual.saldo = reverseStatementBalanceAdjustment({ currentBalance: bancoAtual.saldo, adjustment: saldoAjusteReversivel });
-                    Database.save('bancos');
+        undoButton.onclick = async () => {
+            undoButton.disabled = true;
+            try {
+                await Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id));
+                if (saldoFinalAplicado && saldoAjusteReversivel !== 0) {
+                    const bancoAtual = db.bancos.find(b => String(b.id) === String(bancoId));
+                    if (bancoAtual) {
+                        bancoAtual.saldo = reverseStatementBalanceAdjustment({ currentBalance: bancoAtual.saldo, adjustment: saldoAjusteReversivel });
+                        Database.save('bancos');
+                    }
                 }
+                undoButton.remove();
+                Utils.showToast('Importação desfeita.', 'success');
+                if (scheduleRenderCallback) scheduleRenderCallback();
+            } catch (error) {
+                undoButton.disabled = false;
+                Utils.showToast(error?.message || 'Não foi possível desfazer a importação.', 'error');
             }
-            undoButton.remove();
-            Utils.showToast('Importação desfeita.', 'success');
-            if (scheduleRenderCallback) scheduleRenderCallback();
         };
         document.body.appendChild(undoButton);
         setTimeout(() => undoButton.remove(), 8000);

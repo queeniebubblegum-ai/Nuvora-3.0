@@ -480,10 +480,8 @@ export const Modals = {
             <form data-submit="meta" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome da Meta</label><input id="meta-nome" type="text" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Data Alvo</label><input id="meta-data" type="date" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor Alvo (R$)</label><input id="meta-alvo" type="number" step="0.01" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>
-                    <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Já Guardado</label><input id="meta-atual" type="number" step="0.01" value="0" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>
-                </div>
+                <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor Alvo (R$)</label><input id="meta-alvo" type="number" min="0.01" step="0.01" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>
+                <p class="text-xs text-text-secondary">A meta começa sem saldo reservado. Use “Depositar” para transferir dinheiro de uma conta para a reserva.</p>
                 <div class="shrink-0 mt-3">
                     <button type="submit" class="w-full py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft">Criar Meta</button>
                 </div>
@@ -501,7 +499,13 @@ export const Modals = {
             <form data-submit="depositoMeta" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <input type="hidden" id="deposito-meta-id">
                 <div>
-                    <input id="deposito-meta-valor" type="number" step="0.01" required placeholder="0.00" class="w-full p-3 bg-bg border border-border rounded-[10px] text-center text-xl font-mono font-bold text-text-primary transition-all">
+                    <label for="deposito-meta-banco" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Debitar da conta</label>
+                    <select id="deposito-meta-banco" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></select>
+                    <p id="deposito-meta-sem-contas" class="hidden mt-2 text-xs text-danger" role="status">Cadastre uma conta bancária antes de fazer um aporte.</p>
+                </div>
+                <div>
+                    <label for="deposito-meta-valor" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor do aporte (R$)</label>
+                    <input id="deposito-meta-valor" type="number" min="0.01" step="0.01" required placeholder="0.00" class="w-full p-3 bg-bg border border-border rounded-[10px] text-center text-xl font-mono font-bold text-text-primary transition-all">
                 </div>
                 <div class="shrink-0 mt-3">
                     <button type="submit" class="w-full py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft">Confirmar</button>

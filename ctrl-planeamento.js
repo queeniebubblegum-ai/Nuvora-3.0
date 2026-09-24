@@ -59,36 +59,33 @@ export const PlaneamentoController = {
         const nome = document.getElementById('meta-nome').value;
         const data = document.getElementById('meta-data').value;
         const alvo = parseFloat(document.getElementById('meta-alvo').value);
-        const atual = parseFloat(document.getElementById('meta-atual').value);
-        
-        Database.add('metas', { id: Date.now(), nome, data, alvo, atual });
+        Database.add('metas', { id: Date.now(), nome, data, alvo, atual: 0 });
         Utils.showToast('Meta criada com sucesso!', 'success');
         App.closeModal();
     },
 
-    submitDepositoMeta: (e) => {
+    submitDepositoMeta: async (e) => {
         e.preventDefault();
-        const id = parseInt(document.getElementById('deposito-meta-id').value);
-        const valor = parseFloat(document.getElementById('deposito-meta-valor').value);
-        
-        const bancoIdRaw = document.getElementById('deposito-meta-banco')?.value;
-        const bancoId = bancoIdRaw ? parseInt(bancoIdRaw) : (db.bancos.length > 0 ? db.bancos[0].id : null);
-        
-        Database.depositGoal(id, valor);
-        
-        Database.add('transacoes', {
-            id: Date.now(),
-            desc: `Depósito: ${document.getElementById('deposito-meta-nome').innerText}`,
-            valor: valor,
-            tipo: 'despesa',
-            categoria: 'Investimentos',
-            bancoId: bancoId,
-            isCartao: false,
-            data: Utils.localISODate()
-        });
-        
-        Utils.showToast(`Guardou ${Utils.formatMoney(valor)}!`, 'success');
-        App.closeModal();
+        const id = document.getElementById('deposito-meta-id').value;
+        const valor = Number(document.getElementById('deposito-meta-valor').value);
+        const bancoId = document.getElementById('deposito-meta-banco')?.value;
+        if (!db.bancos.some(bank => String(bank.id) === String(bancoId))) {
+            Utils.showToast('Selecione uma conta bancária válida para debitar o aporte.', 'error');
+            return;
+        }
+        if (!Number.isFinite(valor) || valor <= 0) {
+            Utils.showToast('Informe um valor de aporte maior que zero.', 'error');
+            return;
+        }
+
+        try {
+            await Database.depositGoal(id, bancoId, valor, Utils.localISODate());
+            Utils.showToast(`Guardou ${Utils.formatMoney(valor)} na reserva da meta.`, 'success');
+            App.closeModal();
+            App.scheduleRender();
+        } catch (error) {
+            Utils.showToast(error?.message || 'Não foi possível transferir o aporte para a reserva.', 'error');
+        }
     },
 
     submitOrcamento: (e) => {

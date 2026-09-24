@@ -1,7 +1,8 @@
 import { CATEGORIAS_PADRAO, getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment } from './reconciliation.js';
-import { calculatePeriodTotals, isIncome, isTransfer } from './financial-ledger.js';
+import { calculatePeriodTotals, isIncome, isInvoicePayment, isTransfer } from './financial-ledger.js';
 import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
+import { createTransfer, isValidTransferDate } from './financial-transfers.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -20,6 +21,7 @@ const initialDB = {
     // Conferência é independente de agendamentos/status de pagamento.
     conciliacoesFaturas: [],
     metas: [],
+    reservas: [],
     orcamentos: [],
     notificacoes: [],
     agendamentos: [], 
@@ -84,8 +86,34 @@ const IDB = {
         const req = tx.objectStore(IDB_STORE).put(value, key);
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
+    }),
+    setMany: entries => new Promise((resolve, reject) => {
+        if (typeof indexedDB === 'undefined') {
+            try {
+                const nextStore = { ...IDB._memoryStore };
+                entries.forEach(([key, value]) => { nextStore[key] = value; });
+                IDB._memoryStore = nextStore;
+                resolve();
+            } catch (error) {
+                reject(error);
+            }
+            return;
+        }
+        const tx = IDB._db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('Falha ao salvar transferência.'));
+        tx.onabort = () => reject(tx.error || new Error('Transação interrompida ao salvar transferência.'));
+        try {
+            entries.forEach(([key, value]) => store.put(value, key));
+        } catch (error) {
+            try { tx.abort(); } catch (_) {}
+            reject(error);
+        }
     })
 };
+
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
 
 const clearCache = () => {
     Cache.transacoesPorMes = null;
@@ -137,6 +165,31 @@ const loadData = async () => {
             db[col] = db[col].filter(item => item !== null && item !== undefined);
         }
     });
+
+    let goalsChanged = false;
+    let reservesChanged = false;
+    db.metas.forEach(meta => {
+        const fallbackReserveId = meta.reservaId || `reserva-meta-${String(meta.id)}`;
+        let reserve = db.reservas.find(item => String(item.id) === String(fallbackReserveId))
+            || db.reservas.find(item => String(item.goalId) === String(meta.id));
+        const reserveId = reserve?.id || fallbackReserveId;
+        if (meta.reservaId !== reserveId) { meta.reservaId = reserveId; goalsChanged = true; }
+        if (!reserve) {
+            reserve = { id: reserveId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)) };
+            db.reservas.push(reserve);
+            reservesChanged = true;
+        } else {
+            if (String(reserve.goalId) !== String(meta.id)) { reserve.goalId = meta.id; reservesChanged = true; }
+            if (!reserve.nome) { reserve.nome = `Reserva: ${meta.nome || 'Meta'}`; reservesChanged = true; }
+            const normalizedBalance = fromCents(toCents(reserve.saldo));
+            if (reserve.saldo !== normalizedBalance) { reserve.saldo = normalizedBalance; reservesChanged = true; }
+        }
+        const reserveBalance = fromCents(toCents(reserve.saldo));
+        if (toCents(meta.atual) !== toCents(reserveBalance)) { meta.atual = reserveBalance; goalsChanged = true; }
+    });
+    if (goalsChanged || reservesChanged) {
+        await IDB.setMany([['metas', db.metas], ['reservas', db.reservas]]);
+    }
 
     if (db.categorias.length === 0) {
         db.categorias = CATEGORIAS_PADRAO.map(c => ({ ...c }));
@@ -260,18 +313,231 @@ const persist = (col) => {
     }
 };
 
-const applyBalanceDelta = (t, isReverse = false) => {
+const persistAtomically = async cols => {
+    const uniqueCols = [...new Set([...(cols || []), 'metadados'])];
+    const previousMetadata = db.metadados;
+    db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
+    try {
+        await IDB.setMany(uniqueCols.filter(col => db[col] !== undefined).map(col => [col, db[col]]));
+    } catch (error) {
+        db.metadados = previousMetadata;
+        throw error;
+    }
+    clearCache();
+    if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+};
+
+const transferStateSnapshot = () => ({
+    transacoes: db.transacoes.map(item => ({ ...item })),
+    bancos: db.bancos.map(item => ({ ...item })),
+    reservas: (db.reservas || []).map(item => ({ ...item })),
+    metas: db.metas.map(item => ({ ...item })),
+    metadados: { ...(db.metadados || {}) }
+});
+
+const restoreTransferState = snapshot => {
+    db.transacoes = snapshot.transacoes;
+    db.bancos = snapshot.bancos;
+    db.reservas = snapshot.reservas;
+    db.metas = snapshot.metas;
+    db.metadados = snapshot.metadados;
+    clearCache();
+};
+
+const applyBalanceDelta = (t, isReverse = false, shouldPersist = true) => {
     // A confirmed statement balance is an absolute anchor that already includes
     // these imported ledger rows. Keep their history without applying them twice.
-    if (t.isCartao || t.saldoIncluidoNoSaldoDoExtrato === true) return; 
-    const b = db.bancos.find(x => String(x.id) === String(t.bancoId));
-    if (b) {
-        // Use the same movement rules as reports and analytics when applying account deltas.
-        const amount = isTransfer(t)
-            ? (t.transferenciaEntrada ? t.valor : -t.valor)
-            : (isIncome(t) ? t.valor : -t.valor);
-        b.saldo = addMoney(b.saldo, isReverse ? -amount : amount);
-        persist('bancos');
+    if (t.isCartao || t.saldoIncluidoNoSaldoDoExtrato === true) return;
+    const bank = db.bancos.find(account => String(account.id) === String(t.bancoId));
+    const reserve = (db.reservas || []).find(account => String(account.id) === String(t.bancoId));
+    const account = bank || reserve;
+    if (!account) return;
+
+    const amount = isTransfer(t)
+        ? (t.transferenciaEntrada ? t.valor : -t.valor)
+        : (isIncome(t) ? t.valor : -t.valor);
+    account.saldo = addMoney(account.saldo, isReverse ? -amount : amount);
+    if (shouldPersist) persist(bank ? 'bancos' : 'reservas');
+};
+
+const applyGoalReserveDelta = (transaction, sign = 1) => {
+    if (!isTransfer(transaction)) return;
+    const reserve = (db.reservas || []).find(item => String(item.id) === String(transaction?.bancoId));
+    if (!reserve) return;
+    const goal = db.metas.find(item => String(item.id) === String(reserve.goalId));
+    if (!goal) return;
+    const direction = transaction.transferenciaEntrada ? 1 : -1;
+    goal.atual = addMoney(goal.atual, direction * sign * (Number(transaction.valor) || 0));
+};
+
+const resolveTransferAccount = id => ({
+    bank: db.bancos.find(item => String(item.id) === String(id)) || null,
+    reserve: (db.reservas || []).find(item => String(item.id) === String(id)) || null,
+});
+
+const isUnpairedTransfer = item => isTransfer(item) && !isInvoicePayment(item) && !item?.transferenciaId;
+
+const TRANSFER_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas'];
+
+const isValidTransferPair = legs => {
+    if (!Array.isArray(legs) || legs.length !== 2) return false;
+    const incoming = legs.filter(item => item.transferenciaEntrada === true);
+    const outgoing = legs.filter(item => item.transferenciaEntrada === false);
+    if (incoming.length !== 1 || outgoing.length !== 1) return false;
+    const [credit] = incoming;
+    const [debit] = outgoing;
+    const sourceAccount = resolveTransferAccount(debit.contaOrigemId);
+    const destinationAccount = resolveTransferAccount(debit.contaDestinoId);
+    const sourceIsUnambiguous = Boolean(sourceAccount.bank) !== Boolean(sourceAccount.reserve);
+    const destinationIsUnambiguous = Boolean(destinationAccount.bank) !== Boolean(destinationAccount.reserve);
+    return Boolean(
+        sourceIsUnambiguous && destinationIsUnambiguous &&
+        credit.transferenciaInterna === true && debit.transferenciaInterna === true &&
+        credit.transferenciaId != null && String(credit.transferenciaId).length > 0 &&
+        String(credit.transferenciaId) === String(debit.transferenciaId) &&
+        credit.id != null && debit.id != null && String(credit.id) !== String(debit.id) &&
+        credit.tipo === 'receita' && debit.tipo === 'despesa' &&
+        String(debit.bancoId) === String(debit.contaOrigemId) &&
+        String(credit.bancoId) === String(credit.contaDestinoId) &&
+        String(debit.contaOrigemId) === String(credit.contaOrigemId) &&
+        String(debit.contaDestinoId) === String(credit.contaDestinoId) &&
+        String(debit.contaOrigemId) !== String(debit.contaDestinoId) &&
+        Boolean(resolveTransferAccount(debit.contaOrigemId).bank || resolveTransferAccount(debit.contaOrigemId).reserve) &&
+        Boolean(resolveTransferAccount(debit.contaDestinoId).bank || resolveTransferAccount(debit.contaDestinoId).reserve) &&
+        toCents(debit.valor) > 0 && toCents(debit.valor) === toCents(credit.valor) &&
+        String(debit.data) === String(credit.data) && isValidTransferDate(debit.data)
+    );
+};
+
+export const TransferRepo = {
+    add: async ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null } = {}) => {
+        const source = resolveTransferAccount(sourceAccountId);
+        const destination = resolveTransferAccount(destinationAccountId);
+        if ((!source.bank && !source.reserve) || (!destination.bank && !destination.reserve)) {
+            throw new Error('A conta de origem ou destino não existe.');
+        }
+        if ((source.bank && source.reserve) || (destination.bank && destination.reserve)) {
+            throw new Error('Identificador de conta ambíguo para transferência.');
+        }
+        if (source.reserve && goalId != null) throw new Error('A origem do aporte deve ser uma conta bancária.');
+        if (goalId != null && (!source.bank || !destination.reserve || String(destination.reserve.goalId) !== String(goalId) || !db.metas.some(item => String(item.id) === String(goalId)))) {
+            throw new Error('A reserva não pertence à meta selecionada.');
+        }
+
+        const legs = createTransfer({ sourceAccountId, destinationAccountId, amount, date, description });
+        if (!isValidTransferPair(legs) || db.transacoes.some(item => String(item.transferenciaId) === String(legs[0].transferenciaId)) || legs.some(leg => db.transacoes.some(item => String(item.id) === String(leg.id)))) {
+            throw new Error('Não foi possível criar um par de transferência íntegro.');
+        }
+        const snapshot = transferStateSnapshot();
+        try {
+            db.transacoes = [...legs, ...db.transacoes];
+            legs.forEach(leg => {
+                applyBalanceDelta(leg, false, false);
+                applyGoalReserveDelta(leg, 1);
+            });
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return { ok: true, transferId: legs[0].transferenciaId, transactions: legs };
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
+    },
+
+    update: async (transactionId, newData = {}) => {
+        if (!newData || typeof newData !== 'object' || Array.isArray(newData)) return false;
+        const target = db.transacoes.find(item => String(item.id) === String(transactionId));
+        if (!target?.transferenciaId) return false;
+        const legs = db.transacoes.filter(item => String(item.transferenciaId) === String(target.transferenciaId));
+        if (!isValidTransferPair(legs)) return false;
+        const allowedFields = ['desc', 'data', 'categoria', 'contatoId', 'observacoes', 'valor'];
+        if (Object.keys(newData).some(key => !allowedFields.includes(key))) return false;
+
+        const sharedChanges = {};
+        ['desc', 'data', 'categoria', 'contatoId', 'observacoes'].forEach(key => {
+            if (hasOwn(newData, key)) sharedChanges[key] = newData[key];
+        });
+        if (hasOwn(newData, 'data') && !isValidTransferDate(newData.data)) return false;
+        if (hasOwn(newData, 'valor')) {
+            const valueCents = toCents(newData.valor);
+            if (valueCents <= 0) return false;
+            sharedChanges.valor = fromCents(valueCents);
+        }
+        const nextLegs = legs.map(leg => ({ ...leg, ...sharedChanges }));
+        const snapshot = transferStateSnapshot();
+        try {
+            legs.forEach(leg => {
+                applyBalanceDelta(leg, true, false);
+                applyGoalReserveDelta(leg, -1);
+            });
+            const byId = new Map(nextLegs.map(leg => [String(leg.id), leg]));
+            db.transacoes = db.transacoes.map(leg => byId.get(String(leg.id)) || leg);
+            nextLegs.forEach(leg => {
+                applyBalanceDelta(leg, false, false);
+                applyGoalReserveDelta(leg, 1);
+            });
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return true;
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
+    },
+
+    deleteByIds: async ids => {
+        const selected = new Set((ids || []).map(String));
+        const selectedTransfers = db.transacoes.filter(item => selected.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
+        if (selectedTransfers.some(item => !item.transferenciaId)) {
+            throw new Error('Não é possível remover uma perna de transferência sem identificador vinculado.');
+        }
+        const transferIds = new Set(selectedTransfers.map(item => String(item.transferenciaId)));
+        if (!transferIds.size) return null;
+
+        const grouped = [...transferIds].map(transferId => db.transacoes.filter(item => String(item.transferenciaId) === transferId));
+        if (grouped.some(legs => !isValidTransferPair(legs))) {
+            throw new Error('A transferência está incompleta; nenhuma perna foi removida.');
+        }
+        const removed = db.transacoes.filter(item => selected.has(String(item.id)) || (item.transferenciaId && transferIds.has(String(item.transferenciaId))));
+        const snapshot = transferStateSnapshot();
+        try {
+            removed.forEach(leg => {
+                applyBalanceDelta(leg, true, false);
+                applyGoalReserveDelta(leg, -1);
+            });
+            db.transacoes = db.transacoes.filter(item => !selected.has(String(item.id)) && !(item.transferenciaId && transferIds.has(String(item.transferenciaId))));
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return removed;
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
+    },
+
+    restoreMany: async items => {
+        const candidates = (items || []).filter(item => !db.transacoes.some(current => String(current.id) === String(item.id)));
+        if (candidates.some(item => isUnpairedTransfer(item))) {
+            throw new Error('Não é possível restaurar uma transferência sem identificador vinculado.');
+        }
+        const grouped = new Map();
+        candidates.filter(item => item.transferenciaId || isUnpairedTransfer(item)).forEach(item => {
+            const key = String(item.transferenciaId);
+            grouped.set(key, [...(grouped.get(key) || []), item]);
+        });
+        if ([...grouped.values()].some(legs => !isValidTransferPair(legs))) {
+            throw new Error('Não é possível restaurar uma transferência incompleta.');
+        }
+        const snapshot = transferStateSnapshot();
+        try {
+            db.transacoes = [...candidates, ...db.transacoes];
+            candidates.forEach(item => {
+                applyBalanceDelta(item, false, false);
+                applyGoalReserveDelta(item, 1);
+            });
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return candidates.length;
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
     }
 };
 
@@ -334,6 +600,7 @@ export const TransactionsRepo = {
     },
     
     add: (item) => {
+        if (item?.transferenciaId || isUnpairedTransfer(item)) return false;
         const t = { ...item };
         if (!t.codigoRef) t.codigoRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         db.transacoes.unshift(t);
@@ -343,6 +610,7 @@ export const TransactionsRepo = {
     },
     
     addRecurrent: (t, parcelas) => {
+        if (t?.transferenciaId || isTransfer(t)) return false;
         const dataOriginal = new Date(t.data + 'T12:00:00');
         const diaOriginal = dataOriginal.getDate();
         const grupoId = Date.now();
@@ -406,7 +674,10 @@ export const TransactionsRepo = {
     },
     
     update: (id, newData) => {
-        const index = db.transacoes.findIndex(t => t.id.toString() === id.toString());
+        const index = db.transacoes.findIndex(t => String(t.id) === String(id));
+        if (index >= 0 && db.transacoes[index].transferenciaId) return TransferRepo.update(id, newData);
+        if (index >= 0 && isUnpairedTransfer(db.transacoes[index])) return false;
+        if (newData && (newData.transferenciaId || newData.transferenciaInterna === true || newData.tipo === 'transferencia' || newData.tipoTransferencia === 'interna')) return false;
         if (index !== -1) {
             const oldT = db.transacoes[index];
             applyBalanceDelta(oldT, true); 
@@ -422,9 +693,16 @@ export const TransactionsRepo = {
     updateCategories: (idsArray, categoria) => {
         const ids = new Set((idsArray || []).map(id => String(id)));
         if (!ids.size || !categoria) return 0;
+        const selectedTransfers = db.transacoes.filter(item => ids.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
+        if (selectedTransfers.some(item => !item.transferenciaId)) return 0;
+        const transferIds = new Set(selectedTransfers.map(item => String(item.transferenciaId)));
+        const selectedPairs = [...transferIds].map(id => db.transacoes.filter(item => String(item.transferenciaId) === id));
+        if (selectedPairs.some(legs => !isValidTransferPair(legs))) return 0;
+        const idsToUpdate = new Set(ids);
+        db.transacoes.filter(item => item.transferenciaId && transferIds.has(String(item.transferenciaId))).forEach(item => idsToUpdate.add(String(item.id)));
         let changed = 0;
         db.transacoes = db.transacoes.map(t => {
-            if (!ids.has(String(t.id))) return t;
+            if (!idsToUpdate.has(String(t.id))) return t;
             changed += 1;
             return { ...t, categoria };
         });
@@ -432,26 +710,19 @@ export const TransactionsRepo = {
         return changed;
     },
     
-    delete: (id) => {
-        const strId = id.toString();
-        const target = db.transacoes.find(item => item.id.toString() === strId);
-        if (target) applyBalanceDelta(target, true); 
-        
-        db.transacoes = db.transacoes.filter(item => item.id.toString() !== strId);
-        persist('transacoes');
-    },
-    
-    deleteMultiple: (idsArray) => {
-        if (!idsArray || idsArray.length === 0) return;
-        const strIds = idsArray.map(id => id.toString());
-        
-        strIds.forEach(strId => {
-            const target = db.transacoes.find(t => t.id.toString() === strId);
-            if (target) applyBalanceDelta(target, true); 
-        });
+    delete: id => TransactionsRepo.deleteMultiple([id]),
 
-        db.transacoes = db.transacoes.filter(t => !strIds.includes(t.id.toString()));
+    deleteMultiple: idsArray => {
+        if (!idsArray || idsArray.length === 0) return;
+        const strIds = new Set(idsArray.map(String));
+        const includesTransfer = db.transacoes.some(item => strIds.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
+        if (includesTransfer) return TransferRepo.deleteByIds(idsArray);
+
+        const removed = db.transacoes.filter(item => strIds.has(String(item.id)));
+        db.transacoes = db.transacoes.filter(item => !strIds.has(String(item.id)));
+        removed.forEach(item => applyBalanceDelta(item, true));
         persist('transacoes');
+        return removed;
     }
 };
 
@@ -547,19 +818,47 @@ export const ReconciliationRepo = {
 };
 
 export const GoalRepo = {
-    add: (item) => {
-        db.metas.unshift({
+    add: item => {
+        if (!Array.isArray(db.reservas)) db.reservas = [];
+        const goalId = item.id ?? `goal-${Date.now()}`;
+        const reserveId = item.reservaId || `reserva-meta-${String(goalId)}`;
+        const goal = {
             ...item,
-            atual: fromCents(toCents(item.atual)),
+            id: goalId,
+            reservaId: reserveId,
+            atual: 0,
             alvo: fromCents(toCents(item.alvo))
-        });
-        persist('metas');
+        };
+        db.metas.unshift(goal);
+        if (!(db.reservas || []).some(reserve => String(reserve.id) === String(reserveId))) {
+            db.reservas.unshift({ id: reserveId, goalId, nome: `Reserva: ${goal.nome || 'Meta'}`, saldo: goal.atual });
+        }
+        persist();
         return true;
     },
-    remove: (id) => { db.metas = db.metas.filter(i => i.id.toString() !== id.toString()); persist('metas'); },
-    deposit: (id, val) => {
-        const g = db.metas.find(x => String(x.id) === String(id));
-        if (g) { g.atual = addMoney(g.atual, val); persist('metas'); }
+    remove: id => {
+        const goal = db.metas.find(item => String(item.id) === String(id));
+        if (!goal) return false;
+        const reserve = (db.reservas || []).find(item => String(item.id) === String(goal.reservaId));
+        if (reserve && Math.abs(toCents(reserve.saldo)) > 0) return false;
+        const reserveIsReferenced = db.transacoes.some(item => [item.bancoId, item.contaOrigemId, item.contaDestinoId].some(accountId => String(accountId) === String(goal.reservaId)));
+        if (reserveIsReferenced) return false;
+        db.metas = db.metas.filter(item => String(item.id) !== String(id));
+        db.reservas = (db.reservas || []).filter(item => String(item.id) !== String(goal.reservaId));
+        persist();
+        return true;
+    },
+    deposit: (goalId, sourceAccountId, amount, date = new Date().toISOString().slice(0, 10), description = null) => {
+        const goal = db.metas.find(item => String(item.id) === String(goalId));
+        if (!goal) return Promise.reject(new Error('Meta não encontrada.'));
+        return TransferRepo.add({
+            sourceAccountId,
+            destinationAccountId: goal.reservaId,
+            amount,
+            date,
+            description: description || `Depósito em meta: ${goal.nome || 'Meta'}`,
+            goalId: goal.id
+        });
     }
 };
 
@@ -808,24 +1107,70 @@ export const Database = {
         if (!data || typeof data !== 'object') throw new Error('Backup inválido');
 
         for (const col of collections) {
+            if (!hasOwn(data, col)) continue;
             if (Array.isArray(initialDB[col])) {
-                if (data[col] !== undefined && !Array.isArray(data[col])) {
-                    throw new Error(`Coleção inválida: ${col}`);
-                }
-                if (data[col] !== undefined) db[col] = data[col];
-            } else if (data[col] !== undefined) {
-                if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
-                    throw new Error(`Registro inválido: ${col}`);
-                }
-                db[col] = data[col];
+                if (!Array.isArray(data[col])) throw new Error(`Coleção inválida: ${col}`);
+            } else if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
+                throw new Error(`Registro inválido: ${col}`);
             }
         }
 
-        db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
-        await Promise.all(collections.map(col => IDB.set(col, db[col])));
-        clearCache();
-        if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
-        return true;
+        const snapshot = Object.fromEntries(collections.map(col => [
+            col,
+            Array.isArray(db[col]) ? db[col].map(item => item && typeof item === 'object' ? { ...item } : item)
+                : (db[col] && typeof db[col] === 'object' ? { ...db[col] } : db[col])
+        ]));
+        try {
+            for (const col of collections) {
+                if (!hasOwn(data, col)) continue;
+                db[col] = Array.isArray(initialDB[col])
+                    ? data[col].map(item => item && typeof item === 'object' ? { ...item } : item)
+                    : { ...data[col] };
+            }
+
+            if (hasOwn(data, 'metas') && !hasOwn(data, 'reservas')) {
+                // Legacy backups recorded goal progress after deducting deposits
+                // from bank balances. Reconstruct reserves once, without keeping
+                // stale reserve entries from the database being replaced.
+                db.reservas = db.metas.map(meta => ({
+                    id: meta.reservaId || `reserva-meta-${String(meta.id)}`,
+                    goalId: meta.id,
+                    nome: `Reserva: ${meta.nome || 'Meta'}`,
+                    saldo: fromCents(toCents(meta.atual))
+                }));
+            }
+
+            if (Array.isArray(db.metas)) {
+                const existingReserves = Array.isArray(db.reservas) ? db.reservas : [];
+                const unlinkedReserves = existingReserves.filter(reserve => reserve.goalId == null);
+                const goalReserves = [];
+                db.metas = db.metas.map(meta => {
+                    const fallbackId = meta.reservaId || `reserva-meta-${String(meta.id)}`;
+                    let reserve = existingReserves.find(item => String(item.id) === String(fallbackId))
+                        || existingReserves.find(item => String(item.goalId) === String(meta.id));
+                    if (!reserve) {
+                        reserve = { id: fallbackId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)) };
+                    }
+                    reserve.id = reserve.id || fallbackId;
+                    reserve.goalId = meta.id;
+                    reserve.nome = reserve.nome || `Reserva: ${meta.nome || 'Meta'}`;
+                    reserve.saldo = fromCents(toCents(reserve.saldo));
+                    goalReserves.push(reserve);
+                    return { ...meta, reservaId: reserve.id, atual: reserve.saldo };
+                });
+                db.reservas = [...goalReserves, ...unlinkedReserves];
+            }
+
+            db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
+            await IDB.setMany(collections.map(col => [col, db[col]]));
+            clearCache();
+            if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+            return true;
+        } catch (error) {
+            collections.forEach(col => { db[col] = snapshot[col]; });
+            clearCache();
+            throw error;
+        }
     },
     saveMentoriaSnapshot: MentoriaRepo.saveSnapshot,
     add: (col, item) => {
@@ -863,8 +1208,10 @@ export const Database = {
         }
     },
     removeMultiple: (col, ids) => {
-        if (col === 'transacoes') TransactionsRepo.deleteMultiple(ids);
+        if (col === 'transacoes') return TransactionsRepo.deleteMultiple(ids);
     },
+    addTransfer: TransferRepo.add,
+    restoreTransactions: TransferRepo.restoreMany,
     updateTransaction: TransactionsRepo.update,
     updateTransactionCategories: TransactionsRepo.updateCategories,
     updateAgendamento: ScheduleRepo.update,
@@ -884,10 +1231,15 @@ export const Database = {
     markAllNotificationsRead: NotificationRepo.markAllRead,
     getTotals: () => {
         const totals = calculatePeriodTotals(db.transacoes);
+        const saldoDisponivel = db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0);
+        const saldoReservado = (db.reservas || []).reduce((total, reserve) => addMoney(total, reserve.saldo), 0);
         return {
             receitas: totals.income,
             despesas: totals.expense,
-            saldo: db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0)
+            saldo: saldoDisponivel,
+            saldoDisponivel,
+            saldoReservado,
+            saldoTotal: addMoney(saldoDisponivel, saldoReservado)
         };
     }
 };

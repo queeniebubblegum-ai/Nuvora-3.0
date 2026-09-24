@@ -58,25 +58,23 @@ const clearUndoSnapshot = () => {
     undoContext.items = [];
 };
 
-const undoDeletedTransactions = () => {
-    const snapshot = undoContext.items;
+const undoDeletedTransactions = async () => {
+    const snapshot = undoContext.items.map(cloneTransaction);
     if (!snapshot.length) return false;
 
-    clearUndoSnapshot();
-    // Restore through the repository method so bank balance deltas are applied
-    // exactly as they are for a newly added transaction. Card installments do
-    // not alter bank balances, and transfer legs preserve their original
-    // metadata, keeping transfer semantics intact.
-    snapshot.forEach(transaction => {
-        if (!db.transacoes.some(current => String(current.id) === String(transaction.id))) {
-            Database.add('transacoes', cloneTransaction(transaction));
-        }
-    });
-    db.transacoes.sort((a, b) => new Date(b.data || b.id) - new Date(a.data || a.id));
-    Database.save('transacoes');
-    refreshTransactionsAfterMutation();
-    Utils.showToast('Ação desfeita. Transações restauradas.', 'success');
-    return true;
+    try {
+        // Restore the complete snapshot in one repository operation. Transfer
+        // legs are validated and their balance/reserve deltas persist together.
+        const restored = await Database.restoreTransactions(snapshot);
+        if (!restored) return false;
+        clearUndoSnapshot();
+        refreshTransactionsAfterMutation();
+        Utils.showToast('Ação desfeita. Transações restauradas.', 'success');
+        return true;
+    } catch (error) {
+        Utils.showToast(error?.message || 'Não foi possível desfazer a exclusão; os saldos anteriores foram mantidos.', 'error');
+        return false;
+    }
 };
 
 const showUndoToast = (message) => {
@@ -91,43 +89,54 @@ const showUndoToast = (message) => {
     });
 };
 
-const executeSoftDelete = (itemsToDelete, toastMsg) => {
+const executeSoftDelete = async (itemsToDelete, toastMsg) => {
     if (!itemsToDelete || itemsToDelete.length === 0) return;
 
-    // Keep a complete snapshot (including every card installment and both
-    // transfer legs selected by the caller) before the destructive operation.
-    clearUndoSnapshot();
-    undoContext.items = itemsToDelete.map(cloneTransaction);
-    Database.removeMultiple('transacoes', undoContext.items.map(t => t.id));
-    refreshTransactionsAfterMutation();
-    showUndoToast(toastMsg);
+    try {
+        const requested = itemsToDelete.map(cloneTransaction);
+        const removed = await Database.removeMultiple('transacoes', requested.map(t => t.id));
+        const completeSnapshot = Array.isArray(removed) ? removed.map(cloneTransaction) : requested;
+        if (!completeSnapshot.length) return;
 
-    undoContext.timeout = setTimeout(() => {
-        // The database deletion has already happened; expiry only discards the
-        // in-memory restoration snapshot and the action becomes a no-op.
-        undoContext.items = [];
-        undoContext.timeout = null;
-    }, 8000);
+        clearUndoSnapshot();
+        undoContext.items = completeSnapshot;
+        refreshTransactionsAfterMutation();
+        showUndoToast(toastMsg);
+        undoContext.timeout = setTimeout(() => {
+            undoContext.items = [];
+            undoContext.timeout = null;
+        }, 8000);
+    } catch (error) {
+        Utils.showToast(error?.message || 'Não foi possível apagar as transações; saldos e dados foram mantidos.', 'error');
+        refreshTransactionsAfterMutation();
+    }
 };
 
 export const TransacoesController = {
-    submitTransferencia: (e) => {
+    submitTransferencia: async (e) => {
         e.preventDefault();
         const form = e.target;
         const valueOf = (inlineId, fallbackId) => document.getElementById(inlineId)?.value || document.getElementById(fallbackId)?.value || '';
-        const origemId = parseInt(valueOf('inline-transfer-origem', 'transfer-origem'), 10);
-        const destinoId = parseInt(valueOf('inline-transfer-destino', 'transfer-destino'), 10);
+        const origemId = String(valueOf('inline-transfer-origem', 'transfer-origem')).trim();
+        const destinoId = String(valueOf('inline-transfer-destino', 'transfer-destino')).trim();
         const valor = Math.abs(parseFloat(valueOf('inline-transfer-valor', 'transfer-valor')));
         const data = valueOf('inline-transfer-data', 'transfer-data');
         const desc = valueOf('inline-transfer-desc', 'transfer-desc').trim() || 'Transferência entre contas';
         if (!origemId || !destinoId || origemId === destinoId) { Utils.showToast('Selecione contas de origem e destino diferentes.', 'error'); return; }
         if (!valor || valor <= 0 || !data) { Utils.showToast('Informe valor e data válidos.', 'error'); return; }
-        const transferenciaId = `TR-${Date.now()}`;
-        // Two ledger entries keep each account balance correct; the explicit type is excluded from income/expense analytics.
-        Database.add('transacoes', { id: Date.now(), desc, valor, tipo: 'despesa', transferenciaInterna: true, transferenciaId, bancoId: origemId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna' });
-        Database.add('transacoes', { id: Date.now() + 1, desc, valor, tipo: 'receita', transferenciaInterna: true, transferenciaId, bancoId: destinoId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna', transferenciaEntrada: true });
-        showTransactionSavedToast('Transferência registrada sem alterar receitas e despesas.');
-        App.closeModal();
+        try {
+            await Database.addTransfer({
+                sourceAccountId: origemId,
+                destinationAccountId: destinoId,
+                amount: valor,
+                date: data,
+                description: desc
+            });
+            showTransactionSavedToast('Transferência registrada sem alterar receitas e despesas.');
+            App.closeModal();
+        } catch (error) {
+            Utils.showToast(error?.message || 'Não foi possível salvar a transferência.', 'error');
+        }
     },
 
     submitTransacao: (e) => {
@@ -295,29 +304,35 @@ export const TransacoesController = {
         const form = e.target;
         const id = document.getElementById('edit-id').value;
         const desc = document.getElementById('edit-desc').value;
-        
         const valor = Math.abs(parseFloat(document.getElementById('edit-valor').value));
         if (valor === 0 || isNaN(valor)) { Utils.showToast('O valor deve ser maior que zero.', 'warning'); return; }
 
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Atualizando...");
 
-        setTimeout(() => {
-            const data = document.getElementById('edit-data').value;
-            const categoria = document.getElementById('edit-categoria').value;
-            const contatoIdRaw = document.getElementById('edit-contato').value;
-            const contatoId = contatoIdRaw ? parseInt(contatoIdRaw) : null;
+        setTimeout(async () => {
+            try {
+                const data = document.getElementById('edit-data').value;
+                const categoria = document.getElementById('edit-categoria').value;
+                const contatoIdRaw = document.getElementById('edit-contato').value;
+                const contatoId = contatoIdRaw ? parseInt(contatoIdRaw) : null;
+                const updated = await Database.updateTransaction(id, { desc, valor, data, categoria, contatoId });
 
-            if(Database.updateTransaction(id, { desc, valor, data, categoria, contatoId })) {
-                showTransactionSavedToast('Transação atualizada!');
-                markSaved(form);
-                trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_updated' });
-                App.closeModal();
-            } else {
-                Utils.showToast('Erro ao atualizar.', 'error');
+                if (updated) {
+                    showTransactionSavedToast('Transação atualizada!');
+                    markSaved(form);
+                    trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_updated' });
+                    App.closeModal();
+                } else {
+                    Utils.showToast('A transferência não pôde ser atualizada. Nenhuma das duas pernas foi alterada.', 'error');
+                    SubmitFeedback.set(form, 'idle');
+                }
+            } catch (error) {
+                Utils.showToast(error?.message || 'Não foi possível atualizar a transação; os dados anteriores foram mantidos.', 'error');
                 SubmitFeedback.set(form, 'idle');
+            } finally {
+                SubmitGuard.release(form);
             }
-            SubmitGuard.release(form);
         }, 350);
     },
 

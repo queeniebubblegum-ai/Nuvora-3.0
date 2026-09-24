@@ -254,6 +254,18 @@ export const UI = {
     openDepositModal: (id, nome) => {
         document.getElementById('deposito-meta-id').value = id;
         document.getElementById('deposito-meta-nome').innerText = nome;
+        const accountSelect = document.getElementById('deposito-meta-banco');
+        const submit = document.querySelector('#modal-depositar-meta button[type="submit"]');
+        const noAccounts = document.getElementById('deposito-meta-sem-contas');
+        if (accountSelect) {
+            const banks = Array.isArray(db.bancos) ? db.bancos : [];
+            accountSelect.innerHTML = banks.length
+                ? banks.map((bank, index) => `<option value="${Utils.escapeHTML(String(bank.id))}" ${index === 0 ? 'selected' : ''}>${Utils.escapeHTML(bank.nome || bank.instituicao || 'Conta bancária')}</option>`).join('')
+                : '<option value="" selected>Cadastre uma conta bancária primeiro</option>';
+            accountSelect.disabled = banks.length === 0;
+        }
+        if (submit) submit.disabled = !Array.isArray(db.bancos) || db.bancos.length === 0;
+        noAccounts?.classList.toggle('hidden', Array.isArray(db.bancos) && db.bancos.length > 0);
         UI.openModal('modal-depositar-meta');
     },
 

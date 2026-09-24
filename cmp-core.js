@@ -274,6 +274,13 @@ export const CoreComponents = {
                 const catObj = CoreComponents._getCategoryConfig(t.categoria);
                 const recBadge = t.recorrente ? `<span title="Lançamento Recorrente" class="text-brand-medium"><i class="fa-solid fa-rotate text-[10px]"></i></span>` : '';
                 const cardBadge = t.isCartao ? `<span title="Cartão de Crédito" class="text-text-secondary"><i class="fa-solid fa-credit-card text-[10px]"></i></span>` : '';
+                const transferAccountId = transfer ? (isRec ? (t.contaDestinoId ?? t.bancoId) : (t.contaOrigemId ?? t.bancoId)) : null;
+                const transferAccount = transfer ? (
+                    db.bancos.find(account => String(account.id) === String(transferAccountId)) ||
+                    (db.reservas || []).find(account => String(account.id) === String(transferAccountId))
+                ) : null;
+                const goalName = transferAccount?.goalId == null ? '' : db.metas.find(goal => String(goal.id) === String(transferAccount.goalId))?.nome;
+                const transferAccountLabel = transfer ? `${isRec ? 'Para' : 'De'} ${transferAccount?.nome || (goalName ? `Reserva: ${goalName}` : 'Conta não identificada')}` : '';
 
                 // UX ENG: Arquitetura HTML para as Interações de Swipe (Camadas Absolutas Traseiras e Camada Relativa Frontal)
                 html += `
@@ -303,6 +310,7 @@ export const CoreComponents = {
                                 <div class="flex items-center gap-2 mt-1 flex-wrap">
                                     <span class="text-[9px] font-bold px-1.5 py-0.5 rounded text-white tracking-wider uppercase" style="background-color: ${catObj.cor}99">${Utils.escapeHTML(t.categoria)}</span>
                                     <span class="text-[10px] text-text-secondary truncate hidden sm:inline-block">• ${Utils.escapeHTML(t.formaPagamento)}</span>
+                                    ${transfer ? `<span class="text-[10px] text-brand-medium truncate">${Utils.escapeHTML(transferAccountLabel)}</span>` : ''}
                                     ${t.contatoId ? `<span class="text-[10px] text-text-secondary truncate hidden md:inline-block"><i class="fa-regular fa-user mr-1"></i> Contato Vinculado</span>` : ''}
                                 </div>
                             </div>

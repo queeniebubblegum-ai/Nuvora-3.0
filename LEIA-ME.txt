@@ -1,0 +1,5 @@
+CORREÇÃO MÍNIMA DO TESTE — PROJEÇÃO DIÁRIA
+
+Substitua somente cashflow-projection.test.js na raiz do projeto.
+A fixture da assinatura agora informa nome: 'Streaming', que o teste espera ao conferir a descrição exibida. Nenhum arquivo de lógica da aplicação foi alterado.
+Depois rode npm.cmd test novamente.

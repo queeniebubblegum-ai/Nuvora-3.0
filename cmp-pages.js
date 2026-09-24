@@ -9,6 +9,7 @@ import { addMoney } from './money-math.js';
 
 export const accountPortfolioSummary = ({
     banks = [],
+    reserves = [],
     cards = [],
     cardPurchases = [],
 } = {}) => {
@@ -16,6 +17,12 @@ export const accountPortfolioSummary = ({
         (total, bank) => addMoney(total, bank?.saldo),
         0
     );
+    const reservedBalance = (Array.isArray(reserves) ? reserves : []).reduce(
+        (total, reserve) => addMoney(total, reserve?.saldo),
+        0
+    );
+    const totalMoney = addMoney(cashBalance, reservedBalance);
+    const availableMoney = addMoney(totalMoney, -reservedBalance);
 
     const credit = (Array.isArray(cards) ? cards : []).map(card => {
         const limit = addMoney(card?.limite || card?.limiteTotal || 0);
@@ -34,6 +41,9 @@ export const accountPortfolioSummary = ({
 
     return {
         cashBalance,
+        reservedBalance,
+        totalMoney,
+        availableMoney,
         totalCreditLimit: credit.reduce((total, card) => addMoney(total, card.limit), 0),
         totalCreditUsed: credit.reduce((total, card) => addMoney(total, card.used), 0),
         totalCreditAvailable: credit.reduce((total, card) => addMoney(total, card.available), 0),
@@ -68,7 +78,7 @@ export const PageComponents = {
      * Avenera accounts workspace: keeps the existing bank/card records and action
      * hooks, but presents them as two independent, scannable collections.
      */
-    accountsPage: (bancos = [], cartoes = [], transacoes = []) => {
+    accountsPage: (bancos = [], cartoes = [], transacoes = [], reservas = []) => {
         const hoje = new Date();
         const anoAtual = hoje.getFullYear();
         const mesAtual = hoje.getMonth();
@@ -94,7 +104,7 @@ export const PageComponents = {
         };
         const cardPurchases = (Array.isArray(transacoes) ? transacoes : [])
             .filter(item => item?.isCartao && !item.transferenciaInterna);
-        const portfolio = accountPortfolioSummary({ banks: bancos, cards: cartoes, cardPurchases });
+        const portfolio = accountPortfolioSummary({ banks: bancos, reserves: reservas, cards: cartoes, cardPurchases });
         const cardsData = cartoes.map(card => {
             const portfolioCard = portfolio.credit.find(item => String(item.id) === String(card.id));
             const committed = portfolioCard?.used || 0;
@@ -171,7 +181,7 @@ export const PageComponents = {
 
         return `<div class="nv-accounts-page">
             <header class="nv-accounts-header"><div><p class="nv-accounts-eyebrow">Visão financeira</p><h1>Contas e cartões</h1><p class="nv-accounts-subtitle">Acompanhe saldos, faturas e limites em um só lugar.</p></div><div class="nv-accounts-header-actions"><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Importar OFX</span></button><button type="button" data-action="iniciarImportacaoCSV" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span>Importar CSV</span></button><details class="nv-accounts-add"><summary class="nv-accounts-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Adicionar</span><i class="fa-solid fa-chevron-down nv-accounts-add-chevron" aria-hidden="true"></i></summary><div class="nv-accounts-add-menu"><button type="button" data-action="openModal" data-modal="modal-banco"><i class="fa-solid fa-building-columns" aria-hidden="true"></i><span><strong>Conta</strong><small>Saldo e movimentações</small></span></button><button type="button" ${cardCtaAction}><i class="fa-regular fa-credit-card" aria-hidden="true"></i><span><strong>${cardMenuTitle}</strong><small>${cardMenuDescription}</small></span></button></div></details></div></header>
-            <section class="nv-account-overview" aria-label="Separação entre patrimônio e crédito"><div class="nv-account-overview__cash"><span>Dinheiro disponível</span><strong>${money(portfolio.cashBalance)}</strong><small>Saldo somado das suas contas</small></div><div class="nv-account-overview__credit"><span>Crédito disponível</span><strong>${money(portfolio.totalCreditAvailable)}</strong><small>${money(portfolio.totalCreditUsed)} usados de ${money(portfolio.totalCreditLimit)}</small></div></section>
+            <section class="nv-account-overview" aria-label="Dinheiro, reservas e crédito"><div class="nv-account-overview__credit"><span>Total em contas e reservas</span><strong>${money(portfolio.totalMoney)}</strong><small>O total inclui o saldo bancário e as reservas vinculadas.</small></div><div class="nv-account-overview__credit"><span>Reservado para metas</span><strong>${money(portfolio.reservedBalance)}</strong><small>Valores separados do saldo disponível em conta.</small></div><div class="nv-account-overview__cash"><span>Disponível fora das metas</span><strong>${money(portfolio.availableMoney)}</strong><small>Saldo somado das suas contas bancárias.</small></div><div class="nv-account-overview__credit"><span>Crédito disponível</span><strong>${money(portfolio.totalCreditAvailable)}</strong><small>${money(portfolio.totalCreditUsed)} usados de ${money(portfolio.totalCreditLimit)}</small></div></section>
             <section class="nv-accounts-overview" aria-labelledby="nv-accounts-overview-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Resumo</p><h2 id="nv-accounts-overview-title">Panorama financeiro</h2></div></div><div class="nv-accounts-summary-grid nv-accounts-summary-grid--single"><div class="nv-accounts-summary-card nv-accounts-summary-card--invoice"><div class="nv-accounts-summary-icon"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></div><div><span>Faturas em aberto</span><strong class="money money--large">${money(openInvoiceAmount)}</strong><small>${nextDue ? `Próximo vencimento · ${dateLabel(nextDue)}` : 'Nenhum vencimento informado'}</small></div></div></div></section>
             <section class="nv-accounts-section" aria-labelledby="nv-accounts-bank-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Patrimônio</p><h2 id="nv-accounts-bank-title">Contas</h2><p>Saldo disponível e origem de cada movimentação.</p></div><span class="nv-accounts-count">${bancos.length}</span></div><div class="nv-accounts-grid">${accountsHtml}</div></section>
             <section class="nv-accounts-section nv-accounts-section--cards" aria-labelledby="nv-accounts-card-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Crédito</p><h2 id="nv-accounts-card-title">Cartões</h2><p>Faturas abertas, comprometimento e limite disponível.</p></div><span class="nv-accounts-count">${cartoes.length}</span></div><div class="nv-accounts-grid">${cardsHtml}</div></section>
@@ -360,8 +370,10 @@ export const PageComponents = {
                 : '';
             const contato = t.contatoId && db.contatos ? db.contatos.find(c => c.id === t.contatoId) : null;
             const banco = db.bancos?.find(b => String(b.id) === String(t.bancoId));
+            const reserva = (db.reservas || []).find(item => String(item.id) === String(t.bancoId));
+            const metaReserva = reserva && db.metas?.find(item => String(item.id) === String(reserva.goalId));
             const cartao = t.isCartao ? db.cartoes?.find(c => String(c.id) === String(t.bancoId)) : null;
-            const contaLabel = cartao?.nome || banco?.nome || banco?.instituicao || '';
+            const contaLabel = cartao?.nome || banco?.nome || banco?.instituicao || reserva?.nome || (metaReserva ? `Reserva: ${metaReserva.nome}` : '');
             const txId = t.codigoRef || `TX-${String(t.id).substring(0, 8).toUpperCase()}`;
             const catObj = CoreComponents._getCategoryConfig(t.categoria);
             const catColor = Utils.escapeHTML(String(catObj.cor || 'var(--c-text-secondary)'));
@@ -725,6 +737,13 @@ export const PageComponents = {
 
     goalsPage: (metas, transacoes, options = {}) => {
         const readOnly = options.readOnly === true;
+        const reserveSummaryHtml = Array.isArray(options.reservas) && Array.isArray(options.bancos) ? (() => {
+            const reserved = options.reservas.reduce((total, reserve) => addMoney(total, reserve?.saldo), 0);
+            const bankBalance = options.bancos.reduce((total, bank) => addMoney(total, bank?.saldo), 0);
+            const total = addMoney(bankBalance, reserved);
+            const available = addMoney(total, -reserved);
+            return `<section class="nv-account-overview" aria-label="Resumo de dinheiro e reservas"><article class="nv-account-overview__credit"><span>Total em contas e reservas</span><strong>${Utils.formatMoney(total)}</strong><small>O total inclui o saldo bancário e as reservas vinculadas.</small></article><article class="nv-account-overview__credit"><span>Reservado para metas</span><strong>${Utils.formatMoney(reserved)}</strong><small>Valores separados do saldo disponível em conta.</small></article><article class="nv-account-overview__cash"><span>Disponível fora das metas</span><strong>${Utils.formatMoney(available)}</strong><small>Saldo somado das suas contas bancárias.</small></article></section>`;
+        })() : '';
         const hoje = new Date(); 
         const tresMesesAtras = new Date(); 
         tresMesesAtras.setMonth(hoje.getMonth() - 3);
@@ -749,6 +768,7 @@ export const PageComponents = {
         const metasHtml = metas.length === 0 ? emptyState : metas.map(m => CoreComponents._buildGoalCard(m, hoje, { readOnly })).join('');
 
         return `
+            ${reserveSummaryHtml}
             <div class="rounded-[16px] p-8 mb-10 shadow-soft text-white relative overflow-hidden" style="background: linear-gradient(135deg, var(--c-brand-deep) 0%, var(--c-brand-dark) 100%);"><div class="relative z-10"><div class="flex items-center gap-3 mb-2"><div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><i class="fa-solid fa-wallet"></i></div><span class="font-bold text-sm opacity-90 tracking-wide font-primary">Capacidade de Poupança</span></div><h3 class="text-4xl font-bold mb-1 font-mono">${capacidadeFormatada}</h3><p class="text-sm opacity-80">média mensal calculada dos últimos 3 meses</p></div><div class="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div></div>
             <h3 class="font-bold text-text-primary text-lg mb-6 tracking-tight font-primary">Metas Ativas</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">${metasHtml}</div>`;
     },
