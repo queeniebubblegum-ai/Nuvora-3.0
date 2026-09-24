@@ -10,6 +10,20 @@ import { UI } from './ui.js';
 import { OFXManager } from './ofx.js';
 import { CSVManager } from './csv-manager.js';
 import { Classification } from './classification.js';
+import { isCategoriaPadrao } from './categorias-padrao.js';
+import { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
+import { loadViewContext, saveViewContext, isValidViewContextTab, isValidReportPeriod, isValidCashflowPeriod, isValidPage, isValidPlanningPeriod } from './view-context.js';
+import { configureUITracking, trackUIEvent } from './ui-tracking.js';
+import { ANORA_SETTINGS_KEY, loadAnoraPreferences, saveAnoraPreferences } from './anora-preferences.js';
+import { isExpense, isIncome, isTransfer } from './financial-ledger.js';
+export { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
+
+const validMonth = value => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 11;
+const validYear = value => Number.isInteger(Number(value)) && Number(value) >= 1970 && Number(value) <= 9999;
+const loadPlanningContext = () => loadViewContext('planning.period', {
+    month: new Date().getMonth(), year: new Date().getFullYear()
+}, isValidPlanningPeriod);
+const planningContext = loadPlanningContext();
 
 // --- ENGENHARIA DE UX: Assistente de Fechamento de Mês ---
 const FechamentoManager = {
@@ -116,7 +130,8 @@ const FechamentoManager = {
                     </div>
                 `;
             } else {
-                const metaOptions = db.metas.map(m => `<option value="${m.id}">${Utils.escapeHTML(m.nome)} (Faltam ${Utils.formatMoney(m.alvo - m.atual)})</option>`).join('');
+                const metaOptions = db.metas.map(m => `<option value="${Utils.escapeHTML(String(m.id))}">${Utils.escapeHTML(m.nome)} (Faltam ${Utils.formatMoney(m.alvo - m.atual)})</option>`).join('');
+                const bankOptions = db.bancos.map((bank, index) => `<option value="${Utils.escapeHTML(String(bank.id))}" ${index === 0 ? 'selected' : ''}>${Utils.escapeHTML(bank.nome || bank.instituicao || 'Conta bancária')}</option>`).join('');
                 
                 content.innerHTML = `
                     <div>
@@ -136,6 +151,12 @@ const FechamentoManager = {
                                 </select>
                             </div>
                             <div>
+                                <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Debitar da conta:</label>
+                                <select id="fechamento-meta-banco" class="w-full p-3 bg-surface border border-border rounded-[12px] text-sm focus:border-brand-medium outline-none transition-colors" ${db.bancos.length ? '' : 'disabled'}>
+                                    ${db.bancos.length ? bankOptions : '<option value="">Cadastre uma conta bancária</option>'}
+                                </select>
+                            </div>
+                            <div>
                                 <label class="block text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1.5">Valor do Aporte (R$)</label>
                                 <input type="number" id="fechamento-meta-valor" max="${saldoReal}" step="0.01" placeholder="0.00" class="w-full p-3 bg-surface border border-border rounded-[12px] text-sm focus:border-brand-medium outline-none font-mono transition-colors">
                             </div>
@@ -146,30 +167,35 @@ const FechamentoManager = {
         }
     },
     
-    nextStep: () => {
+    nextStep: async () => {
         if (FechamentoManager.state.step === 2) {
             const metaSelect = document.getElementById('fechamento-meta-id');
             const metaValor = document.getElementById('fechamento-meta-valor');
-            
-            if (metaSelect && metaSelect.value && metaValor && parseFloat(metaValor.value) > 0) {
-                const idMeta = parseFloat(metaSelect.value);
-                const valorDepositado = parseFloat(metaValor.value);
-                
-                Database.depositGoal(idMeta, valorDepositado);
-                Database.add('transacoes', {
-                    id: Date.now(),
-                    desc: 'Aporte de Fechamento de Mês',
-                    valor: valorDepositado,
-                    tipo: 'despesa',
-                    categoria: 'Investimento/Meta',
-                    bancoId: db.bancos.length > 0 ? db.bancos[0].id : null,
-                    isCartao: false,
-                    formaPagamento: 'Transferência',
-                    data: Utils.localISODate(),
-                    parcelaAtual: 1, totalParcelas: 1, recorrente: false
-                });
+            const sourceSelect = document.getElementById('fechamento-meta-banco');
+            const btnNext = document.getElementById('btn-fechamento-next');
+            if (metaSelect?.value) {
+                const valorDepositado = Number(metaValor?.value);
+                if (!Number.isFinite(valorDepositado) || valorDepositado <= 0) {
+                    Utils.showToast('Informe um valor válido para o aporte ou escolha “Nenhuma”.', 'error');
+                    return;
+                }
+                const sourceAccountId = sourceSelect?.value;
+                if (!db.bancos.some(bank => String(bank.id) === String(sourceAccountId))) {
+                    Utils.showToast('Cadastre ou selecione uma conta bancária para debitar o aporte.', 'error');
+                    return;
+                }
+                if (btnNext) btnNext.disabled = true;
+                try {
+                    const goal = db.metas.find(item => String(item.id) === String(metaSelect.value));
+                    await Database.depositGoal(metaSelect.value, sourceAccountId, valorDepositado, Utils.localISODate(), `Aporte de Fechamento de Mês: ${goal?.nome || 'Meta'}`);
+                } catch (error) {
+                    Utils.showToast(error?.message || 'Não foi possível transferir o aporte para a reserva.', 'error');
+                    if (btnNext) btnNext.disabled = false;
+                    return;
+                }
+                if (btnNext) btnNext.disabled = false;
             }
-            
+
             App.closeModal();
             Utils.showToast('Mês concluído e blindado com sucesso!', 'success');
             App.scheduleRender();
@@ -199,26 +225,74 @@ export const App = {
         activeCardId: null,
         invoiceMonth: new Date().getMonth(),
         invoiceYear: new Date().getFullYear(),
-        budgetMonth: new Date().getMonth(),
-        budgetYear: new Date().getFullYear(),
+        budgetMonth: planningContext.month,
+        budgetYear: planningContext.year,
         agendaMonth: new Date().getMonth(),
         agendaYear: new Date().getFullYear(),
-        filters: { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' },
-        reportTab: 'fluxo',
+        agendaSelectedDate: null,
+        filters: loadTransactionFilters(),
+        reportTab: loadViewContext('reports.tab', 'fluxo', isValidViewContextTab),
         isNotifOpen: false,
         notifTab: 'alertas',
         dashboardPeriod: 'este_mes',
-        reportPeriod: 6,
+        reportPeriod: loadViewContext('reports.period', 6, isValidReportPeriod),
+        reportCashflowPeriod: loadViewContext('reports.cashflowPeriod', 1, isValidCashflowPeriod),
         selectedTransactions: [],
+        uncategorizedOnly: false,
         ofxPendente: null,
         ofxPendenteSaldoFinal: null, 
         rawOfxString: null,
         bancoAlvoOFX: null,
-        txPage: 1,
+        txPage: loadViewContext('transactions.page', 1, isValidPage),
         txPerPage: 10
     }, () => {
         if (App.scheduleRender) App.scheduleRender();
     }),
+
+    openSettingsGroup: groupId => {
+        const allowed = new Set(['profile', 'appearance', 'data', 'security', 'anora']);
+        if (!allowed.has(String(groupId))) return false;
+        const section = document.getElementById(`settings-group-${groupId}`);
+        if (!section) return false;
+        document.querySelectorAll('.nv-settings-card[data-group]').forEach(button => {
+            button.setAttribute('aria-pressed', String(button.getAttribute('data-group') === String(groupId)));
+        });
+        section.scrollIntoView?.({ behavior: document.documentElement.classList.contains('avenera-reduced-motion') ? 'auto' : 'smooth', block: 'start' });
+        section.focus?.({ preventScroll: true });
+        return true;
+    },
+
+    toggleTheme: () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('nuvora_theme', isDark ? 'dark' : 'light');
+        const themeState = document.querySelector('[data-settings-theme-state]');
+        if (themeState) themeState.textContent = `Modo atual: ${isDark ? 'escuro' : 'claro'}`;
+        return isDark;
+    },
+
+    setReducedMotion: enabled => {
+        const value = enabled === true;
+        document.documentElement.classList.toggle('avenera-reduced-motion', value);
+        try { localStorage.setItem('avenera:reduced-motion', String(value)); } catch { /* Keep the current-session preference. */ }
+        return value;
+    },
+
+    updateAnoraPreference: (key, value) => {
+        const allowed = new Set(['style', 'notifications', 'localTelemetry']);
+        if (!allowed.has(String(key))) return false;
+        const prefs = saveAnoraPreferences({ [key]: value });
+        if (key === 'style') {
+            Database.updateUser({ mentorStyle: prefs.style });
+            if (App.currentPage === 'Dashboard') App.scheduleRender();
+        }
+        if (key === 'localTelemetry') configureUITracking(prefs.localTelemetry);
+        if (key === 'notifications' && prefs.notifications) Notifications.engine();
+        Utils.showToast('Preferência da Anora atualizada.', 'success');
+        return prefs;
+    },
+
+    chooseProfilePhoto: () => document.getElementById('input-foto-perfil')?.click(),
+    importBackupPicker: () => document.getElementById('backup-input')?.click(),
 
     init: () => {
         if (App.isInitialized) return;
@@ -235,6 +309,16 @@ export const App = {
         };
         
         checkSystemTheme();
+        let hasStoredAnoraPreferences = false;
+        try { hasStoredAnoraPreferences = Boolean(localStorage.getItem(ANORA_SETTINGS_KEY)); } catch { hasStoredAnoraPreferences = false; }
+        if (!hasStoredAnoraPreferences && db.usuario?.mentorStyle) saveAnoraPreferences({ style: db.usuario.mentorStyle });
+        const anoraPreferences = loadAnoraPreferences();
+        const anoraStyleControl = document.getElementById('anora-rigor-select');
+        if (anoraStyleControl) anoraStyleControl.value = anoraPreferences.style;
+        configureUITracking(anoraPreferences.localTelemetry);
+        let reducedMotion = false;
+        try { reducedMotion = localStorage.getItem('avenera:reduced-motion') === 'true'; } catch { reducedMotion = false; }
+        App.setReducedMotion(reducedMotion);
 
         window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', e => {
             if (!localStorage.getItem('nuvora_theme')) {
@@ -242,10 +326,7 @@ export const App = {
             }
         });
         
-        window.toggleDarkMode = () => {
-            const isDark = document.documentElement.classList.toggle('dark');
-            localStorage.setItem('nuvora_theme', isDark ? 'dark' : 'light');
-        };
+        window.toggleDarkMode = () => App.toggleTheme();
 
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('./service-worker.js', { updateViaCache: 'none' }).catch(err => {
@@ -274,7 +355,7 @@ export const App = {
             
             App.currentPage = startPage;
 
-            Notifications.engine();
+            if (loadAnoraPreferences().notifications) Notifications.engine();
             App.autoProvisionInvoices(); 
             App.scheduleRender();
             Renderer.updateBankSelect(); 
@@ -354,17 +435,24 @@ export const App = {
             txCategoria = 'Pagamento de Fatura';
         }
 
-        Database.add('transacoes', {
+        const isInvoicePayment = agendamento.categoria === 'Fatura Cartão';
+        const transaction = {
             id: Date.now(),
             desc: txDesc,
             valor: agendamento.valor,
-            tipo: agendamento.tipo || 'despesa',
+            tipo: isInvoicePayment ? 'pagamento-fatura' : (agendamento.tipo || 'despesa'),
             categoria: txCategoria,
             bancoId: agendamento.bancoId || (db.bancos.length > 0 ? db.bancos[0].id : null),
             isCartao: false,
             formaPagamento: 'Automático (Agendamento)',
             data: Utils.localISODate()
-        });
+        };
+        if (transaction.tipo === 'pagamento-fatura') {
+            transaction.transferenciaInterna = true;
+            transaction.afetaReceita = false;
+            transaction.afetaDespesa = false;
+        }
+        Database.add('transacoes', transaction);
 
         Utils.showToast('Conta marcada como paga!', 'success');
         App.scheduleRender();
@@ -408,16 +496,11 @@ export const App = {
         if (App.renderQueue) cancelAnimationFrame(App.renderQueue);
         App.renderQueue = requestAnimationFrame(() => {
             Renderer.render(App.viewState, App.currentPage);
+            if (App.currentPage === 'Categorias') App.filterCategoriesDOM('');
             App.updateSidebarProfile();
             
             if (App.currentPage === 'Relatorios') {
                 requestAnimationFrame(() => { ChartManager.renderAll(App.viewState, db); });
-            } else if (App.currentPage === 'Categorias') {
-                requestAnimationFrame(() => {
-                    if (typeof ChartManager !== 'undefined' && ChartManager.renderCategoriasPageChart) {
-                        ChartManager.renderCategoriasPageChart(db);
-                    }
-                });
             }
             App.renderQueue = null;
         });
@@ -430,7 +513,10 @@ export const App = {
         if (f.categoria) transacoes = transacoes.filter(t => t.categoria === f.categoria);
         if (f.mes !== '') transacoes = transacoes.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes));
         if (f.bancoId) { const [type, id] = f.bancoId.split('_'); transacoes = transacoes.filter(t => type === 'banco' ? (!t.isCartao && t.bancoId == id) : (t.isCartao && t.bancoId == id)); }
-        const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => [t.data, t.tipo === 'despesa' && !t.transferenciaInterna ? -t.valor : t.valor, t.codigoRef || '', t.desc, t.tipo, t.categoria || ''])];
+        const rows = [['Data', 'Valor', 'Identificador', 'Descrição', 'Tipo', 'Categoria'], ...transacoes.map(t => {
+            const valor = isTransfer(t) ? (t.transferenciaEntrada ? t.valor : -t.valor) : (isIncome(t) ? t.valor : -t.valor);
+            return [t.data, valor, t.codigoRef || '', t.desc, t.tipo, t.categoria || ''];
+        })];
         const csv = rows.map(row => row.map(escape).join(';')).join('\n');
         const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob); const link = document.createElement('a');
@@ -511,8 +597,8 @@ export const App = {
             if (!orcamento) return null;
 
             const hoje = new Date();
-            const despesasCategoria = db.transacoes.filter(t => 
-                t.tipo === 'despesa' && !t.transferenciaInterna && 
+            const despesasCategoria = db.transacoes.filter(t =>
+                isExpense(t) &&
                 t.categoria === categoriaNome && 
                 new Date(t.data || t.id).getFullYear() === hoje.getFullYear() && 
                 new Date(t.data || t.id).getMonth() === hoje.getMonth()
@@ -748,40 +834,241 @@ export const App = {
         });
     },
 
-    navigate: (page, skipHistory = false) => { 
+    navigate: (page, skipHistory = false) => {
+        if (typeof document !== 'undefined') document.dispatchEvent(new Event('nuvora:navigate'));
         App.closeModal(); 
         App.viewState.selectedTransactions = []; 
-        App.currentPage = page; 
+        App.currentPage = page;
+        if (page !== 'Dashboard' && typeof window !== 'undefined') window.resetDashboardQuickAction?.();
         Router.navigate(page, skipHistory);
         App.scheduleRender(); 
     },
     
     setDashboardPeriod: (period) => { App.viewState.dashboardPeriod = period; },
-    setReportPeriod: (months) => { App.viewState.reportPeriod = parseInt(months); },
-    setReportTab: (tab) => { App.viewState.reportTab = tab; },
+    setReportPeriod: (months) => {
+        const value = parseInt(months, 10);
+        if (!isValidReportPeriod(value)) return;
+        App.viewState.reportPeriod = value;
+        saveViewContext('reports.period', value, isValidReportPeriod);
+    },
+    setReportCashflowPeriod: (months) => {
+        const value = parseInt(months, 10);
+        if (!isValidCashflowPeriod(value)) return;
+        App.viewState.reportCashflowPeriod = value;
+        saveViewContext('reports.cashflowPeriod', value, isValidCashflowPeriod);
+    },
+    setReportTab: (tab) => {
+        if (!isValidViewContextTab(tab)) return;
+        App.viewState.reportTab = tab;
+        saveViewContext('reports.tab', tab, isValidViewContextTab);
+    },
+
+    prepareCategoryParents: (preferred = null) => {
+        const type = ['despesa', 'receita'].includes(document.getElementById('nova-categoria-tipo')?.value)
+            ? document.getElementById('nova-categoria-tipo').value : 'despesa';
+        const select = document.getElementById('nova-categoria-grupo');
+        if (!select) return;
+        const isPrincipal = c => {
+            const group = String(c?.grupo || '').trim();
+            const name = String(c?.nome || '').trim();
+            return c?.tipoCategoria === 'principal' || !group || (group === name && String(c?.subgrupo || name) === name);
+        };
+        const isArchived = c => c && (c.ativo === false || c.arquivada === true);
+        const parents = (db.categorias || []).filter(c => c && !isArchived(c) && (!c.tipo || c.tipo === type) && isPrincipal(c));
+        const unique = new Map();
+        parents.forEach(c => {
+            const group = String(c.grupo || c.nome).trim();
+            if (group && !unique.has(group.toLocaleLowerCase('pt-BR'))) unique.set(group.toLocaleLowerCase('pt-BR'), { name: group, category: c });
+        });
+        const current = preferred ?? select.value;
+        select.innerHTML = '<option value="">Selecione uma categoria principal</option>' + Array.from(unique.values())
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+            .map(({ name }) => `<option value="${Utils.escapeHTML(name)}">${Utils.escapeHTML(name)}</option>`).join('');
+        // An archived category can still be edited for historical consistency. It is
+        // shown only as the current value and never becomes a new-choice option.
+        if (current && !Array.from(select.options).some(o => o.value === current)) {
+            const legacy = (db.categorias || []).find(c => String(c.grupo || c.nome) === String(current) && (!c.tipo || c.tipo === type) && isPrincipal(c));
+            if (legacy) select.insertAdjacentHTML('beforeend', `<option value="${Utils.escapeHTML(current)}">${Utils.escapeHTML(current)} (histórico)</option>`);
+        }
+        if (current) select.value = current;
+    },
+    toggleCategoryLevel: (level = null) => {
+        const selected = level || document.getElementById('nova-categoria-nivel')?.value || 'principal';
+        const wrap = document.getElementById('nova-categoria-grupo-wrap');
+        const parent = document.getElementById('nova-categoria-grupo');
+        const isSubcategory = selected === 'subcategoria';
+        wrap?.classList.toggle('hidden', !isSubcategory);
+        if (parent) {
+            parent.disabled = !isSubcategory;
+            parent.required = isSubcategory;
+            if (!isSubcategory) parent.value = '';
+        }
+        if (isSubcategory) App.prepareCategoryParents();
+    },
+    prepareCategoryModal: (categoryId = null) => {
+        const item = categoryId ? (db.categorias || []).find(c => String(c.id) === String(categoryId)) : null;
+        const id = document.getElementById('nova-categoria-id');
+        const name = document.getElementById('nova-categoria-nome');
+        const type = document.getElementById('nova-categoria-tipo');
+        const level = document.getElementById('nova-categoria-nivel');
+        const parent = document.getElementById('nova-categoria-grupo');
+        const title = document.getElementById('nova-categoria-titulo');
+        const submit = document.getElementById('nova-categoria-submit');
+        const isSubcategory = !!item && (item.tipoCategoria === 'subcategoria' || (item.grupo && item.grupo !== item.nome));
+        if (id) id.value = item?.id || '';
+        if (name) name.value = item?.nome || '';
+        if (type) type.value = item?.tipo === 'receita' ? 'receita' : 'despesa';
+        if (level) level.value = isSubcategory ? 'subcategoria' : 'principal';
+        const icon = document.getElementById('nova-categoria-icone');
+        const color = document.getElementById('nova-categoria-cor');
+        if (icon) icon.value = item?.icone || 'fa-tag';
+        if (color) color.value = item?.cor || '#3B82F6';
+        if (title) title.textContent = item ? 'Editar categoria' : 'Nova categoria';
+        if (submit) submit.textContent = item ? 'Salvar alterações' : 'Criar categoria';
+        App.toggleCategoryLevel(isSubcategory ? 'subcategoria' : 'principal');
+        if (isSubcategory) {
+            App.prepareCategoryParents(item.grupo || '');
+            if (parent && item.grupo && !Array.from(parent.options).some(o => o.value === item.grupo)) {
+                parent.insertAdjacentHTML('beforeend', `<option value="${Utils.escapeHTML(item.grupo)}">${Utils.escapeHTML(item.grupo)} (histórico)</option>`);
+            }
+            if (parent) parent.value = item.grupo || '';
+        } else if (parent) {
+            parent.value = '';
+        }
+    },
+    openCategoryEditor: (id) => {
+        App.openModal('modal-categoria', null, id);
+    },
+    archiveCategory: (id) => {
+        const item = (db.categorias || []).find(c => String(c.id) === String(id));
+        if (!item || isCategoriaPadrao(item)) { Utils.showToast('Categorias padrão não podem ser arquivadas.', 'error'); return; }
+        if (!confirm(`Arquivar “${item.nome}”? Ela ficará no histórico, mas não aparecerá em novos lançamentos.`)) return;
+        if (Database.archiveCategory(id)) {
+            Utils.showToast('Categoria arquivada. O histórico foi preservado.', 'success');
+            App.updateCategorySelects(); App.scheduleRender();
+        } else {
+            Utils.showToast(Database.getCategoryError?.() || 'Não foi possível arquivar a categoria.', 'error');
+        }
+    },
+    restoreCategory: (id) => {
+        if (Database.restoreCategory(id)) { Utils.showToast('Categoria restaurada e disponível para novos lançamentos.', 'success'); App.updateCategorySelects(); App.scheduleRender(); }
+    },
+    deleteCategory: (id) => {
+        const item = (db.categorias || []).find(c => String(c.id) === String(id));
+        if (!item) return;
+        if (isCategoriaPadrao(item)) { Utils.showToast('Categorias padrão não podem ser excluídas.', 'error'); return; }
+        const usage = Database.getCategoryUsage(id);
+        if (usage.count) { Utils.showToast(`Não é possível excluir: ${usage.references.join(', ')}. Arquive a categoria para preservar o histórico.`, 'error'); return; }
+        if (!confirm(`Excluir “${item.nome}”? Esta categoria não tem referências e será removida permanentemente.`)) return;
+        if (Database.remove('categorias', id) !== false) { Utils.showToast('Categoria excluída.', 'success'); App.updateCategorySelects(); App.scheduleRender(); }
+    },
+    setCategoryType: (type) => {
+        const root = document.querySelector('[data-category-management]');
+        if (!root) return;
+        const selected = ['all', 'despesa', 'receita'].includes(type) ? type : 'all';
+        root.dataset.categoryType = selected;
+        root.querySelectorAll('[data-action="setCategoryType"]').forEach(button => {
+            const active = button.getAttribute('data-payload') === selected;
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        App.filterCategoriesDOM(root.querySelector('[data-input="categorySearch"]')?.value || '');
+    },
+
+    setCategoryStatus: (status) => {
+        const root = document.querySelector('[data-category-management]');
+        if (!root) return;
+        const selected = ['all', 'active', 'archived'].includes(status) ? status : 'active';
+        root.dataset.categoryStatus = selected;
+        root.querySelectorAll('[data-action="setCategoryStatus"]').forEach(button => {
+            const active = button.getAttribute('data-payload') === selected;
+            button.classList.toggle('is-active', active);
+            button.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+        App.filterCategoriesDOM(root.querySelector('[data-input="categorySearch"]')?.value || '');
+    },
+    filterCategoriesDOM: (query) => {
+        const root = document.querySelector('[data-category-management]');
+        if (!root) return;
+        const normalizedQuery = String(query || '').trim().toLocaleLowerCase('pt-BR');
+        const selectedType = root.dataset.categoryType || 'all';
+        const selectedStatus = root.dataset.categoryStatus || 'active';
+        let visibleCategoryCount = 0;
+        let visibleGroupCount = 0;
+        root.querySelectorAll('[data-category-section]').forEach(section => {
+            const sectionType = section.getAttribute('data-category-section');
+            const typeMatches = selectedType === 'all' || selectedType === sectionType;
+            let visibleCards = 0;
+            section.querySelectorAll('.nv-category-card').forEach(card => {
+                let visibleRows = 0;
+                card.querySelectorAll('[data-category-row]').forEach(row => {
+                    const statusMatches = selectedStatus === 'all' || row.dataset.categoryStatus === selectedStatus;
+                    const textMatches = !normalizedQuery || String(row.dataset.search || '').includes(normalizedQuery);
+                    const visible = typeMatches && statusMatches && textMatches;
+                    row.hidden = !visible;
+                    if (visible) { visibleRows += 1; visibleCategoryCount += 1; }
+                });
+                const visible = typeMatches && visibleRows > 0;
+                card.hidden = !visible;
+                if (visible) visibleCards += 1;
+            });
+            visibleGroupCount += visibleCards;
+            const hasCards = section.querySelectorAll('.nv-category-card').length > 0;
+            section.hidden = !typeMatches || !visibleCards || !hasCards;
+        });
+        const empty = root.querySelector('.nv-category-filter-empty');
+        if (empty) empty.hidden = visibleCategoryCount !== 0;
+        const result = root.querySelector('.nv-category-results-count');
+        if (result) result.textContent = `${visibleCategoryCount} ${visibleCategoryCount === 1 ? 'categoria' : 'categorias'} · ${visibleGroupCount} ${visibleGroupCount === 1 ? 'grupo' : 'grupos'}`;
+    },
     
     setTxPage: (page) => {
-        App.viewState.txPage = parseInt(page);
+        const value = parseInt(page, 10);
+        if (!isValidPage(value)) return;
+        App.viewState.txPage = value;
+        saveViewContext('transactions.page', value, isValidPage);
     },
     
     setTxPerPage: (limit) => {
         App.viewState.txPerPage = parseInt(limit);
         App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
     },
 
-    setFilter: (key, value) => { 
-        App.viewState.selectedTransactions = []; 
-        App.viewState.filters[key] = value; 
-        App.viewState.txPage = 1; 
+    setFilter: (key, value) => {
+        if (!TRANSACTION_FILTER_KEYS.includes(key)) return;
+        App.viewState.selectedTransactions = [];
+        const defaults = getDefaultTransactionFilters();
+        App.viewState.filters[key] = normalizeTransactionFilter(key, value, defaults[key]);
+        App.viewState.uncategorizedOnly = false;
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+        persistTransactionFilters(App.viewState.filters);
+        trackUIEvent({ screen: 'Transacoes', source: 'filter', action: 'filter_changed' });
     },
     
-    clearFilters: () => { 
-        App.viewState.selectedTransactions = []; 
-        App.viewState.filters = { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' }; 
-        App.viewState.txPage = 1; 
+    filterUncategorized: () => {
+        App.viewState.selectedTransactions = [];
+        App.viewState.uncategorizedOnly = true;
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+    },
+    clearUncategorizedFilter: () => {
+        App.viewState.uncategorizedOnly = false;
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+    },
+    clearFilters: () => {
+        App.viewState.selectedTransactions = [];
+        App.viewState.uncategorizedOnly = false;
+        App.viewState.filters = getDefaultTransactionFilters();
+        App.viewState.txPage = 1;
+        saveViewContext('transactions.page', 1, isValidPage);
+        persistTransactionFilters(App.viewState.filters);
     },
     
     showAgendaDay: (date) => {
+        App.viewState.agendaSelectedDate = date;
         const items = [...(db.agendamentos || []), ...(db.receitasFuturas || [])].filter(i => (i.dataVencimento || i.data) === date);
         const dataFormatada = new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' });
         const lista = document.getElementById('agenda-dia-lista');
@@ -837,6 +1124,7 @@ export const App = {
         const hoje = new Date();
         App.viewState.agendaMonth = hoje.getMonth();
         App.viewState.agendaYear = hoje.getFullYear();
+        App.viewState.agendaSelectedDate = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
         App.scheduleRender();
     },
 
@@ -862,12 +1150,18 @@ export const App = {
             App.viewState.invoiceMonth = m; App.viewState.invoiceYear = y; 
             if(document.getElementById('modal-fatura-detalhes')?.classList.contains('flex')) Renderer.renderInvoiceModal(App.viewState);
         } else { 
-            App.viewState.budgetMonth = m; App.viewState.budgetYear = y; 
+            App.viewState.budgetMonth = m; App.viewState.budgetYear = y;
+            saveViewContext('planning.period', { month: m, year: y }, isValidPlanningPeriod);
         }
     },
 
     setTransactionType: (tipo) => UI.setTransactionType(tipo),
-    openModal: (id, transType = null) => UI.openModal(id, transType),
+    openModal: (id, transType = null, categoryId = null) => {
+        // Prepare category state before capturing the modal snapshot. Otherwise a
+        // previous edit is treated as unsaved data when opening a new category.
+        if (id === 'modal-categoria') App.prepareCategoryModal(categoryId);
+        UI.openModal(id, transType);
+    },
     switchToTransferMode: () => UI.switchToTransferMode(),
     captureModalState: (id) => UI.captureModalState(id),
     renameCategory: (id, nome) => Database.renameCategory(id, nome),
@@ -975,7 +1269,7 @@ export const App = {
         const groupSelect = document.getElementById('invoice-classification-group');
         const subgroupSelect = document.getElementById('invoice-classification-subgroup');
         if (!modal || !groupSelect || !subgroupSelect || !selected.length) return;
-        const categories = (db.categorias || []).filter(c => c && (!c.tipo || c.tipo === 'despesa'));
+        const categories = (db.categorias || []).filter(c => c && c.ativo !== false && !c.arquivada && (!c.tipo || c.tipo === 'despesa'));
         const groups = [...new Set(categories.map(c => c.grupo || c.nome).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), 'pt-BR'));
         groupSelect.innerHTML = '<option value="" disabled selected>Selecione um grupo</option>' + groups.map(g => `<option value="${Utils.escapeHTML(g)}">${Utils.escapeHTML(g)}</option>`).join('');
         subgroupSelect.innerHTML = '<option value="" disabled selected>Selecione uma categoria</option>';

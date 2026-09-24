@@ -1,5 +1,8 @@
-import { CATEGORIAS_PADRAO } from './categorias-padrao.js';
+import { CATEGORIAS_PADRAO, getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment } from './reconciliation.js';
+import { calculatePeriodTotals, isIncome, isInvoicePayment, isTransfer } from './financial-ledger.js';
+import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
+import { createTransfer, isValidTransferDate } from './financial-transfers.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -18,6 +21,7 @@ const initialDB = {
     // Conferência é independente de agendamentos/status de pagamento.
     conciliacoesFaturas: [],
     metas: [],
+    reservas: [],
     orcamentos: [],
     notificacoes: [],
     agendamentos: [], 
@@ -31,7 +35,9 @@ const initialDB = {
     historicoMentoria: [],
     receitasFuturas: [],
     assinaturas: [],
-    investimentos: []
+    investimentos: [],
+    // Persisted write timestamp; null means freshness is not trustworthy yet.
+    metadados: { ultimaAtualizacao: null }
 };
 
 export let db = {};
@@ -80,8 +86,34 @@ const IDB = {
         const req = tx.objectStore(IDB_STORE).put(value, key);
         req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
+    }),
+    setMany: entries => new Promise((resolve, reject) => {
+        if (typeof indexedDB === 'undefined') {
+            try {
+                const nextStore = { ...IDB._memoryStore };
+                entries.forEach(([key, value]) => { nextStore[key] = value; });
+                IDB._memoryStore = nextStore;
+                resolve();
+            } catch (error) {
+                reject(error);
+            }
+            return;
+        }
+        const tx = IDB._db.transaction(IDB_STORE, 'readwrite');
+        const store = tx.objectStore(IDB_STORE);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error || new Error('Falha ao salvar transferência.'));
+        tx.onabort = () => reject(tx.error || new Error('Transação interrompida ao salvar transferência.'));
+        try {
+            entries.forEach(([key, value]) => store.put(value, key));
+        } catch (error) {
+            try { tx.abort(); } catch (_) {}
+            reject(error);
+        }
     })
 };
+
+const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
 
 const clearCache = () => {
     Cache.transacoesPorMes = null;
@@ -134,6 +166,31 @@ const loadData = async () => {
         }
     });
 
+    let goalsChanged = false;
+    let reservesChanged = false;
+    db.metas.forEach(meta => {
+        const fallbackReserveId = meta.reservaId || `reserva-meta-${String(meta.id)}`;
+        let reserve = db.reservas.find(item => String(item.id) === String(fallbackReserveId))
+            || db.reservas.find(item => String(item.goalId) === String(meta.id));
+        const reserveId = reserve?.id || fallbackReserveId;
+        if (meta.reservaId !== reserveId) { meta.reservaId = reserveId; goalsChanged = true; }
+        if (!reserve) {
+            reserve = { id: reserveId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)) };
+            db.reservas.push(reserve);
+            reservesChanged = true;
+        } else {"}...commentary -------------- code 424? Let's invoke properly. We must edit existing? Code displays entry. Need tool call. I have syntax weird. Let's actually call. Earlier commentary above is analysis internal? It looks tool? no tag. Need use. I notice meta variable currently after using `meta.reservaId` fallback but no ID reserve. Let's patch. Wait tool call was malformed due my content not namespace. We'll call now. Option: no need. But it'd robust. Do it.*** UNKNOWN? We need only tool calls as assistant. Continue.*** Hmm as the current assistant context, tool namespace available but commentary tag syntax. Let's resume with valid. Ensure no stray message inadvertently.*** We need produce commentary invocation. We'll make call. (Analysis content only.)*** I apparently wrote 
+            if (String(reserve.goalId) !== String(meta.id)) { reserve.goalId = meta.id; reservesChanged = true; }
+            if (!reserve.nome) { reserve.nome = `Reserva: ${meta.nome || 'Meta'}`; reservesChanged = true; }
+            const normalizedBalance = fromCents(toCents(reserve.saldo));
+            if (reserve.saldo !== normalizedBalance) { reserve.saldo = normalizedBalance; reservesChanged = true; }
+        }
+        const reserveBalance = fromCents(toCents(reserve.saldo));
+        if (toCents(meta.atual) !== toCents(reserveBalance)) { meta.atual = reserveBalance; goalsChanged = true; }
+    });
+    if (goalsChanged || reservesChanged) {
+        await IDB.setMany([['metas', db.metas], ['reservas', db.reservas]]);
+    }
+
     if (db.categorias.length === 0) {
         db.categorias = CATEGORIAS_PADRAO.map(c => ({ ...c }));
         await IDB.set('categorias', db.categorias);
@@ -141,44 +198,33 @@ const loadData = async () => {
 
     if (db.categorias.length > 0) {
         const padraoPorNome = new Map(CATEGORIAS_PADRAO.map(c => [String(c.nome).toLowerCase(), c]));
-        db.categorias = db.categorias.map(c => {
-            const padrao = padraoPorNome.get(String(typeof c === 'string' ? c : c.nome || '').toLowerCase());
-            if (!padrao || typeof c === 'string') return typeof c === 'string' ? { ...padrao, id: 'cat_' + Date.now() + Math.random() } : c;
-            return { ...c, grupo: c.grupo || padrao.grupo, subgrupo: c.subgrupo || padrao.subgrupo, tipo: c.tipo || padrao.tipo, fixa: c.fixa ?? padrao.fixa, icone: c.icone || padrao.icone, cor: c.cor || padrao.cor };
-        });
-        await IDB.set('categorias', db.categorias);
-        const categoryDefaults = {
-            'Alimentação': { icone: 'fa-utensils', cor: '#F97316' },
-            'Moradia': { icone: 'fa-house', cor: '#8B5CF6' },
-            'Transporte': { icone: 'fa-car', cor: '#3B82F6' },
-            'Lazer': { icone: 'fa-gamepad', cor: '#EC4899' },
-            'Saúde': { icone: 'fa-heart-pulse', cor: '#F43F5E' },
-            'Salário': { icone: 'fa-money-bill-wave', cor: '#10B981' },
-            'Serviços': { icone: 'fa-bolt', cor: '#06B6D4' },
-            'Educação': { icone: 'fa-graduation-cap', cor: '#6366F1' },
-            'Compras': { icone: 'fa-bag-shopping', cor: '#F59E0B' }
-        };
-        
-        db.categorias = db.categorias.map((c, index) => {
-            if (typeof c === 'string') {
-                const def = categoryDefaults[c] || { icone: 'fa-tag', cor: '#9CA3AF' };
-                return { id: 'cat_' + Date.now() + index, nome: c, icone: def.icone, cor: def.cor };
-            } else if (typeof c === 'object' && c !== null) {
-                return {
-                    id: c.id || 'cat_' + Date.now() + index,
-                    nome: c.nome || 'Categoria ' + (index + 1),
-                    icone: c.icone || 'fa-tag',
-                    cor: c.cor || '#9CA3AF',
-                    paiId: c.paiId || null,
-                    grupo: c.grupo || null,
-                    subgrupo: c.subgrupo || c.nome || null,
-                    tipo: c.grupo === 'Renda' ? 'receita' : (c.tipo || 'despesa')
-                };
+        // Fill legacy fields without treating a custom category with the same
+        // display name as a default. The stable seed id and explicit fixa flag
+        // are the only default signals.
+        db.categorias = db.categorias.map((raw, index) => {
+            if (typeof raw === 'string') {
+                const padrao = padraoPorNome.get(raw.toLowerCase());
+                return padrao ? { ...padrao, id: 'cat_' + Date.now() + index, fixa: false } : { id: 'cat_' + Date.now() + index, nome: raw, icone: 'fa-tag', cor: '#9CA3AF', fixa: false };
             }
-            return null;
-        }).filter(c => c !== null);
-        
-        IDB.set('categorias', db.categorias).catch(console.error);
+            const c = raw && typeof raw === 'object' ? raw : {};
+            const padrao = padraoPorNome.get(String(c.nome || '').toLowerCase());
+            const id = c.id || 'cat_' + Date.now() + index;
+            const defaultRecord = isCategoriaPadrao({ ...c, id }, padrao);
+            const merged = {
+                ...c,
+                id,
+                nome: c.nome || 'Categoria ' + (index + 1),
+                grupo: c.grupo || padrao?.grupo || null,
+                subgrupo: c.subgrupo || padrao?.subgrupo || c.nome || null,
+                tipo: c.grupo === 'Renda' ? 'receita' : (c.tipo || padrao?.tipo || 'despesa'),
+                fixa: defaultRecord,
+                icone: c.icone || padrao?.icone || 'fa-tag',
+                cor: c.cor || padrao?.cor || '#9CA3AF',
+                paiId: c.paiId || null
+            };
+            return { ...merged, icone: getCategoriaIcon(merged) };
+        }).filter(Boolean);
+        await IDB.set('categorias', db.categorias);
     }
 
     let oldCardExpensesStr = null;
@@ -252,25 +298,246 @@ Object.defineProperty(db, 'comprasCartao', {
 });
 
 const persist = (col) => {
+    // This timestamp is written only from mutation paths, never from render.
+    // It therefore remains a trustworthy freshness signal across reloads.
+    db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
+    IDB.set('metadados', db.metadados).catch(console.error);
     if (col && db[col] !== undefined) {
         IDB.set(col, db[col]).catch(console.error);
     } else {
         collections.forEach(c => IDB.set(c, db[c]).catch(console.error));
     }
-    clearCache(); 
+    clearCache();
     if (typeof document !== 'undefined') {
         document.dispatchEvent(new Event('db-updated'));
     }
 };
 
-const applyBalanceDelta = (t, isReverse = false) => {
-    if (t.isCartao) return; 
-    const b = db.bancos.find(x => String(x.id) === String(t.bancoId));
-    if (b) {
-        // Internal transfers have a debit and credit leg; never classify them as expense/income.
-        const amount = t.transferenciaInterna ? (t.transferenciaEntrada ? t.valor : -t.valor) : (t.tipo === 'receita' && !t.transferenciaInterna ? t.valor : -t.valor);
-        b.saldo += isReverse ? -amount : amount;
-        persist('bancos');
+const persistAtomically = async cols => {
+    const uniqueCols = [...new Set([...(cols || []), 'metadados'])];
+    const previousMetadata = db.metadados;
+    db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
+    try {
+        await IDB.setMany(uniqueCols.filter(col => db[col] !== undefined).map(col => [col, db[col]]));
+    } catch (error) {
+        db.metadados = previousMetadata;
+        throw error;
+    }
+    clearCache();
+    if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+};
+
+const transferStateSnapshot = () => ({
+    transacoes: db.transacoes.map(item => ({ ...item })),
+    bancos: db.bancos.map(item => ({ ...item })),
+    reservas: (db.reservas || []).map(item => ({ ...item })),
+    metas: db.metas.map(item => ({ ...item })),
+    metadados: { ...(db.metadados || {}) }
+});
+
+const restoreTransferState = snapshot => {
+    db.transacoes = snapshot.transacoes;
+    db.bancos = snapshot.bancos;
+    db.reservas = snapshot.reservas;
+    db.metas = snapshot.metas;
+    db.metadados = snapshot.metadados;
+    clearCache();
+};
+
+const applyBalanceDelta = (t, isReverse = false, shouldPersist = true) => {
+    // A confirmed statement balance is an absolute anchor that already includes
+    // these imported ledger rows. Keep their history without applying them twice.
+    if (t.isCartao || t.saldoIncluidoNoSaldoDoExtrato === true) return;
+    const bank = db.bancos.find(account => String(account.id) === String(t.bancoId));
+    const reserve = (db.reservas || []).find(account => String(account.id) === String(t.bancoId));
+    const account = bank || reserve;
+    if (!account) return;
+
+    const amount = isTransfer(t)
+        ? (t.transferenciaEntrada ? t.valor : -t.valor)
+        : (isIncome(t) ? t.valor : -t.valor);
+    account.saldo = addMoney(account.saldo, isReverse ? -amount : amount);
+    if (shouldPersist) persist(bank ? 'bancos' : 'reservas');
+};
+
+const applyGoalReserveDelta = (transaction, sign = 1) => {
+    if (!isTransfer(transaction)) return;
+    const reserve = (db.reservas || []).find(item => String(item.id) === String(transaction?.bancoId));
+    if (!reserve) return;
+    const goal = db.metas.find(item => String(item.id) === String(reserve.goalId));
+    if (!goal) return;
+    const direction = transaction.transferenciaEntrada ? 1 : -1;
+    goal.atual = addMoney(goal.atual, direction * sign * (Number(transaction.valor) || 0));
+};
+
+const resolveTransferAccount = id => ({
+    bank: db.bancos.find(item => String(item.id) === String(id)) || null,
+    reserve: (db.reservas || []).find(item => String(item.id) === String(id)) || null,
+});
+
+const isUnpairedTransfer = item => isTransfer(item) && !isInvoicePayment(item) && !item?.transferenciaId;
+
+const TRANSFER_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas'];
+
+const isValidTransferPair = legs => {
+    if (!Array.isArray(legs) || legs.length !== 2) return false;
+    const incoming = legs.filter(item => item.transferenciaEntrada === true);
+    const outgoing = legs.filter(item => item.transferenciaEntrada === false);
+    if (incoming.length !== 1 || outgoing.length !== 1) return false;
+    const [credit] = incoming;
+    const [debit] = outgoing;
+    const sourceAccount = resolveTransferAccount(debit.contaOrigemId);
+    const destinationAccount = resolveTransferAccount(debit.contaDestinoId);
+    const sourceIsUnambiguous = Boolean(sourceAccount.bank) !== Boolean(sourceAccount.reserve);
+    const destinationIsUnambiguous = Boolean(destinationAccount.bank) !== Boolean(destinationAccount.reserve);
+    return Boolean(
+        sourceIsUnambiguous && destinationIsUnambiguous &&
+        credit.transferenciaInterna === true && debit.transferenciaInterna === true &&
+        credit.transferenciaId != null && String(credit.transferenciaId).length > 0 &&
+        String(credit.transferenciaId) === String(debit.transferenciaId) &&
+        credit.id != null && debit.id != null && String(credit.id) !== String(debit.id) &&
+        credit.tipo === 'receita' && debit.tipo === 'despesa' &&
+        String(debit.bancoId) === String(debit.contaOrigemId) &&
+        String(credit.bancoId) === String(credit.contaDestinoId) &&
+        String(debit.contaOrigemId) === String(credit.contaOrigemId) &&
+        String(debit.contaDestinoId) === String(credit.contaDestinoId) &&
+        String(debit.contaOrigemId) !== String(debit.contaDestinoId) &&
+        Boolean(resolveTransferAccount(debit.contaOrigemId).bank || resolveTransferAccount(debit.contaOrigemId).reserve) &&
+        Boolean(resolveTransferAccount(debit.contaDestinoId).bank || resolveTransferAccount(debit.contaDestinoId).reserve) &&
+        toCents(debit.valor) > 0 && toCents(debit.valor) === toCents(credit.valor) &&
+        String(debit.data) === String(credit.data) && isValidTransferDate(debit.data)
+    );
+};
+
+export const TransferRepo = {
+    add: async ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null } = {}) => {
+        const source = resolveTransferAccount(sourceAccountId);
+        const destination = resolveTransferAccount(destinationAccountId);
+        if ((!source.bank && !source.reserve) || (!destination.bank && !destination.reserve)) {
+            throw new Error('A conta de origem ou destino não existe.');
+        }
+        if ((source.bank && source.reserve) || (destination.bank && destination.reserve)) {
+            throw new Error('Identificador de conta ambíguo para transferência.');
+        }
+        if (source.reserve && goalId != null) throw new Error('A origem do aporte deve ser uma conta bancária.');
+        if (goalId != null && (!source.bank || !destination.reserve || String(destination.reserve.goalId) !== String(goalId) || !db.metas.some(item => String(item.id) === String(goalId)))) {
+            throw new Error('A reserva não pertence à meta selecionada.');
+        }
+
+        const legs = createTransfer({ sourceAccountId, destinationAccountId, amount, date, description });
+        if (!isValidTransferPair(legs) || db.transacoes.some(item => String(item.transferenciaId) === String(legs[0].transferenciaId)) || legs.some(leg => db.transacoes.some(item => String(item.id) === String(leg.id)))) {
+            throw new Error('Não foi possível criar um par de transferência íntegro.');
+        }
+        const snapshot = transferStateSnapshot();
+        try {
+            db.transacoes = [...legs, ...db.transacoes];
+            legs.forEach(leg => {
+                applyBalanceDelta(leg, false, false);
+                applyGoalReserveDelta(leg, 1);
+            });
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return { ok: true, transferId: legs[0].transferenciaId, transactions: legs };
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
+    },
+
+    update: async (transactionId, newData = {}) => {
+        if (!newData || typeof newData !== 'object' || Array.isArray(newData)) return false;
+        const target = db.transacoes.find(item => String(item.id) === String(transactionId));
+        if (!target?.transferenciaId) return false;
+        const legs = db.transacoes.filter(item => String(item.transferenciaId) === String(target.transferenciaId));
+        if (!isValidTransferPair(legs)) return false;
+        const allowedFields = ['desc', 'data', 'categoria', 'contatoId', 'observacoes', 'valor'];
+        if (Object.keys(newData).some(key => !allowedFields.includes(key))) return false;
+
+        const sharedChanges = {};
+        ['desc', 'data', 'categoria', 'contatoId', 'observacoes'].forEach(key => {
+            if (hasOwn(newData, key)) sharedChanges[key] = newData[key];
+        });
+        if (hasOwn(newData, 'data') && !isValidTransferDate(newData.data)) return false;
+        if (hasOwn(newData, 'valor')) {
+            const valueCents = toCents(newData.valor);
+            if (valueCents <= 0) return false;
+            sharedChanges.valor = fromCents(valueCents);
+        }
+        const nextLegs = legs.map(leg => ({ ...leg, ...sharedChanges }));
+        const snapshot = transferStateSnapshot();
+        try {
+            legs.forEach(leg => {
+                applyBalanceDelta(leg, true, false);
+                applyGoalReserveDelta(leg, -1);
+            });
+            const byId = new Map(nextLegs.map(leg => [String(leg.id), leg]));
+            db.transacoes = db.transacoes.map(leg => byId.get(String(leg.id)) || leg);
+            nextLegs.forEach(leg => {
+                applyBalanceDelta(leg, false, false);
+                applyGoalReserveDelta(leg, 1);
+            });
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return true;
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
+    },
+
+    deleteByIds: async ids => {
+        const selected = new Set((ids || []).map(String));
+        const selectedTransfers = db.transacoes.filter(item => selected.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
+        if (selectedTransfers.some(item => !item.transferenciaId)) {
+            throw new Error('Não é possível remover uma perna de transferência sem identificador vinculado.');
+        }
+        const transferIds = new Set(selectedTransfers.map(item => String(item.transferenciaId)));
+        if (!transferIds.size) return null;
+
+        const grouped = [...transferIds].map(transferId => db.transacoes.filter(item => String(item.transferenciaId) === transferId));
+        if (grouped.some(legs => !isValidTransferPair(legs))) {
+            throw new Error('A transferência está incompleta; nenhuma perna foi removida.');
+        }
+        const removed = db.transacoes.filter(item => selected.has(String(item.id)) || (item.transferenciaId && transferIds.has(String(item.transferenciaId))));
+        const snapshot = transferStateSnapshot();
+        try {
+            removed.forEach(leg => {
+                applyBalanceDelta(leg, true, false);
+                applyGoalReserveDelta(leg, -1);
+            });
+            db.transacoes = db.transacoes.filter(item => !selected.has(String(item.id)) && !(item.transferenciaId && transferIds.has(String(item.transferenciaId))));
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return removed;
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
+    },
+
+    restoreMany: async items => {
+        const candidates = (items || []).filter(item => !db.transacoes.some(current => String(current.id) === String(item.id)));
+        if (candidates.some(item => isUnpairedTransfer(item))) {
+            throw new Error('Não é possível restaurar uma transferência sem identificador vinculado.');
+        }
+        const grouped = new Map();
+        candidates.filter(item => item.transferenciaId || isUnpairedTransfer(item)).forEach(item => {
+            const key = String(item.transferenciaId);
+            grouped.set(key, [...(grouped.get(key) || []), item]);
+        });
+        if ([...grouped.values()].some(legs => !isValidTransferPair(legs))) {
+            throw new Error('Não é possível restaurar uma transferência incompleta.');
+        }
+        const snapshot = transferStateSnapshot();
+        try {
+            db.transacoes = [...candidates, ...db.transacoes];
+            candidates.forEach(item => {
+                applyBalanceDelta(item, false, false);
+                applyGoalReserveDelta(item, 1);
+            });
+            await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
+            return candidates.length;
+        } catch (error) {
+            restoreTransferState(snapshot);
+            throw error;
+        }
     }
 };
 
@@ -299,6 +566,7 @@ export const BankRepo = {
     add: (item) => { 
         const novoBanco = {
             ...item,
+            saldo: fromCents(toCents(item.saldo)),
             dataCriacao: item.dataCriacao || new Date().toISOString().split('T')[0]
         };
         db.bancos.unshift(novoBanco); 
@@ -332,6 +600,7 @@ export const TransactionsRepo = {
     },
     
     add: (item) => {
+        if (item?.transferenciaId || isUnpairedTransfer(item)) return false;
         const t = { ...item };
         if (!t.codigoRef) t.codigoRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         db.transacoes.unshift(t);
@@ -341,12 +610,15 @@ export const TransactionsRepo = {
     },
     
     addRecurrent: (t, parcelas) => {
+        if (t?.transferenciaId || isTransfer(t)) return false;
         const dataOriginal = new Date(t.data + 'T12:00:00');
         const diaOriginal = dataOriginal.getDate();
         const grupoId = Date.now();
         const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        const quantidade = Math.max(1, Number.parseInt(parcelas, 10) || 1);
+        const valorParcela = fromCents(toCents(t.valor));
 
-        for (let i = 0; i < parcelas; i++) {
+        for (let i = 0; i < quantidade; i++) {
             let dataParcela = new Date(dataOriginal);
             dataParcela.setMonth(dataOriginal.getMonth() + i);
             if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
@@ -354,9 +626,10 @@ export const TransactionsRepo = {
             const newT = {
                 ...t,
                 id: grupoId + i,
+                valor: valorParcela,
                 data: dataParcela.toISOString().split('T')[0],
                 parcelaAtual: i + 1,
-                totalParcelas: parcelas,
+                totalParcelas: quantidade,
                 grupoId: grupoId,
                 codigoRef: `${baseRef}-${i + 1}`
             };
@@ -367,26 +640,22 @@ export const TransactionsRepo = {
     },
     
     addCardExpense: (compra) => {
-        const valorBaseParcela = Math.round((compra.total / compra.parcelas) * 100) / 100;
-        const diferenca = parseFloat((compra.total - (valorBaseParcela * compra.parcelas)).toFixed(2));
-        
+        const quantidade = Math.max(1, Number.parseInt(compra.parcelas, 10) || 1);
+        const valoresParcelas = splitInstallments(compra.total, quantidade);
         const dataOriginal = new Date(compra.data + 'T12:00:00');
         const diaOriginal = dataOriginal.getDate();
         const grupoId = Date.now();
         const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
         
-        for (let i = 0; i < compra.parcelas; i++) {
+        for (let i = 0; i < quantidade; i++) {
             let dataParcela = new Date(dataOriginal);
             dataParcela.setMonth(dataOriginal.getMonth() + i);
             if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
             
-            let valorFinal = valorBaseParcela;
-            if (i === 0) valorFinal = parseFloat((valorFinal + diferenca).toFixed(2));
-
             db.transacoes.unshift({
                 id: grupoId + i,
                 desc: compra.desc,
-                valor: valorFinal,
+                valor: valoresParcelas[i],
                 tipo: 'despesa',
                 categoria: compra.categoria,
                 bancoId: compra.cartaoId,
@@ -394,10 +663,10 @@ export const TransactionsRepo = {
                 formaPagamento: 'Cartão de Crédito',
                 data: dataParcela.toISOString().split('T')[0],
                 parcelaAtual: i + 1,
-                totalParcelas: compra.parcelas,
-                recorrente: compra.parcelas > 1,
+                totalParcelas: quantidade,
+                recorrente: quantidade > 1,
                 grupoId: compra.id || grupoId,
-                codigoRef: compra.parcelas > 1 ? `${baseRef}-${i + 1}` : baseRef,
+                codigoRef: quantidade > 1 ? `${baseRef}-${i + 1}` : baseRef,
                 contatoId: compra.contatoId || null
             });
         }
@@ -405,7 +674,10 @@ export const TransactionsRepo = {
     },
     
     update: (id, newData) => {
-        const index = db.transacoes.findIndex(t => t.id.toString() === id.toString());
+        const index = db.transacoes.findIndex(t => String(t.id) === String(id));
+        if (index >= 0 && db.transacoes[index].transferenciaId) return TransferRepo.update(id, newData);
+        if (index >= 0 && isUnpairedTransfer(db.transacoes[index])) return false;
+        if (newData && (newData.transferenciaId || newData.transferenciaInterna === true || newData.tipo === 'transferencia' || newData.tipoTransferencia === 'interna')) return false;
         if (index !== -1) {
             const oldT = db.transacoes[index];
             applyBalanceDelta(oldT, true); 
@@ -421,9 +693,16 @@ export const TransactionsRepo = {
     updateCategories: (idsArray, categoria) => {
         const ids = new Set((idsArray || []).map(id => String(id)));
         if (!ids.size || !categoria) return 0;
+        const selectedTransfers = db.transacoes.filter(item => ids.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
+        if (selectedTransfers.some(item => !item.transferenciaId)) return 0;
+        const transferIds = new Set(selectedTransfers.map(item => String(item.transferenciaId)));
+        const selectedPairs = [...transferIds].map(id => db.transacoes.filter(item => String(item.transferenciaId) === id));
+        if (selectedPairs.some(legs => !isValidTransferPair(legs))) return 0;
+        const idsToUpdate = new Set(ids);
+        db.transacoes.filter(item => item.transferenciaId && transferIds.has(String(item.transferenciaId))).forEach(item => idsToUpdate.add(String(item.id)));
         let changed = 0;
         db.transacoes = db.transacoes.map(t => {
-            if (!ids.has(String(t.id))) return t;
+            if (!idsToUpdate.has(String(t.id))) return t;
             changed += 1;
             return { ...t, categoria };
         });
@@ -431,26 +710,19 @@ export const TransactionsRepo = {
         return changed;
     },
     
-    delete: (id) => {
-        const strId = id.toString();
-        const target = db.transacoes.find(item => item.id.toString() === strId);
-        if (target) applyBalanceDelta(target, true); 
-        
-        db.transacoes = db.transacoes.filter(item => item.id.toString() !== strId);
-        persist('transacoes');
-    },
-    
-    deleteMultiple: (idsArray) => {
-        if (!idsArray || idsArray.length === 0) return;
-        const strIds = idsArray.map(id => id.toString());
-        
-        strIds.forEach(strId => {
-            const target = db.transacoes.find(t => t.id.toString() === strId);
-            if (target) applyBalanceDelta(target, true); 
-        });
+    delete: id => TransactionsRepo.deleteMultiple([id]),
 
-        db.transacoes = db.transacoes.filter(t => !strIds.includes(t.id.toString()));
+    deleteMultiple: idsArray => {
+        if (!idsArray || idsArray.length === 0) return;
+        const strIds = new Set(idsArray.map(String));
+        const includesTransfer = db.transacoes.some(item => strIds.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
+        if (includesTransfer) return TransferRepo.deleteByIds(idsArray);
+
+        const removed = db.transacoes.filter(item => strIds.has(String(item.id)));
+        db.transacoes = db.transacoes.filter(item => !strIds.has(String(item.id)));
+        removed.forEach(item => applyBalanceDelta(item, true));
         persist('transacoes');
+        return removed;
     }
 };
 
@@ -528,9 +800,11 @@ export const ReconciliationRepo = {
         if (!Array.isArray(db.conciliacoesFaturas)) db.conciliacoesFaturas = [];
         const chave = invoiceReconciliationKey(cardId, year, month);
         const numeric = realInvoiceAmount === '' || realInvoiceAmount === null ? null : Number(realInvoiceAmount);
+        const validAmount = Number.isFinite(numeric);
+        const normalizedAmount = validAmount ? fromCents(toCents(numeric)) : null;
         const index = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
         const current = index >= 0 ? db.conciliacoesFaturas[index] : { chave, cardId, ano: year, mes: month };
-        const value = { ...current, valorFaturaReal: Number.isFinite(numeric) ? numeric : null, statusConciliacao: Number.isFinite(numeric) ? 'aguardando conferência' : 'em aberto', atualizadoEm: new Date().toISOString() };
+        const value = { ...current, valorFaturaReal: normalizedAmount, statusConciliacao: validAmount ? 'aguardando conferência' : 'em aberto', atualizadoEm: new Date().toISOString() };
         if (index >= 0) db.conciliacoesFaturas[index] = value;
         else db.conciliacoesFaturas.unshift(value);
         persist('conciliacoesFaturas');
@@ -544,58 +818,220 @@ export const ReconciliationRepo = {
 };
 
 export const GoalRepo = {
-    add: (item) => { db.metas.unshift(item); persist('metas'); return true; },
-    remove: (id) => { db.metas = db.metas.filter(i => i.id.toString() !== id.toString()); persist('metas'); },
-    deposit: (id, val) => {
-        const g = db.metas.find(x => String(x.id) === String(id));
-        if(g) { g.atual += val; persist('metas'); }
+    add: item => {
+        if (!Array.isArray(db.reservas)) db.reservas = [];
+        const goalId = item.id ?? `goal-${Date.now()}`;
+        const reserveId = item.reservaId || `reserva-meta-${String(goalId)}`;
+        const goal = {
+            ...item,
+            id: goalId,
+            reservaId: reserveId,
+            atual: 0,
+            alvo: fromCents(toCents(item.alvo))
+        };
+        db.metas.unshift(goal);
+        if (!(db.reservas || []).some(reserve => String(reserve.id) === String(reserveId))) {
+            db.reservas.unshift({ id: reserveId, goalId, nome: `Reserva: ${goal.nome || 'Meta'}`, saldo: goal.atual });
+        }
+        persist();
+        return true;
+    },
+    remove: id => {
+        const goal = db.metas.find(item => String(item.id) === String(id));
+        if (!goal) return false;
+        const reserve = (db.reservas || []).find(item => String(item.id) === String(goal.reservaId));
+        if (reserve && Math.abs(toCents(reserve.saldo)) > 0) return false;
+        const reserveIsReferenced = db.transacoes.some(item => [item.bancoId, item.contaOrigemId, item.contaDestinoId].some(accountId => String(accountId) === String(goal.reservaId)));
+        if (reserveIsReferenced) return false;
+        db.metas = db.metas.filter(item => String(item.id) !== String(id));
+        db.reservas = (db.reservas || []).filter(item => String(item.id) !== String(goal.reservaId));
+        persist();
+        return true;
+    },
+    deposit: (goalId, sourceAccountId, amount, date = new Date().toISOString().slice(0, 10), description = null) => {
+        const goal = db.metas.find(item => String(item.id) === String(goalId));
+        if (!goal) return Promise.reject(new Error('Meta não encontrada.'));
+        return TransferRepo.add({
+            sourceAccountId,
+            destinationAccountId: goal.reservaId,
+            amount,
+            date,
+            description: description || `Depósito em meta: ${goal.nome || 'Meta'}`,
+            goalId: goal.id
+        });
     }
 };
 
 export const BudgetRepo = {
-    add: (item) => { db.orcamentos.unshift(item); persist('orcamentos'); return true; },
+    add: (item) => {
+        db.orcamentos.unshift({ ...item, limite: fromCents(toCents(item.limite)) });
+        persist('orcamentos');
+        return true;
+    },
     remove: (id) => { db.orcamentos = db.orcamentos.filter(i => i.id.toString() !== id.toString()); persist('orcamentos'); },
     updateLimit: (categoria, limite, ano = null, mes = null) => {
+        const amount = fromCents(toCents(limite));
         const existe = db.orcamentos.findIndex(o => o.categoria === categoria && o.ano === ano && o.mes === mes);
-        if (existe >= 0) db.orcamentos[existe].limite = limite;
-        else db.orcamentos.push({ id: Date.now(), categoria, limite, ano, mes });
+        if (existe >= 0) db.orcamentos[existe].limite = amount;
+        else db.orcamentos.push({ id: Date.now(), categoria, limite: amount, ano, mes });
         persist('orcamentos');
     }
 };
 
 export const CategoryRepo = {
-    add: (item) => {
-        if (!db.categorias.some(c => c.nome.toLowerCase() === item.nome.toLowerCase())) {
-            db.categorias.push(item); 
-            persist('categorias'); 
-            return true;
+    _lastError: '',
+    _fail: (message) => { CategoryRepo._lastError = message; return false; },
+    getLastError: () => CategoryRepo._lastError,
+    _find: (id) => db.categorias.find(c => String(c.id) === String(id)),
+    _isArchived: (category) => category?.ativo === false || category?.arquivada === true,
+    isPrincipal: (category) => {
+        if (!category) return false;
+        const group = String(category.grupo || '').trim();
+        const name = String(category.nome || '').trim();
+        return category.tipoCategoria === 'principal' || !group || (group === name && String(category.subgrupo || name) === name);
+    },
+    _compatibleType: (category, tipo) => !category?.tipo || category.tipo === tipo,
+    _sameName: (a, b) => String(a || '').trim().toLocaleLowerCase('pt-BR') === String(b || '').trim().toLocaleLowerCase('pt-BR'),
+    _findParent: (group, tipo, excludeId = null, includeArchived = false) => {
+        const target = String(group || '').trim();
+        if (!target) return null;
+        return db.categorias.find(c => String(c.id) !== String(excludeId ?? '') &&
+            CategoryRepo._compatibleType(c, tipo) && CategoryRepo.isPrincipal(c) &&
+            (includeArchived || !CategoryRepo._isArchived(c)) &&
+            CategoryRepo._sameName(c.grupo || c.nome, target));
+    },
+    _references: (oldName, newName) => {
+        ['transacoes', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas'].forEach(collection => {
+            (db[collection] || []).forEach(item => { if (item?.categoria === oldName) item.categoria = newName; });
+        });
+    },
+    usage: (id) => {
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return { exists: false, count: 0, references: [] };
+        const name = String(categoria.nome);
+        const references = [];
+        const check = (collection, label) => (db[collection] || []).forEach(item => { if (item && item.categoria === name) references.push(label); });
+        check('transacoes', 'lançamentos'); check('orcamentos', 'orçamentos'); check('agendamentos', 'agendamentos'); check('receitasFuturas', 'receitas futuras'); check('assinaturas', 'assinaturas');
+        const children = (db.categorias || []).filter(c => String(c.paiId || '') === String(id) || (String(c.grupo || '') === name && String(c.id) !== String(id)));
+        if (children.length) references.push(`${children.length} subcategoria(s)`);
+        return { exists: true, count: references.length, references, default: isCategoriaPadrao(categoria) };
+    },
+    add: (item = {}) => {
+        CategoryRepo._lastError = '';
+        const nome = String(item.nome || '').trim();
+        const tipo = String(item.tipo || '').toLowerCase();
+        const nivel = item.tipoCategoria === 'subcategoria' ? 'subcategoria' : 'principal';
+        if (!nome) return CategoryRepo._fail('Informe um nome para a categoria.');
+        if (!['despesa', 'receita'].includes(tipo)) return CategoryRepo._fail('O tipo deve ser Despesa ou Receita.');
+        if (db.categorias.some(c => CategoryRepo._sameName(c?.nome, nome))) return CategoryRepo._fail(`Já existe uma categoria chamada “${nome}”.`);
+
+        let grupo = nome;
+        let paiId = null;
+        if (nivel === 'subcategoria') {
+            const parentName = String(item.grupo || '').trim();
+            const parent = CategoryRepo._findParent(parentName, tipo);
+            if (!parent) return CategoryRepo._fail('Escolha uma categoria principal ativa do mesmo tipo.');
+            grupo = String(parent.grupo || parent.nome).trim();
+            paiId = parent.id;
         }
-        return false;
+        db.categorias.push({
+            ...item, nome, tipo, tipoCategoria: nivel, grupo, subgrupo: nome, paiId,
+            fixa: false, ativo: true, arquivada: false
+        });
+        persist('categorias'); return true;
     },
     rename: (id, novoNome) => {
-        const categoria = db.categorias.find(c => String(c.id) === String(id));
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
         const nome = String(novoNome || '').trim();
-        if (!categoria || !nome || db.categorias.some(c => c !== categoria && String(c.nome).toLowerCase() === nome.toLowerCase())) return false;
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão são protegidas.');
+        if (!nome) return CategoryRepo._fail('Informe um nome para a categoria.');
+        if (db.categorias.some(c => c !== categoria && CategoryRepo._sameName(c.nome, nome))) return CategoryRepo._fail(`Já existe uma categoria chamada “${nome}”.`);
         const antigo = categoria.nome;
         categoria.nome = nome;
-        db.transacoes.forEach(t => { if (t.categoria === antigo) t.categoria = nome; });
-        db.orcamentos.forEach(o => { if (o.categoria === antigo) o.categoria = nome; });
-        db.agendamentos.forEach(a => { if (a.categoria === antigo) a.categoria = nome; });
-        persist('categorias'); persist('transacoes'); persist('orcamentos'); persist('agendamentos');
+        categoria.subgrupo = nome;
+        if (CategoryRepo.isPrincipal(categoria)) {
+            categoria.grupo = nome;
+            db.categorias.forEach(c => { if (c !== categoria && c.grupo === antigo) c.grupo = nome; });
+        }
+        CategoryRepo._references(antigo, nome);
+        persist('categorias'); ['transacoes', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas'].forEach(persist);
         return true;
     },
+    update: (id, data = {}) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão são protegidas e não podem ser editadas.');
+        const nome = String(data.nome || '').trim();
+        const tipo = String(data.tipo || categoria.tipo || '').toLowerCase();
+        const nivel = data.tipoCategoria === 'subcategoria' ? 'subcategoria' : 'principal';
+        if (!nome) return CategoryRepo._fail('Informe um nome para a categoria.');
+        if (!['despesa', 'receita'].includes(tipo)) return CategoryRepo._fail('O tipo deve ser Despesa ou Receita.');
+        if (db.categorias.some(c => c !== categoria && CategoryRepo._sameName(c.nome, nome))) return CategoryRepo._fail(`Já existe uma categoria chamada “${nome}”.`);
 
-    remove: (id) => { 
-        const categoria = db.categorias.find(c => String(c.id) === String(id));
-        if (!categoria) return false;
-        if (categoria.fixa) return false;
-        const usada = db.transacoes.some(t => t.categoria === categoria.nome) ||
-            db.orcamentos.some(o => o.categoria === categoria.nome) ||
-            db.agendamentos.some(a => a.categoria === categoria.nome);
-        if (usada) return false;
-        db.categorias = db.categorias.filter(c => c.id.toString() !== id.toString()); 
-        persist('categorias');
+        const oldLevel = CategoryRepo.isPrincipal(categoria) ? 'principal' : 'subcategoria';
+        const children = db.categorias.filter(c => c !== categoria && (String(c.paiId || '') === String(categoria.id) || String(c.grupo || '') === String(categoria.nome)));
+        if (oldLevel === 'principal' && nivel === 'subcategoria' && children.length) return CategoryRepo._fail('Esta categoria principal possui subcategorias e não pode virar subcategoria.');
+        if (oldLevel === 'principal' && children.length && categoria.tipo && categoria.tipo !== tipo) return CategoryRepo._fail('Altere o tipo das subcategorias antes de mudar o tipo desta categoria principal.');
+
+        let grupo = nome;
+        let paiId = null;
+        if (nivel === 'subcategoria') {
+            const requestedGroup = String(data.grupo || '').trim();
+            const parent = CategoryRepo._findParent(requestedGroup, tipo, categoria.id) ||
+                // An archived category may be edited to repair/display an old
+                // record without making its archived parent a new choice.
+                (CategoryRepo._isArchived(categoria) && CategoryRepo._findParent(requestedGroup, tipo, categoria.id, true));
+            if (!parent) return CategoryRepo._fail('Escolha uma categoria principal ativa e compatível.');
+            grupo = String(parent.grupo || parent.nome).trim();
+            paiId = parent.id;
+        }
+
+        const antigo = categoria.nome;
+        const eraPrincipal = oldLevel === 'principal';
+        categoria.nome = nome;
+        categoria.tipo = tipo;
+        categoria.tipoCategoria = nivel;
+        categoria.grupo = grupo;
+        categoria.subgrupo = nome;
+        categoria.paiId = paiId;
+        if (data.icone) categoria.icone = data.icone;
+        if (data.cor) categoria.cor = data.cor;
+        // ativo/arquivada/fixa are lifecycle/protection state, not editable form fields.
+        if (eraPrincipal && antigo !== nome) db.categorias.forEach(c => { if (c !== categoria && c.grupo === antigo) c.grupo = nome; });
+        if (antigo !== nome) CategoryRepo._references(antigo, nome);
+        persist('categorias'); ['transacoes', 'orcamentos', 'agendamentos', 'receitasFuturas', 'assinaturas'].forEach(persist);
         return true;
+    },
+    archive: (id) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão não podem ser arquivadas.');
+        const activeChildren = db.categorias.filter(c => c !== categoria &&
+            (String(c.paiId || '') === String(id) || String(c.grupo || '') === String(categoria.nome)) && !CategoryRepo._isArchived(c));
+        if (activeChildren.length) return CategoryRepo._fail('Arquive as subcategorias deste grupo antes de arquivar a categoria principal.');
+        categoria.ativo = false; categoria.arquivada = true;
+        persist('categorias'); return true;
+    },
+    restore: (id) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão não podem ser restauradas.');
+        categoria.ativo = true; categoria.arquivada = false;
+        persist('categorias'); return true;
+    },
+    remove: (id) => {
+        CategoryRepo._lastError = '';
+        const categoria = CategoryRepo._find(id);
+        if (!categoria) return CategoryRepo._fail('Categoria não encontrada.');
+        if (isCategoriaPadrao(categoria)) return CategoryRepo._fail('Categorias padrão não podem ser excluídas.');
+        if (CategoryRepo.usage(id).count) return CategoryRepo._fail('Categoria possui referências; arquive-a para preservar o histórico.');
+        db.categorias = db.categorias.filter(c => String(c.id) !== String(id));
+        persist('categorias'); return true;
     }
 };
 
@@ -666,27 +1102,75 @@ export const Database = {
     getTransacoesPorMes: TransactionsRepo.getByMonth,
     getComprasCartaoPorMes: TransactionsRepo.getCardExpensesByMonth,
     save: persist,
+    getLastUpdated: () => db.metadados?.ultimaAtualizacao || null,
     replaceAll: async (data) => {
         if (!data || typeof data !== 'object') throw new Error('Backup inválido');
 
         for (const col of collections) {
+            if (!hasOwn(data, col)) continue;
             if (Array.isArray(initialDB[col])) {
-                if (data[col] !== undefined && !Array.isArray(data[col])) {
-                    throw new Error(`Coleção inválida: ${col}`);
-                }
-                if (data[col] !== undefined) db[col] = data[col];
-            } else if (data[col] !== undefined) {
-                if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
-                    throw new Error(`Registro inválido: ${col}`);
-                }
-                db[col] = data[col];
+                if (!Array.isArray(data[col])) throw new Error(`Coleção inválida: ${col}`);
+            } else if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
+                throw new Error(`Registro inválido: ${col}`);
             }
         }
 
-        await Promise.all(collections.map(col => IDB.set(col, db[col])));
-        clearCache();
-        if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
-        return true;
+        const snapshot = Object.fromEntries(collections.map(col => [
+            col,
+            Array.isArray(db[col]) ? db[col].map(item => item && typeof item === 'object' ? { ...item } : item)
+                : (db[col] && typeof db[col] === 'object' ? { ...db[col] } : db[col])
+        ]));
+        try {
+            for (const col of collections) {
+                if (!hasOwn(data, col)) continue;
+                db[col] = Array.isArray(initialDB[col])
+                    ? data[col].map(item => item && typeof item === 'object' ? { ...item } : item)
+                    : { ...data[col] };
+            }
+
+            if (hasOwn(data, 'metas') && !hasOwn(data, 'reservas')) {
+                // Legacy backups recorded goal progress after deducting deposits
+                // from bank balances. Reconstruct reserves once, without keeping
+                // stale reserve entries from the database being replaced.
+                db.reservas = db.metas.map(meta => ({
+                    id: meta.reservaId || `reserva-meta-${String(meta.id)}`,
+                    goalId: meta.id,
+                    nome: `Reserva: ${meta.nome || 'Meta'}`,
+                    saldo: fromCents(toCents(meta.atual))
+                }));
+            }
+
+            if (Array.isArray(db.metas)) {
+                const existingReserves = Array.isArray(db.reservas) ? db.reservas : [];
+                const unlinkedReserves = existingReserves.filter(reserve => reserve.goalId == null);
+                const goalReserves = [];
+                db.metas = db.metas.map(meta => {
+                    const fallbackId = meta.reservaId || `reserva-meta-${String(meta.id)}`;
+                    let reserve = existingReserves.find(item => String(item.id) === String(fallbackId))
+                        || existingReserves.find(item => String(item.goalId) === String(meta.id));
+                    if (!reserve) {
+                        reserve = { id: fallbackId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)) };
+                    }
+                    reserve.id = reserve.id || fallbackId;
+                    reserve.goalId = meta.id;
+                    reserve.nome = reserve.nome || `Reserva: ${meta.nome || 'Meta'}`;
+                    reserve.saldo = fromCents(toCents(reserve.saldo));
+                    goalReserves.push(reserve);
+                    return { ...meta, reservaId: reserve.id, atual: reserve.saldo };
+                });
+                db.reservas = [...goalReserves, ...unlinkedReserves];
+            }
+
+            db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
+            await IDB.setMany(collections.map(col => [col, db[col]]));
+            clearCache();
+            if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+            return true;
+        } catch (error) {
+            collections.forEach(col => { db[col] = snapshot[col]; });
+            clearCache();
+            throw error;
+        }
     },
     saveMentoriaSnapshot: MentoriaRepo.saveSnapshot,
     add: (col, item) => {
@@ -724,8 +1208,10 @@ export const Database = {
         }
     },
     removeMultiple: (col, ids) => {
-        if (col === 'transacoes') TransactionsRepo.deleteMultiple(ids);
+        if (col === 'transacoes') return TransactionsRepo.deleteMultiple(ids);
     },
+    addTransfer: TransferRepo.add,
+    restoreTransactions: TransferRepo.restoreMany,
     updateTransaction: TransactionsRepo.update,
     updateTransactionCategories: TransactionsRepo.updateCategories,
     updateAgendamento: ScheduleRepo.update,
@@ -734,13 +1220,26 @@ export const Database = {
     updateConfig: NotificationRepo.updateConfig,
     updateBudget: BudgetRepo.updateLimit,
     renameCategory: CategoryRepo.rename,
+    updateCategory: CategoryRepo.update,
+    archiveCategory: CategoryRepo.archive,
+    restoreCategory: CategoryRepo.restore,
+    getCategoryUsage: CategoryRepo.usage,
+    getCategoryError: CategoryRepo.getLastError,
     depositGoal: GoalRepo.deposit,
     updateUser: UserRepo.update,
     markNotificationRead: NotificationRepo.markRead,
     markAllNotificationsRead: NotificationRepo.markAllRead,
-    getTotals: () => ({
-        receitas: db.transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + (b.valor || 0), 0),
-        despesas: db.transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + (b.valor || 0), 0),
-        saldo: db.bancos.reduce((a, b) => a + (b.saldo || 0), 0)
-    })
+    getTotals: () => {
+        const totals = calculatePeriodTotals(db.transacoes);
+        const saldoDisponivel = db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0);
+        const saldoReservado = (db.reservas || []).reduce((total, reserve) => addMoney(total, reserve.saldo), 0);
+        return {
+            receitas: totals.income,
+            despesas: totals.expense,
+            saldo: saldoDisponivel,
+            saldoDisponivel,
+            saldoReservado,
+            saldoTotal: addMoney(saldoDisponivel, saldoReservado)
+        };
+    }
 };

@@ -1,5 +1,7 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
+import { ImportError, IMPORT_ERROR_CODES, asImportError } from './import-errors.js';
+import { shouldAnchorImportedTransactionsToStatementBalance, statementBalanceAnchorMetadata, normalizeStatementBalance, statementBalanceAdjustment, reverseStatementBalanceAdjustment } from './ofx-balance.js';
 
 export const OFXManager = {
     iniciarImportacaoOFX: (bancoId, viewState) => {
@@ -15,9 +17,21 @@ export const OFXManager = {
         const reader = new FileReader();
 
         reader.onload = (event) => {
-            viewState.rawOfxString = event.target.result;
-            OFXManager.processarEVerificarDuplicidades(event.target.result, bancoIdPrevio, viewState, renderCallback, openModalCallback);
-            e.target.value = ''; 
+            try {
+                viewState.rawOfxString = event.target.result;
+                OFXManager.processarEVerificarDuplicidades(event.target.result, bancoIdPrevio, viewState, renderCallback, openModalCallback);
+            } catch (error) {
+                const importError = asImportError(error, IMPORT_ERROR_CODES.OFX_INVALID_FORMAT);
+                Utils.showToast(importError.message, 'error', {
+                    action: { action: 'iniciarImportacaoOFX', label: 'Escolher outro arquivo', payload: bancoIdPrevio }
+                });
+            } finally { e.target.value = ''; }
+        };
+        reader.onerror = () => {
+            Utils.showToast('Não foi possível ler o arquivo OFX.', 'error', {
+                action: { action: 'iniciarImportacaoOFX', label: 'Escolher outro arquivo', payload: bancoIdPrevio }
+            });
+            e.target.value = '';
         };
 
         reader.readAsText(file);
@@ -30,8 +44,12 @@ export const OFXManager = {
     },
 
     processarEVerificarDuplicidades: (ofxString, bancoId, viewState, renderCallback, openModalCallback) => {
-        const parsedData = Utils.parseOFX(ofxString);
+        const raw = String(ofxString ?? '');
+        if (!raw.trim()) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
+        if (!/<OFX[\s>]/i.test(raw)) throw new ImportError(IMPORT_ERROR_CODES.OFX_INVALID_FORMAT);
+        const parsedData = Utils.parseOFX(raw);
         const transacoesOFX = parsedData.transactions;
+        if (!transacoesOFX.length) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
 
         const selectBanco = document.getElementById('ofx-banco-alvo-id');
         if (selectBanco) {
@@ -57,7 +75,11 @@ export const OFXManager = {
         }
 
         const chkSaldo = document.getElementById('ofx-confirmar-saldo');
-        if (chkSaldo) chkSaldo.checked = false;
+        if (chkSaldo) {
+            chkSaldo.checked = false;
+            chkSaldo.disabled = parsedData.balance === null;
+            chkSaldo.title = parsedData.balance === null ? 'Este arquivo não contém saldo final.' : 'Substituir o saldo atual pelo saldo final do extrato.';
+        }
 
         let transacoesExistentes = [];
         let dataCriacaoBanco = null;
@@ -134,6 +156,7 @@ export const OFXManager = {
         }
 
         const categorias = db.categorias || [];
+        const activeCategoriesFor = item => categorias.filter(c => (c.ativo !== false && !c.arquivada) || c.nome === item.categoria);
         const html = viewState.ofxPendente.map(item => {
             const isDuplicada = item.status === 'duplicada';
             const isRetroativa = item.status === 'ignorada_saldo_inicial';
@@ -186,7 +209,7 @@ export const OFXManager = {
                         <div class="text-right shrink-0 ml-2">
                             <p class="text-sm font-bold font-mono ${item.tipo === 'receita' ? 'text-success' : 'text-text-primary'}">${valorFormatado}</p>
                             ${badgeStatus}
-                            <select class="mt-1 max-w-[120px] text-[10px] bg-surface border border-border rounded p-1 text-text-primary" onclick="event.stopPropagation()" onchange="App.alterarCategoriaOFX('${item.idTemp}', this.value)"><option value="">Categoria</option>${categorias.map(c => `<option value="${Utils.escapeHTML(c.nome)}" ${item.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('')}</select>
+                            <select class="mt-1 max-w-[120px] text-[10px] bg-surface border border-border rounded p-1 text-text-primary" onclick="event.stopPropagation()" onchange="App.alterarCategoriaOFX('${item.idTemp}', this.value)"><option value="">Categoria</option>${activeCategoriesFor(item).map(c => `<option value="${Utils.escapeHTML(c.nome)}" ${item.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}${c.ativo === false || c.arquivada ? ' (arquivada · histórico)' : ''}</option>`).join('')}</select>
                         </div>
                     </div>
                     ${alertaDuplicidade}
@@ -222,17 +245,29 @@ export const OFXManager = {
             return;
         }
 
-        if (chkSaldo && chkSaldo.checked && viewState.ofxPendenteSaldoFinal !== null) {
-            const banco = db.bancos.find(b => b.id.toString() === bancoId.toString());
-            if (banco) {
-                banco.saldo = viewState.ofxPendenteSaldoFinal;
-                Database.save('bancos');
+        const statementBalance = viewState.ofxPendenteSaldoFinal;
+        const anchorMetadata = statementBalanceAnchorMetadata({
+            importType: viewState.tipoImportacao,
+            balanceConfirmed: chkSaldo?.checked === true,
+            statementBalance,
+        });
+        const saldoFinalAplicado = anchorMetadata.saldoIncluidoNoSaldoDoExtrato === true;
+        const itensParaSalvar = viewState.ofxPendente.filter(i => i.selecionado);
+        const bancoAlvo = db.bancos.find(b => String(b.id) === String(bancoId));
+        let saldoAjusteReversivel = 0;
+
+        if (saldoFinalAplicado) {
+            if (!bancoAlvo) {
+                Utils.showToast('Não foi possível localizar a conta selecionada.', 'error');
+                return;
             }
+            const saldoAnterior = normalizeStatementBalance(bancoAlvo.saldo);
+            bancoAlvo.saldo = normalizeStatementBalance(statementBalance);
+            saldoAjusteReversivel = statementBalanceAdjustment(bancoAlvo.saldo, saldoAnterior);
+            Database.save('bancos');
         }
 
-        const itensParaSalvar = viewState.ofxPendente.filter(i => i.selecionado);
-
-        if (itensParaSalvar.length === 0 && (!chkSaldo || !chkSaldo.checked)) {
+        if (itensParaSalvar.length === 0 && !saldoFinalAplicado) {
             Utils.showToast('Nenhum item selecionado e saldo não atualizado.', 'warning');
             return;
         }
@@ -261,7 +296,8 @@ export const OFXManager = {
                 data: item.data,
                 codigoRef: item.identificador || `OFX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
                 importadoOFX: viewState.tipoImportacao === 'OFX',
-                importadoCSV: viewState.tipoImportacao === 'CSV'
+                importadoCSV: viewState.tipoImportacao === 'CSV',
+                ...anchorMetadata
             };
             Database.add('transacoes', transacaoImportada);
             transacoesImportadas.push(transacaoImportada);
@@ -269,8 +305,29 @@ export const OFXManager = {
 
         const undoButton = document.createElement('button');
         undoButton.className = 'fixed bottom-10 left-1/2 -translate-x-1/2 bg-brand-deep text-white px-5 py-3 rounded-xl shadow-2xl z-[9999] text-sm font-bold';
-        undoButton.innerHTML = `${transacoesImportadas.length} importadas · Desfazer`;
-        undoButton.onclick = () => { Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id)); undoButton.remove(); Utils.showToast('Importação desfeita.', 'success'); if (scheduleRenderCallback) scheduleRenderCallback(); };
+        const undoDescription = transacoesImportadas.length
+            ? `${transacoesImportadas.length} importadas`
+            : (saldoFinalAplicado ? 'Saldo atualizado' : 'Importação');
+        undoButton.innerHTML = `${undoDescription} · Desfazer`;
+        undoButton.onclick = async () => {
+            undoButton.disabled = true;
+            try {
+                await Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id));
+                if (saldoFinalAplicado && saldoAjusteReversivel !== 0) {
+                    const bancoAtual = db.bancos.find(b => String(b.id) === String(bancoId));
+                    if (bancoAtual) {
+                        bancoAtual.saldo = reverseStatementBalanceAdjustment({ currentBalance: bancoAtual.saldo, adjustment: saldoAjusteReversivel });
+                        Database.save('bancos');
+                    }
+                }
+                undoButton.remove();
+                Utils.showToast('Importação desfeita.', 'success');
+                if (scheduleRenderCallback) scheduleRenderCallback();
+            } catch (error) {
+                undoButton.disabled = false;
+                Utils.showToast(error?.message || 'Não foi possível desfazer a importação.', 'error');
+            }
+        };
         document.body.appendChild(undoButton);
         setTimeout(() => undoButton.remove(), 8000);
         const historico = JSON.parse(localStorage.getItem('nuvora_importacoes') || '[]');

@@ -1,13 +1,20 @@
 import { Utils } from './utils.js';
 import { db } from './db.js';
+import { getCategoriaIcon } from './categorias-padrao.js';
+import { isIncome, isTransfer } from './financial-ledger.js';
 
 export const CoreComponents = {
+    // Synchronous screens do not render this by default. The helper is kept
+    // for a real async boundary (for example, a future report fetch) without
+    // introducing artificial delays or first-paint flicker.
+    loadingSkeleton: (label = 'Carregando conteúdo') => `<div class="nv-skeleton" role="status" aria-live="polite" aria-label="${Utils.escapeHTML(label)}"><span class="nv-skeleton__line nv-skeleton__line--wide" aria-hidden="true"></span><span class="nv-skeleton__line" aria-hidden="true"></span><span class="nv-skeleton__line nv-skeleton__line--short" aria-hidden="true"></span><span class="sr-only">${Utils.escapeHTML(label)}</span></div>`,
+
     _getCategoryConfig: (catName) => {
         const cat = db.categorias.find(c => {
             const nome = typeof c === 'string' ? c : c.nome;
             return nome === catName;
         });
-        if (cat && typeof cat === 'object') return { icone: cat.icone || 'fa-tag', cor: cat.cor || 'var(--c-text-secondary)' }; 
+        if (cat && typeof cat === 'object') return { icone: getCategoriaIcon(cat), cor: cat.cor || 'var(--c-text-secondary)' }; 
         return { icone: 'fa-tag', cor: 'var(--c-text-secondary)' };
     },
 
@@ -27,8 +34,10 @@ export const CoreComponents = {
             trendIcon = isUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down';
         }
         
+        const cardTone = title.toLowerCase().includes('receita') ? 'nv-summary-card--income' : title.toLowerCase().includes('despesa') ? 'nv-summary-card--expense' : 'nv-summary-card--neutral';
+
         return `
-        <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform duration-300 group">
+        <div class="nv-dashboard-card nv-summary-card ${cardTone} group">
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-2">
                     <span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">${Utils.escapeHTML(title)}</span>
@@ -41,7 +50,7 @@ export const CoreComponents = {
                     <i class="fa-solid ${iconClass}"></i>
                 </div>
             </div>
-            <h3 class="text-3xl font-bold text-text-primary mb-1 font-mono tracking-tight">${Utils.formatMoney(value)}</h3>
+            <h3 data-currency-value="${Number.isFinite(Number(value)) ? Number(value) : ''}" class="text-3xl font-bold text-text-primary mb-1 font-mono tracking-tight">${Utils.formatMoney(value)}</h3>
             <p class="text-[11px] text-text-secondary font-medium">${Utils.escapeHTML(trendSubtitle)}</p>
         </div>`;
     },
@@ -118,20 +127,18 @@ export const CoreComponents = {
         </div>`;
     },
 
-    _buildBudgetCard: (o, gasto) => {
-        const restante = o.limite - gasto; 
-        const pctReal = (gasto / o.limite) * 100; 
-        const pctBarra = Math.min(pctReal, 100);
-        
-        let tagHtml = '';
-        let barColor = 'bg-reserve'; 
-        if (pctReal > 100) { 
-            tagHtml = '<span class="text-[10px] text-danger font-bold ml-2 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Excedido</span>'; 
-            barColor = 'bg-danger';
-        } else if (pctReal > 80) { 
-            tagHtml = '<span class="text-[10px] text-credit font-bold ml-2 flex items-center gap-1"><i class="fa-solid fa-triangle-exclamation"></i> Atenção</span>'; 
-            barColor = 'bg-credit';
-        }
+    _buildBudgetCard: (o, gasto, options = {}) => {
+        const readOnly = options.readOnly === true;
+        const planned = Number(o?.limite);
+        const spent = Number(gasto) || 0;
+        const hasPlannedLimit = Number.isFinite(planned) && planned > 0;
+        const restante = hasPlannedLimit ? planned - spent : 0;
+        const pctReal = hasPlannedLimit ? (spent / planned) * 100 : null;
+        const pctBarra = pctReal == null ? 0 : Math.min(Math.max(pctReal, 0), 100);
+        const status = pctReal == null ? 'neutral' : pctReal >= 100 ? 'danger' : pctReal >= 80 ? 'warning' : 'success';
+        const statusText = status === 'danger' ? 'Limite ultrapassado' : status === 'warning' ? 'Próximo do limite' : status === 'success' ? 'Dentro do planejado' : 'Limite não informado';
+        const tagHtml = `<span class="text-[10px] ${status === 'danger' ? 'text-danger' : status === 'warning' ? 'text-credit' : 'text-text-secondary'} font-bold ml-2 flex items-center gap-1" data-budget-status="${status}">${status === 'danger' || status === 'warning' ? '<i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>' : ''}${statusText}</span>`;
+        const barColor = status === 'danger' ? 'bg-danger' : status === 'warning' ? 'bg-credit' : status === 'success' ? 'bg-reserve' : 'bg-border';
         
         const catObj = CoreComponents._getCategoryConfig(o.categoria);
 
@@ -144,30 +151,43 @@ export const CoreComponents = {
                     </div>
                     <div>
                         <h4 class="font-bold text-text-primary text-base flex items-center mb-1 font-primary">${Utils.escapeHTML(o.categoria)} ${tagHtml}</h4>
-                        <p class="text-sm text-text-secondary"><strong class="font-mono text-text-primary">${Utils.formatMoney(gasto)}</strong> de <span class="font-mono">${Utils.formatMoney(o.limite)}</span></p>
+                        <p class="text-sm text-text-secondary"><strong class="font-mono text-text-primary">${Utils.formatMoney(spent)}</strong> de <span class="font-mono">${hasPlannedLimit ? Utils.formatMoney(planned) : 'Limite não informado'}</span></p>
                     </div>
                 </div>
                 <div class="flex items-center gap-6">
                     <div class="text-right">
-                        <span class="block font-bold text-text-primary text-base font-mono">${Utils.formatMoney(restante)}</span>
-                        <span class="text-xs text-text-secondary">restante</span>
+                        <span class="block font-bold text-text-primary text-base font-mono">${hasPlannedLimit ? Utils.formatMoney(restante) : '—'}</span>
+                        <span class="text-xs text-text-secondary">${hasPlannedLimit ? 'restante' : 'limite não informado'}</span>
                     </div>
-                    <div class="flex gap-2">
+                    ${readOnly ? '' : `<div class="flex gap-2">
                         <button data-action="delete" data-col="orcamentos" data-id="${o.id}" class="text-border hover:text-danger transition-colors w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg"><i class="fa-solid fa-trash-can"></i></button>
-                    </div>
+                    </div>`}
                 </div>
             </div>
             <div class="relative pt-2">
-                <div class="overflow-hidden h-[6px] mb-2 text-xs flex rounded-full bg-border">
+                <div class="overflow-hidden h-[6px] mb-2 text-xs flex rounded-full bg-border" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pctReal == null ? 0 : pctBarra.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(statusText)}" aria-label="${Utils.escapeHTML(o.categoria || 'Categoria')}">
                     <div style="width:${pctBarra}%" class="shadow-none flex flex-col text-center whitespace-nowrap justify-center ${barColor} transition-all duration-500"></div>
                 </div>
-                <div class="text-right w-full text-text-secondary text-xs font-medium font-mono">${pctReal.toFixed(0)}% utilizado</div>
+                <div class="text-right w-full text-text-secondary text-xs font-medium font-mono">${pctReal == null ? 'Limite não informado' : `${pctReal.toFixed(0)}% utilizado · ${statusText}`}</div>
             </div>
         </div>`;
     },
 
-    _buildGoalCard: (m, hoje) => {
-        const pct = Math.min((m.atual/m.alvo)*100, 100); 
+    _getGoalProgress: (m) => {
+        const atual = Number(m?.atual) || 0;
+        const alvo = Number(m?.alvo) || 0;
+        const hasTarget = alvo > 0;
+        const percentual = hasTarget ? (atual / alvo) * 100 : null;
+        const pct = hasTarget ? Math.min(Math.max(percentual, 0), 100) : 0;
+        const status = !hasTarget ? 'neutral' : percentual >= 100 ? 'success' : percentual >= 75 ? 'brand' : 'neutral';
+        const statusLabel = !hasTarget ? 'Alvo não informado' : percentual >= 100 ? 'Concluída' : percentual >= 75 ? 'Quase lá' : 'Em progresso';
+        return { atual, alvo, hasTarget, percentual, pct, status, statusLabel };
+    },
+
+    _buildGoalCard: (m, hoje, options = {}) => {
+        const readOnly = options.readOnly === true;
+        const goalProgress = CoreComponents._getGoalProgress(m);
+        const { pct, hasTarget, status, statusLabel } = goalProgress;
         let diasRestantes = 0; 
         let economiaMensal = 0; 
         let temPrazo = false;
@@ -193,18 +213,19 @@ export const CoreComponents = {
                         <p class="text-sm text-text-secondary font-medium">${temPrazo ? `<span class="font-mono">${diasRestantes}</span> dias restantes` : 'Sem prazo definido'}</p>
                     </div>
                 </div>
-                <button data-action="delete" data-col="metas" data-id="${m.id}" class="text-border hover:text-danger transition-colors"><i class="fa-solid fa-trash-can"></i></button>
+                ${readOnly ? '' : `<button data-action="delete" data-col="metas" data-id="${m.id}" class="text-border hover:text-danger transition-colors"><i class="fa-solid fa-trash-can"></i></button>`}
             </div>
             <div class="mb-6">
-                <div class="flex justify-between text-sm mb-2"><span class="font-bold text-text-primary">Progresso</span><span class="font-bold text-text-primary font-mono">${pct.toFixed(1)}%</span></div>
-                <div class="w-full bg-border rounded-full h-[6px]"><div class="bg-investment h-[6px] rounded-full transition-all duration-1000" style="width: ${Utils.escapeHTML(pct)}%"></div></div>
+                <div class="flex justify-between items-center gap-2 text-sm mb-2"><span class="font-bold text-text-primary">Progresso</span><span class="nv-goal-status nv-goal-status--${status}">${Utils.escapeHTML(statusLabel)}</span></div>
+                <div class="flex justify-between items-center mb-2"><span class="text-xs text-text-secondary">${hasTarget ? 'Percentual atingido' : 'Defina um alvo positivo para acompanhar o percentual'}</span><span class="font-bold text-text-primary font-mono">${hasTarget ? `${pct.toFixed(1)}%` : '—'}</span></div>
+                <div class="w-full bg-border rounded-full h-[6px]" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${hasTarget ? pct.toFixed(0) : 0}" aria-valuetext="${Utils.escapeHTML(statusLabel)}"><div class="bg-investment h-[6px] rounded-full transition-all duration-1000" style="width: ${Utils.escapeHTML(pct)}%"></div></div>
             </div>
             <div class="grid grid-cols-2 gap-4 mb-6">
                 <div class="bg-bg border border-border p-4 rounded-[12px]"><p class="text-xs text-text-secondary mb-1">Atual</p><p class="font-bold text-text-primary font-mono">${Utils.formatMoney(m.atual)}</p></div>
                 <div class="bg-bg border border-border p-4 rounded-[12px]"><p class="text-xs text-text-secondary mb-1">Meta</p><p class="font-bold text-text-primary font-mono">${Utils.formatMoney(m.alvo)}</p></div>
             </div>
             ${temPrazo && m.atual < m.alvo ? `<div class="bg-bg border border-border rounded-[12px] p-4 mb-6"><p class="text-xs font-bold text-investment flex items-center gap-2 mb-1"><i class="fa-solid fa-arrow-trend-up"></i> Planejamento</p><p class="text-xs text-text-secondary leading-relaxed">Poupe <strong class="text-investment font-mono">${Utils.formatMoney(economiaMensal)}/mês</strong> para atingir o objetivo.</p></div>` : ''}
-            <button data-action="openDepositModal" data-id="${m.id}" data-nome="${Utils.escapeHTML(m.nome)}" class="w-full py-3 bg-brand-medium hover:bg-brand-dark text-white font-bold rounded-[12px] transition-all flex items-center justify-center gap-2 shadow-brand-glow hover:-translate-y-0.5"><i class="fa-solid fa-plus"></i> Depositar</button>
+            ${readOnly ? '' : `<button data-action="openDepositModal" data-id="${m.id}" data-nome="${Utils.escapeHTML(m.nome)}" class="w-full py-3 bg-brand-medium hover:bg-brand-dark text-white font-bold rounded-[12px] transition-all flex items-center justify-center gap-2 shadow-brand-glow hover:-translate-y-0.5"><i class="fa-solid fa-plus"></i> Depositar</button>`}
         </div>`;
     },
 
@@ -243,16 +264,23 @@ export const CoreComponents = {
             
             items.forEach(t => {
                 const isSelected = appState.selectedTransactions && appState.selectedTransactions.includes(t.id);
-                const isTransfer = !!t.transferenciaInterna || t.tipo === 'transferencia';
+                const transfer = isTransfer(t);
                 // Na lista, a perna de destino é uma entrada e a de origem é uma saída.
                 // Os totais continuam ignorando ambas por serem transferência interna.
-                const isRec = isTransfer ? !!t.transferenciaEntrada : t.tipo === 'receita';
+                const isRec = transfer ? !!t.transferenciaEntrada : isIncome(t);
                 const valColor = isRec ? 'text-success' : 'text-danger';
                 const sign = isRec ? '+' : '-';
                 
                 const catObj = CoreComponents._getCategoryConfig(t.categoria);
                 const recBadge = t.recorrente ? `<span title="Lançamento Recorrente" class="text-brand-medium"><i class="fa-solid fa-rotate text-[10px]"></i></span>` : '';
                 const cardBadge = t.isCartao ? `<span title="Cartão de Crédito" class="text-text-secondary"><i class="fa-solid fa-credit-card text-[10px]"></i></span>` : '';
+                const transferAccountId = transfer ? (isRec ? (t.contaDestinoId ?? t.bancoId) : (t.contaOrigemId ?? t.bancoId)) : null;
+                const transferAccount = transfer ? (
+                    db.bancos.find(account => String(account.id) === String(transferAccountId)) ||
+                    (db.reservas || []).find(account => String(account.id) === String(transferAccountId))
+                ) : null;
+                const goalName = transferAccount?.goalId == null ? '' : db.metas.find(goal => String(goal.id) === String(transferAccount.goalId))?.nome;
+                const transferAccountLabel = transfer ? `${isRec ? 'Para' : 'De'} ${transferAccount?.nome || (goalName ? `Reserva: ${goalName}` : 'Conta não identificada')}` : '';
 
                 // UX ENG: Arquitetura HTML para as Interações de Swipe (Camadas Absolutas Traseiras e Camada Relativa Frontal)
                 html += `
@@ -282,6 +310,7 @@ export const CoreComponents = {
                                 <div class="flex items-center gap-2 mt-1 flex-wrap">
                                     <span class="text-[9px] font-bold px-1.5 py-0.5 rounded text-white tracking-wider uppercase" style="background-color: ${catObj.cor}99">${Utils.escapeHTML(t.categoria)}</span>
                                     <span class="text-[10px] text-text-secondary truncate hidden sm:inline-block">• ${Utils.escapeHTML(t.formaPagamento)}</span>
+                                    ${transfer ? `<span class="text-[10px] text-brand-medium truncate">${Utils.escapeHTML(transferAccountLabel)}</span>` : ''}
                                     ${t.contatoId ? `<span class="text-[10px] text-text-secondary truncate hidden md:inline-block"><i class="fa-regular fa-user mr-1"></i> Contato Vinculado</span>` : ''}
                                 </div>
                             </div>
@@ -325,9 +354,10 @@ export const CoreComponents = {
         <div class="flex flex-col lg:flex-row gap-4 items-end">
             <div class="flex-1 w-full"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Buscar</label><div class="relative"><i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-text-secondary"></i><input type="text" placeholder="Ex: Mercado, Uber..." value="${Utils.escapeHTML(f.desc)}" data-input="setFilterDesc" class="w-full pl-10 p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-all text-text-primary"></div></div>
             <div class="w-full lg:w-40"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Mês</label><select data-change="setFilter" data-filter-key="mes" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todos</option>${meses.map((m, i) => `<option value="${i}" ${f.mes === i.toString() ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
-            <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todas</option>${categorias.map(c => {
+            <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary"><option value="">Todas</option>${categorias.filter(c => typeof c === 'string' || (c.ativo !== false && !c.arquivada) || (f.categoria && c.nome === f.categoria)).map(c => {
                 const nome = typeof c === 'string' ? c : c.nome;
-                return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`;
+                const archived = typeof c !== 'string' && (c.ativo === false || c.arquivada === true);
+                return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}${archived ? ' (arquivada · histórico)' : ''}</option>`;
             }).join('')}</select></div>
             <div class="w-full lg:w-48"><label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Conta/Cartão</label><select data-change="setFilter" data-filter-key="bancoId" class="w-full p-2.5 bg-surface border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary">${selectContaOptions}</select></div>
             <div class="w-full lg:w-auto"><button data-action="clearFilters" class="w-full lg:w-auto px-4 py-2.5 bg-bg text-text-primary hover:bg-border rounded-[12px] text-sm font-bold transition-colors flex items-center justify-center gap-2"><i class="fa-solid fa-eraser"></i> Limpar</button></div>

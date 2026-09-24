@@ -1,7 +1,7 @@
 export const Modals = {
     getHTML: () => `
     <div id="modal-chat-anora" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-4 border-b border-border flex justify-between items-center bg-brand-deep rounded-t-[16px] text-white shrink-0">
                 <div class="flex items-center gap-3">
                     <img src="assets/anora.svg" class="w-10 h-10 rounded-full border-2 border-white/20 object-cover">
@@ -32,7 +32,7 @@ export const Modals = {
     </div>
 
     <div id="modal-historico-anora" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-4 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Histórico de Mentoria</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -48,7 +48,7 @@ export const Modals = {
     </div>
 
     <div id="modal-agenda-dia" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium border border-border flex flex-col max-h-[75vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[75vh] overflow-hidden">
             <div class="p-5 border-b border-border flex justify-between items-center"><div><h3 class="text-lg font-bold text-text-primary">Agenda do dia</h3><p id="agenda-dia-data" class="text-xs text-text-secondary"></p></div><button data-action="closeModal" class="text-text-secondary"><i class="fa-solid fa-xmark"></i></button></div>
             <div id="agenda-dia-lista" class="p-5 overflow-y-auto space-y-2"></div>
             <div class="p-4 border-t border-border"><button id="agenda-dia-adicionar" data-action="addAgendaOnDate" class="w-full py-2.5 rounded-lg bg-brand-medium text-white text-sm font-bold"><i class="fa-solid fa-plus mr-2"></i>Adicionar previsão neste dia</button></div>
@@ -56,7 +56,7 @@ export const Modals = {
     </div>
 
     <div id="modal-agendamento" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 id="agendamento-titulo" class="text-lg font-bold font-primary text-text-primary">Nova previsão</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -98,7 +98,7 @@ export const Modals = {
     </div>
 
     <div id="modal-editar-transacao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1002;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-4 shrink-0">
                 <div>
                     <h3 class="text-lg font-bold font-primary text-text-primary">Editar Lançamento</h3>
@@ -145,7 +145,7 @@ export const Modals = {
     </div>
 
     <div id="modal-contato" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Contato</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -166,54 +166,63 @@ export const Modals = {
         </div>
     </div>
 
-    <div id="modal-categoria" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+    <div id="modal-categoria" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
-                <h3 class="text-lg font-bold font-primary text-text-primary">Nova Categoria</h3>
-                <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
+                <h3 id="nova-categoria-titulo" class="text-lg font-bold font-primary text-text-primary">Nova categoria</h3>
+                <button type="button" data-action="closeModal" class="text-text-secondary hover:text-text-primary" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form data-submit="categoria" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
+            <form data-submit="categoria" class="space-y-3.5 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
+                <input id="nova-categoria-id" type="hidden" value="">
                 <div>
-                    <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Grupo principal</label>
-                    <select id="nova-categoria-grupo" data-change="filterSubgroups" required class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none focus:border-brand-medium transition-colors"><option value="" disabled selected>Selecione um grupo</option><option value="Alimentação" data-type="despesa">Alimentação</option><option value="Compras" data-type="despesa">Compras</option><option value="Transporte" data-type="despesa">Transporte</option><option value="Moradia" data-type="despesa">Moradia</option><option value="Lazer e entretenimento" data-type="despesa">Lazer e entretenimento</option><option value="Saúde e bem-estar" data-type="despesa">Saúde e bem-estar</option><option value="Educação" data-type="despesa">Educação</option><option value="Serviços digitais" data-type="despesa">Serviços digitais</option><option value="Finanças" data-type="despesa">Finanças</option><option value="Seguros" data-type="despesa">Seguros</option><option value="Outros" data-type="despesa">Outros</option><option value="Renda" data-type="despesa">Renda</option></select>
+                    <label for="nova-categoria-nome" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Nome da categoria</label>
+                    <input id="nova-categoria-nome" type="text" required maxlength="80" autocomplete="off" placeholder="Ex.: Alimentação fora de casa" class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
+                    <p class="mt-1 text-[10px] text-text-secondary">O nome é livre. Use um nome próprio e claro.</p>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Subgrupo</label>
-                    <select id="nova-categoria-nome" required class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none focus:border-brand-medium transition-colors"><option value="" disabled selected>Selecione um subgrupo</option><option value="Alimentação" data-type="despesa" data-group="Alimentação">Alimentação</option><option value="Supermercado" data-type="despesa" data-group="Alimentação">Supermercado</option><option value="Alimentos e bebidas" data-type="despesa" data-group="Alimentação">Alimentos e bebidas</option><option value="Restaurantes, bares e lanchonetes" data-type="despesa" data-group="Alimentação">Restaurantes, bares e lanchonetes</option><option value="Delivery de alimentos" data-type="despesa" data-group="Alimentação">Delivery de alimentos</option><option value="Compras" data-type="despesa" data-group="Compras">Compras</option><option value="Compras online" data-type="despesa" data-group="Compras">Compras online</option><option value="Eletrônicos" data-type="despesa" data-group="Compras">Eletrônicos</option><option value="Pet Shops e veterinários" data-type="despesa" data-group="Compras">Pet Shops e veterinários</option><option value="Vestuário" data-type="despesa" data-group="Compras">Vestuário</option><option value="Roupas" data-type="despesa" data-group="Compras">Roupas</option><option value="Artigos infantis" data-type="despesa" data-group="Compras">Artigos infantis</option><option value="Livraria" data-type="despesa" data-group="Compras">Livraria</option><option value="Artigos esportivos" data-type="despesa" data-group="Compras">Artigos esportivos</option><option value="Papelaria" data-type="despesa" data-group="Compras">Papelaria</option><option value="Presentes" data-type="despesa" data-group="Compras">Presentes</option><option value="Transporte" data-type="despesa" data-group="Transporte">Transporte</option><option value="Táxi e transporte privado urbano" data-type="despesa" data-group="Transporte">Táxi e transporte privado urbano</option><option value="Transporte público" data-type="despesa" data-group="Transporte">Transporte público</option><option value="Aluguel de veículos" data-type="despesa" data-group="Transporte">Aluguel de veículos</option><option value="Aluguel de bicicletas" data-type="despesa" data-group="Transporte">Aluguel de bicicletas</option><option value="Serviços automotivos" data-type="despesa" data-group="Transporte">Serviços automotivos</option><option value="Postos de gasolina" data-type="despesa" data-group="Transporte">Postos de gasolina</option><option value="Estacionamentos" data-type="despesa" data-group="Transporte">Estacionamentos</option><option value="Pedágios e pagamentos no veículo" data-type="despesa" data-group="Transporte">Pedágios e pagamentos no veículo</option><option value="Taxas e impostos sobre veículos" data-type="despesa" data-group="Transporte">Taxas e impostos sobre veículos</option><option value="Manutenção de veículos" data-type="despesa" data-group="Transporte">Manutenção de veículos</option><option value="Multas de trânsito" data-type="despesa" data-group="Transporte">Multas de trânsito</option><option value="Moradia" data-type="despesa" data-group="Moradia">Moradia</option><option value="Aluguel" data-type="despesa" data-group="Moradia">Aluguel</option><option value="Serviços de utilidade pública" data-type="despesa" data-group="Moradia">Serviços de utilidade pública</option><option value="Água" data-type="despesa" data-group="Moradia">Água</option><option value="Eletricidade" data-type="despesa" data-group="Moradia">Eletricidade</option><option value="Gás" data-type="despesa" data-group="Moradia">Gás</option><option value="Utensílios para casa" data-type="despesa" data-group="Moradia">Utensílios para casa</option><option value="Impostos sobre moradia" data-type="despesa" data-group="Moradia">Impostos sobre moradia</option><option value="Telecomunicação" data-type="despesa" data-group="Moradia">Telecomunicação</option><option value="Comunicação" data-type="despesa" data-group="Moradia">Comunicação</option><option value="Internet" data-type="despesa" data-group="Moradia">Internet</option><option value="Celular" data-type="despesa" data-group="Moradia">Celular</option><option value="TV" data-type="despesa" data-group="Moradia">TV</option><option value="Lazer" data-type="despesa" data-group="Lazer e entretenimento">Lazer</option><option value="Viagens" data-type="despesa" data-group="Lazer e entretenimento">Viagens</option><option value="Aeroportos e cias. aéreas" data-type="despesa" data-group="Lazer e entretenimento">Aeroportos e cias. aéreas</option><option value="Hospedagem" data-type="despesa" data-group="Lazer e entretenimento">Hospedagem</option><option value="Programas de milhagem" data-type="despesa" data-group="Lazer e entretenimento">Programas de milhagem</option><option value="Passagem de ônibus" data-type="despesa" data-group="Lazer e entretenimento">Passagem de ônibus</option><option value="Bilhetes" data-type="despesa" data-group="Lazer e entretenimento">Bilhetes</option><option value="Estádios e arenas" data-type="despesa" data-group="Lazer e entretenimento">Estádios e arenas</option><option value="Museus e pontos turísticos" data-type="despesa" data-group="Lazer e entretenimento">Museus e pontos turísticos</option><option value="Cinema, Teatro e Concertos" data-type="despesa" data-group="Lazer e entretenimento">Cinema, Teatro e Concertos</option><option value="Saúde" data-type="despesa" data-group="Saúde e bem-estar">Saúde</option><option value="Saúde e bem-estar" data-type="despesa" data-group="Saúde e bem-estar">Saúde e bem-estar</option><option value="Bem-estar" data-type="despesa" data-group="Saúde e bem-estar">Bem-estar</option><option value="Cuidados pessoais" data-type="despesa" data-group="Saúde e bem-estar">Cuidados pessoais</option><option value="Academia e centros de lazer" data-type="despesa" data-group="Saúde e bem-estar">Academia e centros de lazer</option><option value="Prática de esportes" data-type="despesa" data-group="Saúde e bem-estar">Prática de esportes</option><option value="Dentista" data-type="despesa" data-group="Saúde e bem-estar">Dentista</option><option value="Ótica" data-type="despesa" data-group="Saúde e bem-estar">Ótica</option><option value="Hospitais, clínicas e laboratórios" data-type="despesa" data-group="Saúde e bem-estar">Hospitais, clínicas e laboratórios</option><option value="Farmácia" data-type="despesa" data-group="Saúde e bem-estar">Farmácia</option><option value="Educação" data-type="despesa" data-group="Educação">Educação</option><option value="Cursos online" data-type="despesa" data-group="Educação">Cursos online</option><option value="Universidade" data-type="despesa" data-group="Educação">Universidade</option><option value="Escola" data-type="despesa" data-group="Educação">Escola</option><option value="Creche" data-type="despesa" data-group="Educação">Creche</option><option value="Serviços digitais" data-type="despesa" data-group="Serviços digitais">Serviços digitais</option><option value="Assinaturas" data-type="despesa" data-group="Serviços digitais">Assinaturas</option><option value="Streaming de música" data-type="despesa" data-group="Serviços digitais">Streaming de música</option><option value="Jogos e videogames" data-type="despesa" data-group="Serviços digitais">Jogos e videogames</option><option value="Streaming de vídeo" data-type="despesa" data-group="Serviços digitais">Streaming de vídeo</option><option value="Investimentos" data-type="despesa" data-group="Finanças">Investimentos</option><option value="Fundos multimercado" data-type="despesa" data-group="Finanças">Fundos multimercado</option><option value="Pagamento de cartão de crédito" data-type="despesa" data-group="Finanças">Pagamento de cartão de crédito</option><option value="Empréstimos e financiamento" data-type="despesa" data-group="Finanças">Empréstimos e financiamento</option><option value="Atraso no pagamento e custos de cheque especial" data-type="despesa" data-group="Finanças">Atraso no pagamento e custos de cheque especial</option><option value="Juros cobrados" data-type="despesa" data-group="Finanças">Juros cobrados</option><option value="Financiamento de veículos" data-type="despesa" data-group="Finanças">Financiamento de veículos</option><option value="Empréstimos" data-type="despesa" data-group="Finanças">Empréstimos</option><option value="Transferência entre contas" data-type="despesa" data-group="Finanças">Transferência entre contas</option><option value="Reserva/investimento" data-type="despesa" data-group="Finanças">Reserva/investimento</option><option value="Pagamento de cartão" data-type="despesa" data-group="Finanças">Pagamento de cartão</option><option value="Ajuste" data-type="despesa" data-group="Finanças">Ajuste</option><option value="Transferência mesma titularidade" data-type="despesa" data-group="Finanças">Transferência mesma titularidade</option><option value="Transferências" data-type="despesa" data-group="Finanças">Transferências</option><option value="Transferência - Boleto bancário" data-type="despesa" data-group="Finanças">Transferência - Boleto bancário</option><option value="Transferência - Dinheiro" data-type="despesa" data-group="Finanças">Transferência - Dinheiro</option><option value="Transferência - Câmbio" data-type="despesa" data-group="Finanças">Transferência - Câmbio</option><option value="Transferência - Mesma instituição" data-type="despesa" data-group="Finanças">Transferência - Mesma instituição</option><option value="Seguros" data-type="despesa" data-group="Seguros">Seguros</option><option value="Impostos e taxas" data-type="despesa" data-group="Outros">Impostos e taxas</option><option value="Dívidas e juros" data-type="despesa" data-group="Outros">Dívidas e juros</option><option value="Despesas gerais" data-type="despesa" data-group="Outros">Despesas gerais</option><option value="A classificar" data-type="despesa" data-group="Outros">A classificar</option><option value="Estorno" data-type="despesa" data-group="Outros">Estorno</option><option value="Renda" data-type="despesa" data-group="Renda">Renda</option><option value="Salário" data-type="despesa" data-group="Renda">Salário</option><option value="Freelance" data-type="despesa" data-group="Renda">Freelance</option><option value="Rendimentos" data-type="despesa" data-group="Renda">Rendimentos</option><option value="Reembolsos" data-type="despesa" data-group="Renda">Reembolsos</option><option value="Vendas" data-type="despesa" data-group="Renda">Vendas</option><option value="Outras receitas" data-type="despesa" data-group="Renda">Outras receitas</option><option value="Renda não-recorrente" data-type="despesa" data-group="Renda">Renda não-recorrente</option><option value="Juros de rendimentos de dividendos" data-type="despesa" data-group="Renda">Juros de rendimentos de dividendos</option><option value="Cashback" data-type="despesa" data-group="Renda">Cashback</option></select>
+                    <label for="nova-categoria-nivel" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Estrutura</label>
+                    <select id="nova-categoria-nivel" data-change="toggleCategoryLevel" class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
+                        <option value="principal">Categoria principal</option>
+                        <option value="subcategoria">Subcategoria</option>
+                    </select>
+                    <p class="mt-1 text-[10px] text-text-secondary">Uma categoria principal forma um grupo; a subcategoria fica dentro de um grupo existente.</p>
                 </div>
                 <div>
-                    <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Tipo</label>
-                    <select id="nova-categoria-tipo" data-change="filterCategoryGroups" class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none transition-colors"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="movimentação">Movimentação</option></select>
+                    <label for="nova-categoria-tipo" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Tipo</label>
+                    <select id="nova-categoria-tipo" data-change="prepareCategoryParents" class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
+                        <option value="despesa">Despesa</option>
+                        <option value="receita">Receita</option>
+                    </select>
+                    <p class="mt-1 text-[10px] text-text-secondary">Transferências continuam sendo registradas pelo fluxo de transferência.</p>
+                </div>
+                <div id="nova-categoria-grupo-wrap" class="hidden">
+                    <label for="nova-categoria-grupo" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Grupo / categoria principal</label>
+                    <select id="nova-categoria-grupo" disabled class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
+                        <option value="">Selecione uma categoria principal</option>
+                    </select>
+                    <p class="mt-1 text-[10px] text-text-secondary">Somente grupos principais do mesmo tipo podem ser escolhidos.</p>
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Ícone</label>
-                        <select id="nova-categoria-icone" class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none transition-colors">
-                            <option value="fa-tag">🏷️ Genérico</option>
-                            <option value="fa-cart-shopping">🛒 Compras</option>
-                            <option value="fa-house">🏠 Moradia</option>
-                            <option value="fa-car">🚗 Veículo</option>
-                            <option value="fa-heart-pulse">❤️ Saúde</option>
-                            <option value="fa-gamepad">🎮 Lazer</option>
+                        <label for="nova-categoria-icone" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Ícone</label>
+                        <select id="nova-categoria-icone" class="w-full p-2.5 bg-surface text-text-primary border border-border rounded-[10px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
+                            <option value="fa-tag">🏷️ Genérico</option><option value="fa-cart-shopping">🛒 Compras</option><option value="fa-house">🏠 Moradia</option><option value="fa-car">🚗 Veículo</option><option value="fa-heart-pulse">❤️ Saúde</option><option value="fa-gamepad">🎮 Lazer</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Cor</label>
+                        <label for="nova-categoria-cor" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Cor</label>
                         <input type="color" id="nova-categoria-cor" value="#3B82F6" class="w-full h-[42px] p-1 bg-surface border border-border rounded-[10px] cursor-pointer">
                     </div>
                 </div>
-
                 <div class="shrink-0 mt-3">
-                    <button type="submit" class="w-full bg-brand-medium text-white px-5 py-2.5 rounded-[10px] font-bold text-sm hover:bg-brand-dark transition-colors shadow-soft">
-                        Criar Categoria
-                    </button>
+                    <button id="nova-categoria-submit" type="submit" class="w-full bg-brand-medium text-white px-5 py-2.5 rounded-[10px] font-bold text-sm hover:bg-brand-dark transition-colors shadow-soft">Criar Categoria</button>
                 </div>
             </form>
         </div>
     </div>
 
     <div id="modal-transferencia" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1001;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border">
             <div class="flex justify-between items-center mb-5"><div><h3 class="font-bold text-text-primary">Transferir entre contas</h3><p class="text-xs text-text-secondary mt-1">Não será contabilizada como receita ou despesa.</p></div><button data-action="closeModal" class="text-text-secondary"><i class="fa-solid fa-xmark"></i></button></div>
             <form data-submit="transferencia" class="space-y-3">
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase mb-1">Conta de origem</label><select id="transfer-origem" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm"></select></div>
@@ -226,7 +235,7 @@ export const Modals = {
     </div>
 
     <div id="modal-transacao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[90vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[90vh] overflow-hidden">
             
             <div class="flex justify-between items-center mb-3 shrink-0">
                 <button type="button" data-action="closeModal" class="text-text-secondary hover:text-text-primary transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
@@ -353,7 +362,7 @@ export const Modals = {
         </div>
     </div>
     <div id="modal-banco" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Nova Conta Bancária</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -381,7 +390,7 @@ export const Modals = {
     </div>
 
     <div id="modal-cartao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Cartão</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -407,7 +416,7 @@ export const Modals = {
     </div>
 
     <div id="modal-despesa-cartao" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <div>
                     <h3 class="text-lg font-bold font-primary text-text-primary">Nova Compra</h3>
@@ -443,13 +452,13 @@ export const Modals = {
     </div>
 
     <div id="modal-fatura-detalhes" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1001;">
-        <div class="bg-surface w-full max-w-2xl rounded-[16px] shadow-medium border border-border flex flex-col h-[90vh] max-h-[760px] overflow-hidden">
+        <div class="bg-surface w-full max-w-2xl rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col h-[90vh] max-h-[760px] overflow-hidden">
             <div id="modal-fatura-content" class="flex-1 min-h-0 overflow-hidden rounded-[16px]"></div>
         </div>
     </div>
 
     <div id="modal-classificar-fatura" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 1003;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border">
             <div class="flex justify-between items-center mb-4">
                 <div><h3 class="text-lg font-bold font-primary text-text-primary">Classificar transações</h3><p id="invoice-classification-count" class="text-xs text-text-secondary mt-1"></p></div>
                 <button type="button" data-action="closeInvoiceClassification" class="text-text-secondary hover:text-text-primary w-8 h-8"><i class="fa-solid fa-xmark"></i></button>
@@ -463,7 +472,7 @@ export const Modals = {
     </div>
 
     <div id="modal-meta" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Nova Meta</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -471,10 +480,8 @@ export const Modals = {
             <form data-submit="meta" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome da Meta</label><input id="meta-nome" type="text" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Data Alvo</label><input id="meta-data" type="date" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor Alvo (R$)</label><input id="meta-alvo" type="number" step="0.01" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>
-                    <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Já Guardado</label><input id="meta-atual" type="number" step="0.01" value="0" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>
-                </div>
+                <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor Alvo (R$)</label><input id="meta-alvo" type="number" min="0.01" step="0.01" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>
+                <p class="text-xs text-text-secondary">A meta começa sem saldo reservado. Use “Depositar” para transferir dinheiro de uma conta para a reserva.</p>
                 <div class="shrink-0 mt-3">
                     <button type="submit" class="w-full py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft">Criar Meta</button>
                 </div>
@@ -483,7 +490,7 @@ export const Modals = {
     </div>
 
     <div id="modal-depositar-meta" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-xs rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-xs rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-3 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Depositar</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -492,7 +499,13 @@ export const Modals = {
             <form data-submit="depositoMeta" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <input type="hidden" id="deposito-meta-id">
                 <div>
-                    <input id="deposito-meta-valor" type="number" step="0.01" required placeholder="0.00" class="w-full p-3 bg-bg border border-border rounded-[10px] text-center text-xl font-mono font-bold text-text-primary transition-all">
+                    <label for="deposito-meta-banco" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Debitar da conta</label>
+                    <select id="deposito-meta-banco" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></select>
+                    <p id="deposito-meta-sem-contas" class="hidden mt-2 text-xs text-danger" role="status">Cadastre uma conta bancária antes de fazer um aporte.</p>
+                </div>
+                <div>
+                    <label for="deposito-meta-valor" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor do aporte (R$)</label>
+                    <input id="deposito-meta-valor" type="number" min="0.01" step="0.01" required placeholder="0.00" class="w-full p-3 bg-bg border border-border rounded-[10px] text-center text-xl font-mono font-bold text-text-primary transition-all">
                 </div>
                 <div class="shrink-0 mt-3">
                     <button type="submit" class="w-full py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft">Confirmar</button>
@@ -502,7 +515,7 @@ export const Modals = {
     </div>
 
     <div id="modal-orcamento" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Limite</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -524,7 +537,7 @@ export const Modals = {
     </div>
 
     <div id="modal-simulador" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary">Simulador</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
@@ -591,7 +604,7 @@ export const Modals = {
                     </div>
                     <label class="flex items-center gap-2 cursor-pointer group bg-surface px-2 py-1.5 border border-border rounded-[6px]">
                         <input type="checkbox" id="ofx-confirmar-saldo" class="w-3.5 h-3.5 text-brand-medium bg-bg border-border rounded">
-                        <span class="text-[10px] font-bold text-text-secondary">Atualizar conta</span>
+                        <span class="text-[10px] font-bold text-text-secondary">Substituir saldo atual</span>
                     </label>
                 </div>
 
@@ -604,7 +617,7 @@ export const Modals = {
     </div>
 
     <div id="modal-orcamento-inteligente" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium border border-border flex flex-col max-h-[85vh] overflow-hidden">
+        <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
                 <h3 class="text-lg font-bold font-primary text-text-primary flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles text-brand-medium"></i> Inteligente</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>

@@ -1,5 +1,7 @@
 import { db } from './db.js';
 import { Utils } from './utils.js';
+import { SubmitFeedback } from './submit-feedback.js';
+import { SubmitGuard } from './submit-guard.js';
 
 export const UI = {
     modalSnapshots: {},
@@ -8,6 +10,20 @@ export const UI = {
         const modal = document.getElementById(id);
         if (!modal) return;
         UI.modalSnapshots[id] = [...modal.querySelectorAll('input, textarea, select')].map(el => [el.id || el.name || el.type, el.value]);
+    },
+    resetCategoryModal: () => {
+        const modal = document.getElementById('modal-categoria');
+        if (!modal) return;
+        modal.querySelector('form')?.reset();
+        const title = document.getElementById('nova-categoria-titulo');
+        const submit = document.getElementById('nova-categoria-submit');
+        const wrap = document.getElementById('nova-categoria-grupo-wrap');
+        const parent = document.getElementById('nova-categoria-grupo');
+        if (title) title.textContent = 'Nova categoria';
+        if (submit) submit.textContent = 'Criar categoria';
+        wrap?.classList.add('hidden');
+        if (parent) { parent.disabled = true; parent.required = false; parent.value = ''; }
+        modal.querySelectorAll('[aria-invalid="true"]').forEach(el => el.removeAttribute('aria-invalid'));
     },
     switchToTransferMode: () => {
         document.querySelector('[data-submit="transacao"]')?.classList.add('hidden');
@@ -106,7 +122,13 @@ export const UI = {
             modal.classList.add('hidden');
             modal.classList.remove('flex', 'animate-fade-in-up');
             // Só a camada encerrada é resetada; não destrói o estado da fatura subjacente.
-            modal.querySelectorAll('form').forEach(form => form.reset());
+            modal.querySelectorAll('form').forEach(form => {
+                form.reset();
+                SubmitFeedback.reset(form);
+                SubmitGuard.cancel(form);
+            });
+            if (modalId === 'modal-categoria') UI.resetCategoryModal();
+            delete UI.modalSnapshots[modal.id];
             if (modalId === 'modal-fatura-detalhes') {
                 viewState.selectedTransactions = [];
                 viewState.activeCardId = null;
@@ -136,7 +158,13 @@ export const UI = {
             const el = document.getElementById(id); if(el) { el.innerHTML = ''; el.classList.add('hidden'); }
         });
         
-        document.querySelectorAll('form').forEach(form => form.reset());
+        document.querySelectorAll('form').forEach(form => {
+            form.reset();
+            SubmitFeedback.reset(form);
+            SubmitGuard.cancel(form);
+        });
+        UI.resetCategoryModal();
+        UI.modalSnapshots = {};
         
         const hoje = Utils.localISODate();
         ['input-data-trans', 'dc-data', 'simulador-data', 'agendamento-data', 'edit-data', 'transfer-data'].forEach(id => {
@@ -188,7 +216,13 @@ export const UI = {
         document.getElementById('edit-data').value = t.data || new Date(t.id).toISOString().split('T')[0];
         
         const catSelect = document.getElementById('edit-categoria');
-        catSelect.innerHTML = db.categorias.map(c => `<option value="${Utils.escapeHTML(c.nome)}" ${t.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('');
+        // Keep archived historical value, but only offer active categories
+        // compatible with the transaction's income/expense type.
+        const categories = db.categorias.filter(c =>
+            (c.nome === t.categoria) ||
+            (c.ativo !== false && !c.arquivada && (!c.tipo || c.tipo === t.tipo))
+        );
+        catSelect.innerHTML = categories.map(c => { const archived = c.ativo === false || c.arquivada === true; return `<option value="${Utils.escapeHTML(c.nome)}" ${t.categoria === c.nome ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}${archived ? ' (arquivada · histórico)' : ''}</option>`; }).join('');
         
         const contSelect = document.getElementById('edit-contato');
         if(contSelect) {
@@ -220,6 +254,18 @@ export const UI = {
     openDepositModal: (id, nome) => {
         document.getElementById('deposito-meta-id').value = id;
         document.getElementById('deposito-meta-nome').innerText = nome;
+        const accountSelect = document.getElementById('deposito-meta-banco');
+        const submit = document.querySelector('#modal-depositar-meta button[type="submit"]');
+        const noAccounts = document.getElementById('deposito-meta-sem-contas');
+        if (accountSelect) {
+            const banks = Array.isArray(db.bancos) ? db.bancos : [];
+            accountSelect.innerHTML = banks.length
+                ? banks.map((bank, index) => `<option value="${Utils.escapeHTML(String(bank.id))}" ${index === 0 ? 'selected' : ''}>${Utils.escapeHTML(bank.nome || bank.instituicao || 'Conta bancária')}</option>`).join('')
+                : '<option value="" selected>Cadastre uma conta bancária primeiro</option>';
+            accountSelect.disabled = banks.length === 0;
+        }
+        if (submit) submit.disabled = !Array.isArray(db.bancos) || db.bancos.length === 0;
+        noAccounts?.classList.toggle('hidden', Array.isArray(db.bancos) && db.bancos.length > 0);
         UI.openModal('modal-depositar-meta');
     },
 

@@ -1,103 +1,345 @@
 import { Utils } from './utils.js';
 import { CoreComponents } from './cmp-core.js';
+import { financialValueClass } from './financial-refinements.js';
+import { isExpense, isIncome, isTransfer as isTransferTransaction } from './financial-ledger.js';
+import { PRIORITY_KEYS, resolvePriority } from './priority.js';
+
+/**
+ * Compares two period values without turning a missing/zero baseline into a
+ * fabricated 100% trend.  A non-zero baseline keeps the existing percentage
+ * semantics; callers decide how to present the neutral state.
+ */
+export const calculateDashboardTrend = (current, previous) => {
+    const currentValue = Number(current);
+    const previousValue = Number(previous);
+    if (!Number.isFinite(currentValue) || !Number.isFinite(previousValue) || previousValue === 0) {
+        return { val: null, label: 'Sem comparação anterior', direction: 'neutral', isUp: false, isNeutral: true };
+    }
+    const diff = ((currentValue - previousValue) / previousValue) * 100;
+    return { val: Math.abs(diff).toFixed(1), label: `${Math.abs(diff).toFixed(1)}%`, direction: diff > 0 ? 'up' : diff < 0 ? 'down' : 'neutral', isUp: diff >= 0, isNeutral: false };
+};
+
+export const onboardingSteps = Object.freeze([
+    { id: 'account', title: 'Adicione uma conta', description: 'Comece pelo saldo que você tem hoje.', action: 'openModal', modal: 'modal-banco' },
+    { id: 'transaction', title: 'Registre o primeiro lançamento', description: 'Isso permite calcular seu resultado do mês.', action: 'openModal', modal: 'modal-transacao' },
+    { id: 'budget', title: 'Defina um limite', description: 'Transforme seus gastos em um plano claro.', action: 'openModal', modal: 'modal-orcamento' },
+]);
+
+const onboardingStepStatus = (database = {}) => ({
+    account: (database.bancos || []).length > 0,
+    transaction: (database.transacoes || []).some(item => isIncome(item) || isExpense(item)),
+    budget: (database.orcamentos || []).some(item => Number.isFinite(Number(item?.limite)) && Number(item.limite) > 0),
+});
 
 export const DashboardComponents = {
-    dashboardCards: (atual, anterior) => {
-        const calcTrend = (a, b) => {
-            if (b === 0) return { val: a > 0 ? 100 : 0, isUp: a > 0 };
-            const diff = ((a - b) / b) * 100;
-            return { val: Math.abs(diff).toFixed(1), isUp: diff >= 0 };
-        };
+    dashboardCards: (atual = {}, anterior = {}) => {
+        const calcTrend = calculateDashboardTrend;
 
-        const recT = calcTrend(atual.receitas, anterior.receitas);
-        const desT = calcTrend(atual.despesas, anterior.despesas);
+        // Receitas/despesas are intentionally period-filtered. Saldo atual is
+        // the existing global Database.getTotals().saldo passed by the page;
+        // none of these values change the underlying financial calculations.
+        const resultadoPeriodo = (Number(atual.receitas) || 0) - (Number(atual.despesas) || 0);
+        const resultadoAnterior = (Number(anterior.receitas) || 0) - (Number(anterior.despesas) || 0);
+        const resultadoT = calcTrend(resultadoPeriodo, resultadoAnterior);
+        const resultadoTrendClass = resultadoT.isNeutral ? 'text-text-secondary' : (resultadoT.isUp ? 'text-success' : 'text-danger');
+        const resultadoTrendIcon = resultadoT.isNeutral ? 'fa-minus' : (resultadoT.isUp ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down');
+        const resultadoTrendLabel = resultadoT.isNeutral ? resultadoT.label : `${resultadoT.label}`;
+        const vencimentos = atual.contasPendentes || 0;
+        const resultadoColor = resultadoPeriodo >= 0 ? 'text-success' : 'text-danger';
+        const vencimentosColor = vencimentos > 0 ? 'text-danger' : 'text-success';
+        const projection = atual.projecaoFimMes || {};
+        const projectionAvailable = projection.available === true && Number.isFinite(Number(projection.value));
+        const projectionValue = projectionAvailable ? Utils.formatMoney(projection.value) : '—';
+        const projectionTone = projectionAvailable ? financialValueClass(projection.value) : financialValueClass(null);
 
-        // --- ENGENHARIA DE UI: Card Especial de Saldo Livre ---
-        const contasPendentes = atual.contasPendentes || 0;
-        const saldoLivre = atual.saldo - contasPendentes;
-        
-        const saldoBrutoFmt = Utils.formatMoney(atual.saldo);
-        const pendentesFmt = Utils.formatMoney(contasPendentes);
-        const pendentesColor = contasPendentes > 0 ? 'text-danger' : 'text-text-secondary';
-        const livreColor = saldoLivre >= 0 ? 'text-text-primary' : 'text-danger';
-
-        const cardSaldoLivre = `
-        <div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft flex flex-col justify-between relative overflow-hidden group hover:-translate-y-1 transition-all">
-            <div class="flex justify-between items-start mb-3">
-                <div>
-                    <h4 class="text-[11px] font-bold text-text-secondary uppercase tracking-wider mb-1 font-primary flex items-center gap-1.5"><i class="fa-solid fa-wallet text-brand-medium"></i> Saldo Livre</h4>
-                    <h2 class="text-2xl font-black ${livreColor} font-mono tracking-tight">${Utils.formatMoney(saldoLivre)}</h2>
+        const resultadoCard = `
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--result group">
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Resultado do período</span>
+                    <span class="${resultadoTrendClass} text-[10px] font-bold flex items-center gap-1 ${resultadoT.isNeutral ? '' : 'font-mono'}" aria-label="${resultadoTrendLabel}"><i class="fa-solid ${resultadoTrendIcon}" aria-hidden="true"></i> ${resultadoTrendLabel}</span>
                 </div>
-                <div class="w-10 h-10 rounded-[12px] bg-bg border border-border text-brand-medium flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                    <i class="fa-solid fa-unlock-keyhole"></i>
-                </div>
+                <div class="w-10 h-10 text-brand-medium bg-brand-soft rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i></div>
             </div>
-            <div class="text-[10px] text-text-secondary flex flex-col gap-1.5 bg-bg p-2.5 rounded-[8px] border border-border">
-                <div class="flex justify-between items-center"><span class="flex items-center gap-1"><i class="fa-solid fa-building-columns opacity-50"></i> Saldo Bruto:</span> <span class="font-mono font-medium text-text-primary">${saldoBrutoFmt}</span></div>
-                <div class="flex justify-between items-center"><span class="flex items-center gap-1"><i class="fa-solid fa-clock opacity-50"></i> Agendamentos:</span> <span class="font-mono font-bold ${pendentesColor}">- ${pendentesFmt}</span></div>
+            <h3 data-currency-value="${resultadoPeriodo}" class="text-3xl font-bold ${resultadoColor} ${financialValueClass(resultadoPeriodo)} mb-1 font-mono tracking-tight">${Utils.formatMoney(resultadoPeriodo)}</h3>
+            <p class="text-[11px] text-text-secondary font-medium">Receitas ${Utils.formatMoney(atual.receitas)} · Despesas ${Utils.formatMoney(atual.despesas)}</p>
+        </div>`;
+
+        const projectionCard = `
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--projection group" aria-label="Projeção de saldo no fim do mês">
+            <div class="flex justify-between items-start mb-4"><div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Fim do mês</span></div><div class="w-10 h-10 text-brand-medium bg-brand-soft rounded-[12px] flex items-center justify-center text-base shadow-sm"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></div></div>
+            <h3 data-currency-value="${projectionAvailable ? projection.value : ''}" class="text-3xl font-bold ${projectionTone} mb-1 font-mono tracking-tight">${projectionValue}</h3>
+            <p class="text-[11px] text-text-secondary font-medium" title="${Utils.escapeHTML(projection.explanation || 'Dados futuros insuficientes para projetar.')}">${Utils.escapeHTML(projectionAvailable ? 'Saldo estimado no fim do mês' : 'Dados insuficientes para projetar')}</p>
+        </div>`;
+
+        const vencimentosCard = `
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--due group">
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Próximos vencimentos</span></div>
+                <div class="w-10 h-10 ${vencimentos > 0 ? 'text-danger bg-danger/10' : 'text-success bg-success/10'} rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-clock" aria-hidden="true"></i></div>
             </div>
+            <h3 data-currency-value="${vencimentos}" class="text-3xl font-bold ${vencimentosColor} ${financialValueClass(vencimentos)} mb-1 font-mono tracking-tight">${Utils.formatMoney(vencimentos)}</h3>
+            <p class="text-[11px] text-text-secondary font-medium">Contas pendentes de hoje até o fim do mês</p>
         </div>`;
 
         return `
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-            ${CoreComponents._buildSummaryCard('Receitas', atual.receitas, recT.val, recT.isUp, 'fa-arrow-trend-up', 'vs período anterior')}
-            ${CoreComponents._buildSummaryCard('Despesas', atual.despesas, desT.val, !desT.isUp, 'fa-arrow-trend-down', 'vs período anterior')}
-            ${cardSaldoLivre}
+        <div class="nv-dashboard-summary-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+            ${CoreComponents._buildSummaryCard('Saldo atual', atual.saldo, '', true, 'fa-wallet', 'Saldo global de todas as contas')}
+            ${resultadoCard}
+            ${vencimentosCard}
+            ${projectionCard}
         </div>`;
     },
 
-    insightsSection: (mentoria) => {
+    onboardingChecklist: (database = {}) => {
+        const completed = onboardingStepStatus(database);
+        const completedCount = onboardingSteps.filter(step => completed[step.id]).length;
+        if (completedCount === onboardingSteps.length) return '';
+        const steps = onboardingSteps.map((step, index) => {
+            const isComplete = completed[step.id];
+            return `<li class="nv-onboarding-step ${isComplete ? 'is-complete' : ''}"><span class="nv-onboarding-step__number" aria-hidden="true">${isComplete ? '<i class="fa-solid fa-check"></i>' : index + 1}</span><div class="nv-onboarding-step__copy"><strong>${Utils.escapeHTML(step.title)}</strong><p>${Utils.escapeHTML(step.description)}</p></div>${isComplete ? '<span class="nv-onboarding-step__status">Concluído</span>' : `<button type="button" data-action="${Utils.escapeHTML(step.action)}" data-modal="${Utils.escapeHTML(step.modal)}" class="nv-onboarding-step__action">Começar</button>`}</li>`;
+        }).join('');
+        const progress = Math.round((completedCount / onboardingSteps.length) * 100);
+        return `<section class="nv-onboarding-checklist" aria-labelledby="nv-onboarding-title"><div class="nv-onboarding-checklist__header"><div><p class="nv-dashboard-eyebrow">Primeiros passos</p><h2 id="nv-onboarding-title">Comece com três passos simples</h2><p>Monte sua base financeira para acompanhar o mês com clareza.</p></div><span class="nv-onboarding-checklist__count">${completedCount} de ${onboardingSteps.length}</span></div><div class="nv-onboarding-checklist__progress" role="progressbar" aria-label="Progresso da configuração inicial" aria-valuemin="0" aria-valuemax="${onboardingSteps.length}" aria-valuenow="${completedCount}"><span style="width:${progress}%"></span></div><ol class="nv-onboarding-steps">${steps}</ol></section>`;
+    },
+
+    // Chooses one next action so the dashboard has a single prioritized
+    // narrative instead of stacking alerts with the same urgency.
+    nextDecision: (atual = {}, context = {}) => {
+        const selection = resolvePriority({ ...atual, ...context });
+        const asNumber = value => {
+            const number = Number(value);
+            return Number.isFinite(number) ? number : 0;
+        };
+        const describe = (items, singular, plural, suffix = 'aguardando regularização.') => {
+            const total = items.reduce((sum, item) => sum + asNumber(item.valor), 0);
+            const countLabel = `${items.length} ${items.length === 1 ? singular : plural}`;
+            return total > 0 ? `${countLabel} · ${Utils.formatMoney(total)} ${suffix}` : `${countLabel} ${suffix}`;
+        };
+        const labelsFor = items => {
+            const labels = [...new Set(items.map(item => item.nome || item.modelo || item.categoria || 'Item').filter(Boolean))];
+            return labels.length <= 2 ? labels.join(' e ') : `${labels.slice(0, 2).join(', ')} e mais ${labels.length - 2}`;
+        };
+
+        if (selection.priority === PRIORITY_KEYS.OVERDUE) {
+            return {
+                priority: selection.priority,
+                tone: 'danger',
+                icon: 'fa-triangle-exclamation',
+                title: 'Regularize as contas vencidas',
+                detail: describe(selection.overdue, 'conta vencida', 'contas vencidas'),
+                action: 'Agendamentos',
+                actionLabel: 'Ver contas vencidas'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.NEGATIVE_BALANCE) {
+            return {
+                priority: selection.priority,
+                tone: 'danger',
+                icon: 'fa-arrow-trend-down',
+                title: 'Recomponha o saldo global',
+                detail: `O saldo de todas as contas está em ${Utils.formatMoney(selection.balance)}.`,
+                action: 'Contas',
+                actionLabel: 'Ver contas'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.OVER_BUDGET) {
+            const label = labelsFor(selection.overBudget);
+            return {
+                priority: selection.priority,
+                tone: 'warning',
+                icon: 'fa-chart-pie',
+                title: 'Revise o orçamento ultrapassado',
+                detail: `${label} ${selection.overBudget.length === 1 ? 'ultrapassou' : 'ultrapassaram'} o limite definido.`,
+                action: 'Orcamento',
+                actionLabel: 'Revisar orçamento'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.HIGH_CARD_USAGE) {
+            const label = labelsFor(selection.highCardUsage);
+            return {
+                priority: selection.priority,
+                tone: 'warning',
+                icon: 'fa-credit-card',
+                title: 'Revise o uso dos cartões',
+                detail: `${label} ${selection.highCardUsage.length === 1 ? 'está' : 'estão'} com pelo menos 80% do limite utilizado.`,
+                action: 'Contas',
+                actionLabel: 'Ver cartões'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.ANORA_RECOMMENDATION) {
+            const candidate = selection.anoraRecommendation;
+            return {
+                priority: selection.priority,
+                tone: 'info',
+                icon: 'fa-sparkles',
+                title: 'Siga a recomendação da Anora',
+                detail: candidate.detail || candidate.label || 'Há uma recomendação da Anora pronta para você.',
+                action: candidate.payload || candidate.modal || 'Dashboard',
+                actionType: candidate.action,
+                actionModal: candidate.modal,
+                actionLabel: candidate.label || 'Ver recomendação'
+            };
+        }
+        if (selection.priority === PRIORITY_KEYS.INFORMATIONAL) {
+            return {
+                priority: selection.priority,
+                tone: 'warning',
+                icon: 'fa-calendar-day',
+                title: 'Antecipe os próximos vencimentos',
+                detail: describe(selection.upcoming, 'conta próxima', 'contas próximas', 'programadas até o fim do mês.'),
+                action: 'Agendamentos',
+                actionLabel: 'Ver próximos vencimentos'
+            };
+        }
+        return null;
+    },
+
+    nextDecisionBlock: (atual = {}, context = {}) => {
+        const decision = DashboardComponents.nextDecision(atual, context);
+        if (!decision) return '';
+        const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+        const actionAttributes = decision.actionType === 'openModal'
+            ? `data-action="openModal" data-modal="${escape(decision.actionModal)}"`
+            : `data-action="navigate" data-payload="${escape(decision.action)}"`;
+        return `<section class="nv-dashboard-attention nv-dashboard-decision is-${escape(decision.tone)}" aria-labelledby="nv-dashboard-decision-title" aria-live="polite"><header class="nv-dashboard-attention__header"><div><p class="nv-dashboard-eyebrow">Próxima decisão</p><h3 id="nv-dashboard-decision-title">Ação recomendada</h3></div><i class="fa-solid ${escape(decision.icon)}" aria-hidden="true"></i></header><div class="nv-dashboard-attention-item is-${escape(decision.tone)}"><span class="nv-dashboard-attention-item__icon" aria-hidden="true"><i class="fa-solid ${escape(decision.icon)}"></i></span><div class="nv-dashboard-attention-item__copy"><strong>${escape(decision.title)}</strong><p>${escape(decision.detail)}</p></div><button type="button" ${actionAttributes} class="nv-dashboard-attention-item__action" aria-label="${escape(decision.actionLabel)}">${escape(decision.actionLabel)}<i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></div></section>`;
+    },
+
+    // Alias kept descriptive for callers that render the decision section
+    // directly, without changing the nextDecision data contract.
+    decisionBlock: (atual = {}, context = {}) => DashboardComponents.nextDecisionBlock(atual, context),
+
+    attentionStrip: (atual = {}, context = {}) => {
+        const selection = resolvePriority({ ...atual, ...context });
+        if (!selection.priority || context.excludePriority === selection.priority) return '';
+        const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+        const labelsFor = items => {
+            const labels = [...new Set(items.map(item => item.nome || item.modelo || item.categoria || 'Item').filter(Boolean))];
+            return labels.length <= 2 ? labels.join(' e ') : `${labels.slice(0, 2).join(', ')} e mais ${labels.length - 2}`;
+        };
+        const describe = (items, singular, plural, suffix = 'aguardando regularização.') => {
+            const total = items.reduce((sum, item) => sum + (Number(item.valor) || 0), 0);
+            const countLabel = `${items.length} ${items.length === 1 ? singular : plural}`;
+            return total > 0 ? `${countLabel} · ${Utils.formatMoney(total)} ${suffix}` : `${countLabel} ${suffix}`;
+        };
+        let alert;
+        if (selection.priority === PRIORITY_KEYS.OVERDUE) {
+            alert = {
+                tone: 'danger', icon: 'fa-triangle-exclamation', title: 'Há contas vencidas',
+                detail: describe(selection.overdue, 'conta vencida', 'contas vencidas'),
+                action: 'navigate', payload: 'Agendamentos', actionLabel: 'Ver contas vencidas'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.NEGATIVE_BALANCE) {
+            alert = {
+                tone: 'danger', icon: 'fa-arrow-trend-down', title: 'Saldo global negativo',
+                detail: `O saldo de todas as contas está em ${Utils.formatMoney(selection.balance)}.`,
+                action: 'navigate', payload: 'Contas', actionLabel: 'Ver contas'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.OVER_BUDGET) {
+            const label = labelsFor(selection.overBudget);
+            alert = {
+                tone: 'warning', icon: 'fa-chart-pie', title: 'Orçamento ultrapassado',
+                detail: `${label} ${selection.overBudget.length === 1 ? 'ultrapassou' : 'ultrapassaram'} o limite definido.`,
+                action: 'navigate', payload: 'Orcamento', actionLabel: 'Revisar orçamento'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.HIGH_CARD_USAGE) {
+            const label = labelsFor(selection.highCardUsage);
+            alert = {
+                tone: 'warning', icon: 'fa-credit-card', title: 'Limite de cartão em atenção',
+                detail: `${label} ${selection.highCardUsage.length === 1 ? 'está' : 'estão'} com pelo menos 80% do limite utilizado.`,
+                action: 'navigate', payload: 'Contas', actionLabel: 'Ver cartões'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.ANORA_RECOMMENDATION) {
+            const candidate = selection.anoraRecommendation;
+            alert = {
+                tone: 'info', icon: 'fa-sparkles', title: 'Recomendação da Anora',
+                detail: candidate.detail || candidate.label || 'Há uma recomendação da Anora pronta para você.',
+                action: candidate.action, payload: candidate.payload, modal: candidate.modal,
+                actionLabel: candidate.label || 'Ver recomendação'
+            };
+        } else if (selection.priority === PRIORITY_KEYS.INFORMATIONAL) {
+            alert = {
+                tone: 'warning', icon: 'fa-calendar-day', title: 'Próximos vencimentos',
+                detail: describe(selection.upcoming, 'conta próxima', 'contas próximas', 'programadas até o fim do mês.'),
+                action: 'navigate', payload: 'Agendamentos', actionLabel: 'Ver próximos vencimentos'
+            };
+        }
+        if (!alert) return '';
+        const actionAttributes = alert.action === 'openModal'
+            ? `data-action="openModal" data-modal="${escape(alert.modal)}"`
+            : `data-action="navigate" data-payload="${escape(alert.payload)}"`;
+        const item = `<li class="nv-dashboard-attention-item is-${alert.tone}"><span class="nv-dashboard-attention-item__icon" aria-hidden="true"><i class="fa-solid ${alert.icon}"></i></span><div class="nv-dashboard-attention-item__copy"><strong>${escape(alert.title)}</strong><p>${escape(alert.detail)}</p></div><button type="button" ${actionAttributes} class="nv-dashboard-attention-item__action" aria-label="${escape(alert.actionLabel)}">${escape(alert.actionLabel)}<i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button></li>`;
+        return `<section class="nv-dashboard-attention" aria-labelledby="nv-dashboard-attention-title" aria-live="polite"><header class="nv-dashboard-attention__header"><div><p class="nv-dashboard-eyebrow">Ação recomendada</p><h3 id="nv-dashboard-attention-title">Atenção agora</h3></div><i class="fa-solid fa-bolt" aria-hidden="true"></i></header><ul class="nv-dashboard-attention__list">${item}</ul></section>`;
+    },
+
+    insightsSection: (mentoria, context = {}) => {
         let btnHtml = '';
-        if (mentoria.onboardingAction) {
-            const { label, action, modal, type } = mentoria.onboardingAction;
-            btnHtml = `<button data-action="${action}" data-modal="${modal}" ${type ? `data-type="${type}"` : ''} class="mt-5 w-full sm:w-auto bg-white text-brand-deep font-bold px-8 py-3.5 rounded-[12px] shadow-dark-glow hover:shadow-white-glow transition-all flex items-center justify-center gap-2 hover:-translate-y-1"><i class="fa-solid fa-bolt"></i> ${label}</button>`;
+        const typedActions = {
+            budget: { action: 'navigate', payload: 'Planejamento', label: 'Revisar orçamento' },
+            overdue: { action: 'navigate', payload: 'Agendamentos', label: 'Regularizar pendências' }
+        };
+        const anoraCandidate = mentoria.onboardingAction || mentoria.actionableAction || typedActions[mentoria.recommendationType] || (!mentoria.isOnboarding ? { action: 'navigate', payload: 'Dashboard', label: 'Voltar à visão geral' } : null);
+        const selection = resolvePriority({ ...context, anoraRecommendation: anoraCandidate });
+        const higherPriority = [PRIORITY_KEYS.OVERDUE, PRIORITY_KEYS.NEGATIVE_BALANCE, PRIORITY_KEYS.OVER_BUDGET, PRIORITY_KEYS.HIGH_CARD_USAGE, PRIORITY_KEYS.INFORMATIONAL].includes(selection.priority);
+        // The single prioritized dashboard decision owns urgent routes; Anora's
+        // compact CTA remains available when it is the winning recommendation.
+        const candidate = higherPriority ? null : anoraCandidate;
+        const validNavigation = candidate?.action === 'navigate' && ['Dashboard', 'Planejamento', 'Agendamentos'].includes(candidate.payload);
+        const validOnboarding = candidate?.action === 'openModal' && ['modal-banco', 'modal-transacao', 'modal-orcamento'].includes(candidate.modal);
+        if (validNavigation) {
+            btnHtml = `<button type="button" data-action="navigate" data-payload="${Utils.escapeHTML(candidate.payload)}" class="nv-onboarding-action" aria-label="${Utils.escapeHTML(candidate.label)}"><i class="fa-solid fa-bolt" aria-hidden="true"></i> ${Utils.escapeHTML(candidate.label)}</button>`;
+        } else if (validOnboarding) {
+            btnHtml = `<button type="button" data-action="openModal" data-modal="${Utils.escapeHTML(candidate.modal)}" ${candidate.type ? `data-type="${Utils.escapeHTML(candidate.type)}"` : ''} class="nv-onboarding-action" aria-label="${Utils.escapeHTML(candidate.label)}"><i class="fa-solid fa-bolt" aria-hidden="true"></i> ${Utils.escapeHTML(candidate.label)}</button>`;
         }
 
         const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
         const mesAtual = meses[new Date().getMonth()];
         const trendBadge = mentoria.trend > 0 ? `<span class="bg-success text-white px-2 py-0.5 rounded-md text-[10px] ml-2 shadow-sm whitespace-nowrap">▲ +${mentoria.trend} pts</span>` : (mentoria.trend < 0 ? `<span class="bg-danger text-white px-2 py-0.5 rounded-md text-[10px] ml-2 shadow-sm whitespace-nowrap">▼ ${mentoria.trend} pts</span>` : '');
+        const primeiroInsight = mentoria.insights?.[0] || 'A Anora está analisando seus dados financeiros.';
 
-        // Badge Visual do Nível da Jornada Semântica
         const levelBadges = {
-            1: '<span class="bg-white/10 border border-white/20 text-white px-3 py-1.5 rounded-full text-[10px] font-bold shadow-sm flex items-center gap-1.5 justify-center mt-3"><i class="fa-solid fa-seedling text-brand-soft"></i> Nível 1: Explorador</span>',
-            2: '<span class="bg-brand-soft border border-white/30 text-brand-deep px-3 py-1.5 rounded-full text-[10px] font-bold shadow-md flex items-center gap-1.5 justify-center mt-3"><i class="fa-solid fa-piggy-bank text-brand-deep"></i> Nível 2: Poupador</span>',
-            3: '<span class="bg-[#F9D342] border border-white/30 text-brand-deep px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider shadow-lg flex items-center gap-1.5 justify-center mt-3"><i class="fa-solid fa-chess-knight text-brand-deep"></i> Nível 3: Estrategista</span>'
+            1: '<span class="nv-insight-badge nv-insight-badge--neutral"><i class="fa-solid fa-seedling" aria-hidden="true"></i> Nível 1: Explorador</span>',
+            2: '<span class="nv-insight-badge nv-insight-badge--positive"><i class="fa-solid fa-piggy-bank" aria-hidden="true"></i> Nível 2: Poupador</span>',
+            3: '<span class="nv-insight-badge nv-insight-badge--attention"><i class="fa-solid fa-chess-knight" aria-hidden="true"></i> Nível 3: Estrategista</span>'
         };
         const badgeHtml = mentoria.isOnboarding ? '' : (levelBadges[mentoria.userLevel] || levelBadges[1]);
+        const diagnosisHtml = (mentoria.insights || []).map(insight => `
+            <div class="nv-insight-item flex items-start">
+                <i class="fa-solid fa-angle-right mt-1 text-[10px] text-brand-medium" aria-hidden="true"></i>
+                <p class="text-sm text-text-primary leading-relaxed font-medium">${Utils.escapeHTML(insight)}</p>
+            </div>
+        `).join('');
 
         return `
-        <div class="rounded-[20px] shadow-soft overflow-hidden mb-8 relative" style="background: linear-gradient(135deg, var(--c-brand-deep) 0%, var(--c-brand-dark) 100%); color: #FFFFFF;">
-            <div class="p-8 flex flex-col md:flex-row gap-8 items-center relative z-10">
-                <div class="flex flex-col items-center text-center shrink-0 w-44">
-                    <div class="w-24 h-24 rounded-full flex items-center justify-center text-4xl shadow-inner border border-brand-medium" style="background-color: #6C3BB6; color: #FFFFFF; font-family: 'Playfair Display', serif;">
-                        ${mentoria.score}
-                    </div>
-                    <span class="text-[10px] font-black uppercase tracking-widest text-brand-soft mt-4 flex items-center justify-center flex-wrap gap-1">Diagnóstico Estratégico <br> ${mesAtual} ${trendBadge}</span>
-                    <span class="text-sm font-bold mt-2 text-white bg-black/20 px-3 py-1 rounded-full border border-white/10">${mentoria.classification}</span>
+        <section class="nv-insight-panel relative" aria-label="Insight contextual da Anora">
+            <div class="nv-insight-panel__content relative z-10">
+                <div class="nv-insight-panel__score-column">
+                    <div class="nv-insight-score rounded-full shadow-inner border" aria-label="Pontuação da mentoria">${mentoria.score}</div>
+                    <span class="nv-insight-panel__diagnosis text-[10px] font-black uppercase tracking-widest text-brand-medium flex items-center justify-center flex-wrap gap-1">Diagnóstico Estratégico <br> ${mesAtual} ${trendBadge}</span>
+                    <span class="nv-insight-panel__classification text-sm font-bold text-text-primary bg-bg px-3 py-1 rounded-full border border-border">${Utils.escapeHTML(mentoria.classification)}</span>
                     ${badgeHtml}
                 </div>
 
-                <div class="flex-1 space-y-5 md:border-l md:border-brand-medium/30 md:pl-8 w-full">
-                    <div class="space-y-3">
-                        ${mentoria.insights.map(insight => `
-                            <div class="flex gap-3 items-start">
-                                <i class="fa-solid fa-angle-right mt-1 text-[10px] text-brand-soft"></i>
-                                <p class="text-sm text-white/90 leading-relaxed font-medium">${Utils.escapeHTML(insight)}</p>
-                            </div>
-                        `).join('')}
+                <div class="nv-insight-panel__body">
+                    <div class="nv-insight-panel__lead">
+                        <p class="nv-insight-panel__lead-label text-[10px] font-black uppercase tracking-widest text-brand-medium">Insight mais relevante</p>
+                        <p class="text-sm text-text-primary leading-relaxed font-medium">${Utils.escapeHTML(primeiroInsight)}</p>
                     </div>
-                    
-                    <div class="bg-black/20 p-5 rounded-[16px] border border-white/10 backdrop-blur-sm shadow-inner">
-                        <h4 class="text-[10px] font-black uppercase mb-2 flex items-center gap-2 text-brand-soft">
-                            <i class="fa-solid fa-crosshairs"></i> Diretriz Executiva
-                        </h4>
-                        <p class="text-[15px] font-bold text-white leading-tight font-mentor tracking-wide">${Utils.escapeHTML(mentoria.recommendation)}</p>
+                    <div class="nv-insight-panel__recommendation border shadow-inner">
+                        <h4 class="nv-insight-panel__recommendation-title text-[10px] font-black uppercase flex items-center gap-2 text-brand-medium"><i class="fa-solid fa-crosshairs" aria-hidden="true"></i> Diretriz Executiva</h4>
+                        <p class="text-[15px] font-bold text-text-primary leading-tight font-mentor tracking-wide">${Utils.escapeHTML(mentoria.recommendation)}</p>
                         ${btnHtml}
                     </div>
+                    <details class="nv-insight-details">
+                        <summary>Ver diagnóstico <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary>
+                        <div class="nv-insight-details__content">
+                            <p class="text-[10px] font-black uppercase tracking-widest text-text-secondary mb-2">Todos os insights</p>
+                            <div class="nv-insight-list">${diagnosisHtml}</div>
+                        </div>
+                    </details>
                 </div>
             </div>
-            <div class="absolute -right-20 -bottom-20 w-64 h-64 rounded-full blur-[100px] opacity-20 pointer-events-none bg-brand-soft"></div>
-        </div>`;
+        </section>`;
     },
 
     dashboardPillars: (pillars) => {
@@ -108,10 +350,13 @@ export const DashboardComponents = {
             else if (score >= 40) status = 'Atenção'; 
             else status = 'Crítico'; 
 
-            if(name === 'fluxoCaixa') { icon = 'fa-arrow-trend-up'; color = 'text-reserve'; } 
-            else if(name === 'reservas') { icon = 'fa-shield-halved'; color = 'text-investment'; } 
-            else if(name === 'credito') { icon = 'fa-credit-card'; color = 'text-credit'; } 
+            if(name === 'fluxoCaixa') { icon = 'fa-arrow-trend-up'; color = 'text-success'; } 
+            else if(name === 'reservas') { icon = 'fa-shield-halved'; color = 'text-success'; } 
+            else if(name === 'credito') { icon = 'fa-credit-card'; color = 'text-info'; } 
             else if(name === 'futuro') { icon = 'fa-road'; color = 'text-text-secondary'; } 
+
+            if (status === 'Atenção') color = 'text-warning';
+            if (status === 'Crítico') color = 'text-danger';
 
             return { status, icon, color };
         };
@@ -121,11 +366,12 @@ export const DashboardComponents = {
             const cfg = getPillarConfig(score, key);
             
             let feedbackText = 'text-text-secondary';
-            if(cfg.status === 'Excelente') feedbackText = 'text-success';
+            if(cfg.status === 'Excelente' || cfg.status === 'Equilibrado') feedbackText = 'text-success';
+            if(cfg.status === 'Atenção') feedbackText = 'text-warning';
             if(cfg.status === 'Crítico') feedbackText = 'text-danger';
 
             return `
-            <div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-all flex flex-col justify-between group">
+            <div class="nv-dashboard-card nv-dashboard-pillar-card flex flex-col justify-between group">
                 <div class="flex justify-between items-start mb-4">
                     <div class="flex items-center gap-3">
                         <div class="w-10 h-10 rounded-[12px] bg-bg border border-border ${cfg.color} flex items-center justify-center text-lg shadow-sm">
@@ -148,7 +394,7 @@ export const DashboardComponents = {
         };
 
         return `
-        <div class="mb-10">
+        <section class="nv-dashboard-pillars mb-10" aria-label="Pilares estratégicos">
             <h3 class="font-bold text-text-primary text-base mb-4 tracking-tight flex items-center gap-2 font-primary">
                 <i class="fa-solid fa-chart-column text-brand-medium"></i> Pilares Estratégicos
             </h3>
@@ -158,31 +404,69 @@ export const DashboardComponents = {
                 ${renderCard('credito', 'Crédito', 'Dependência de terceiros.')}
                 ${renderCard('futuro', 'O Futuro', 'Peso dos parcelamentos.')}
             </div>
-        </div>
+        </section>
         `;
     },
 
     dashboardAccounts: (bancos = [], cartoes = [], compras = []) => {
         // Identidade local: não depende de serviços externos para renderizar o Dashboard.
         const logo = (nome, cor) => { const iniciais = String(nome || 'C').slice(0, 2).toUpperCase(); return `<div class="w-9 h-9 rounded-full flex items-center justify-center overflow-hidden shrink-0 border border-border bg-bg" style="color:${cor || 'var(--c-brand-medium)'}"><span class="text-[10px] font-black">${Utils.escapeHTML(iniciais)}</span></div>`; };
-        const contasHtml = bancos.length ? bancos.map(b => `<div class="flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(b.instituicao || b.nome, b.cor)}</span><span class="flex-1 min-w-0 text-xs text-text-primary truncate"><strong class="block truncate">${Utils.escapeHTML(b.nome || b.instituicao || 'Conta')}</strong><small class="text-[10px] text-text-secondary">${Utils.escapeHTML(b.instituicao || 'Conta')}</small></span><strong class="text-xs font-mono text-text-primary">${Utils.formatMoney(b.saldo || 0)}</strong></div>`).join('') : '<p class="text-xs text-text-secondary">Nenhuma conta cadastrada.</p>';
-        const cartoesHtml = cartoes.length ? cartoes.map(c => { const limite = Number(c.limite || c.limiteTotal || 0); const usado = compras.filter(t => String(t.cartaoId || t.bancoId) === String(c.id)).reduce((s,t) => s + (Number(t.valor)||0), 0); const disponivel = Math.max(limite - usado, 0); const pct = limite ? Math.min(usado / limite * 100, 100) : 0; const cor = pct > 80 ? 'bg-danger' : pct > 50 ? 'bg-credit' : 'bg-success'; const banco = bancos.find(b => String(b.id) === String(c.bancoId)); return `<div class="flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(banco?.instituicao || c.nome, banco?.cor)}</span><div class="flex-1 min-w-0"><div class="flex justify-between"><span class="text-xs text-text-primary truncate">${Utils.escapeHTML(c.nome || 'Cartão')}</span><strong class="text-xs font-mono text-text-primary">${Utils.formatMoney(disponivel)}</strong></div><div class="flex justify-between text-[10px] text-text-secondary mt-1"><span>disponível</span><span>limite ${Utils.formatMoney(limite)}</span></div><div class="w-full h-1.5 bg-border rounded-full mt-1"><div class="${cor} h-1.5 rounded-full" style="width:${pct}%"></div></div></div></div>`; }).join('') : '<p class="text-xs text-text-secondary">Nenhum cartão cadastrado.</p>';
-        return `<div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft mt-8 mb-8"><div class="flex items-center gap-2 mb-3"><i class="fa-solid fa-wallet text-brand-medium"></i><h3 class="font-bold text-text-primary text-base font-primary">Contas e cartões</h3></div><div class="grid grid-cols-1 md:grid-cols-2 gap-5"><div><p class="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">Contas correntes e poupança</p>${contasHtml}</div><div><p class="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-1">Cartões de crédito</p>${cartoesHtml}</div></div></div>`;
+        const contasHtml = bancos.length ? bancos.map(b => `<div class="nv-dashboard-account-row flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(b.instituicao || b.nome, b.cor)}</span><span class="flex-1 min-w-0 text-xs text-text-primary truncate"><strong class="block truncate">${Utils.escapeHTML(b.nome || b.instituicao || 'Conta')}</strong><small class="text-[10px] text-text-secondary">${Utils.escapeHTML(b.instituicao || 'Conta')}</small></span><strong class="text-xs font-mono text-success">${Utils.formatMoney(b.saldo || 0)}</strong></div>`).join('') : '<p class="text-xs text-text-secondary">Nenhuma conta cadastrada.</p>';
+        const cartoesHtml = cartoes.length ? cartoes.map(c => { const limite = Number(c.limite || c.limiteTotal || 0); const usado = compras.filter(t => String(t.cartaoId || t.bancoId) === String(c.id)).reduce((s,t) => s + (Number(t.valor)||0), 0); const disponivel = Math.max(limite - usado, 0); const pct = limite ? Math.min(usado / limite * 100, 100) : 0; const cor = pct > 80 ? 'bg-credit' : pct > 50 ? 'bg-brand-medium' : 'bg-success'; const banco = bancos.find(b => String(b.id) === String(c.bancoId)); return `<div class="nv-dashboard-card-row flex items-center gap-3 py-2.5 border-b border-border last:border-0"><span>${logo(banco?.instituicao || c.nome, banco?.cor)}</span><div class="flex-1 min-w-0"><div class="flex justify-between gap-3"><span class="text-xs text-text-primary truncate">${Utils.escapeHTML(c.nome || 'Cartão')}</span><strong class="text-xs font-mono text-success whitespace-nowrap">${Utils.formatMoney(disponivel)}</strong></div><div class="flex justify-between text-[10px] text-text-secondary mt-1"><span>disponível</span><span>limite ${Utils.formatMoney(limite)}</span></div><div class="w-full h-1.5 bg-border rounded-full mt-1"><div class="${cor} h-1.5 rounded-full" style="width:${pct}%" role="progressbar" aria-valuenow="${Math.round(pct)}" aria-valuemin="0" aria-valuemax="100" aria-label="Utilização de ${Utils.escapeHTML(c.nome || 'cartão')}"></div></div></div></div>`; }).join('') : '<p class="text-xs text-text-secondary">Nenhum cartão cadastrado.</p>';
+        return `<div class="nv-dashboard-accounts-grid" aria-label="Contas e cartões"><section class="nv-dashboard-card nv-dashboard-accounts nv-dashboard-accounts--bank" aria-label="Contas"><div class="nv-dashboard-accounts__header flex items-center justify-between gap-3 mb-3"><div class="flex items-center gap-2 min-w-0"><i class="fa-solid fa-wallet text-success" aria-hidden="true"></i><div class="min-w-0"><h3 class="font-bold text-text-primary text-base font-primary">Contas</h3><p class="text-[10px] text-text-secondary uppercase tracking-wider">Contas correntes e poupança</p></div></div><span class="nv-dashboard-accounts__count text-[10px] font-bold text-success bg-bg px-2 py-1 rounded-full whitespace-nowrap">${bancos.length}</span></div><div class="nv-dashboard-accounts__list">${contasHtml}</div></section><section class="nv-dashboard-card nv-dashboard-accounts nv-dashboard-accounts--cards" aria-label="Cartões"><div class="nv-dashboard-accounts__header flex items-center justify-between gap-3 mb-3"><div class="flex items-center gap-2 min-w-0"><i class="fa-regular fa-credit-card text-brand-medium" aria-hidden="true"></i><div class="min-w-0"><h3 class="font-bold text-text-primary text-base font-primary">Cartões</h3><p class="text-[10px] text-text-secondary uppercase tracking-wider">Limite disponível e utilização</p></div></div><span class="nv-dashboard-accounts__count text-[10px] font-bold text-brand-medium bg-brand-soft px-2 py-1 rounded-full whitespace-nowrap">${cartoes.length}</span></div><div class="nv-dashboard-accounts__list">${cartoesHtml}</div></section></div>`;
     },
 
     dashboardAgenda: (agendamentos = [], receitas = [], state = {}) => {
-        const hoje = new Date(); const ano = Number(state.agendaYear ?? hoje.getFullYear()); const mes = Number(state.agendaMonth ?? hoje.getMonth());
+        const hoje = new Date();
+        const ano = Number(state.agendaYear ?? hoje.getFullYear());
+        const mes = Number(state.agendaMonth ?? hoje.getMonth());
         const nomes = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-        const itens = [...agendamentos.map(i => ({...i, dataAgenda: i.dataVencimento || i.data})), ...receitas.map(i => ({...i, dataAgenda: i.data, tipo: 'receita'}))].filter(i => i.dataAgenda);
-        const porDia = {}; itens.forEach(i => { const d = new Date(i.dataAgenda + 'T12:00:00'); if (d.getFullYear() === ano && d.getMonth() === mes) (porDia[d.getDate()] ||= []).push(i); });
-        const primeiro = new Date(ano, mes, 1).getDay(); const totalDias = new Date(ano, mes + 1, 0).getDate();
-        let cells = ''; for (let i=0;i<primeiro;i++) cells += '<div></div>'; for (let dia=1;dia<=totalDias;dia++) { const lista = porDia[dia] || []; const ehHoje = ano === new Date().getFullYear() && mes === new Date().getMonth() && dia === new Date().getDate(); cells += `<button type="button" data-action="showAgendaDay" onclick="App.showAgendaDay('${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}')" data-payload="${ano}-${String(mes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}" class="min-h-[54px] p-1.5 rounded-lg border ${lista.length ? 'border-brand-medium/40 bg-brand-medium/5' : 'border-border'} ${ehHoje ? 'ring-2 ring-brand-medium ring-offset-1' : ''} text-left" style="${ehHoje ? 'border-color: var(--c-brand-medium); box-shadow: 0 0 0 2px var(--c-brand-medium);' : ''} hover:bg-bg transition-colors"><span class="text-xs font-bold text-text-primary">${dia}</span>${lista.length ? `<span class="block mt-1 text-[9px] font-bold ${lista.some(i=>i.tipo==='receita') ? 'text-success' : 'text-danger'}">${lista.length} item(ns)</span>` : ''}</button>`; }
-        return `<div class="bg-surface p-5 rounded-[16px] border border-border shadow-soft"><div class="flex justify-between items-center mb-4"><div><h3 class="font-bold text-text-primary text-lg font-primary">Agenda financeira</h3><p class="text-xs text-text-secondary">${nomes[mes]} de ${ano} · clique em um dia</p></div><div class="flex items-center gap-1"><button type="button" data-action="resetAgendaToday" class="px-2 h-8 rounded-lg border border-border text-[10px] font-bold text-text-secondary hover:bg-bg">Hoje</button><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="w-8 h-8 rounded-lg border border-border text-text-secondary hover:bg-bg" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left text-xs"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="w-8 h-8 rounded-lg border border-border text-text-secondary hover:bg-bg" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right text-xs"></i></button></div></div><div class="grid grid-cols-7 gap-1.5 mb-2 text-center text-[9px] font-bold text-text-secondary"><span>DOM</span><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span></div><div class="grid grid-cols-7 gap-1.5">${cells}</div></div>`;
+        const diasSemana = ['SEG','TER','QUA','QUI','SEX','SÁB','DOM'];
+        const isoDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        const safeDate = (value) => {
+            if (!value) return null;
+            const date = new Date(`${String(value).slice(0, 10)}T12:00:00`);
+            return Number.isNaN(date.getTime()) ? null : date;
+        };
+        const isCompleted = (item) => item.completed === true || item.isCompleted === true || ['pago', 'recebida', 'concluido', 'concluida', 'completed', 'done', 'realizado', 'realizada', 'quitado', 'quitada', 'liquidado', 'liquidada'].includes(item.status);
+        const itens = [
+            ...agendamentos.map(item => ({ ...item, dataAgenda: item.dataVencimento || item.data, origem: 'agendamento' })),
+            ...receitas.map(item => ({ ...item, dataAgenda: item.data || item.dataVencimento, origem: 'receita' }))
+        ].map(item => ({ ...item, dataObj: safeDate(item.dataAgenda) })).filter(item => item.dataObj);
+        const porData = {};
+        itens.forEach(item => { (porData[isoDate(item.dataObj)] ||= []).push(item); });
+        const selectedDate = state.agendaSelectedDate || state.selectedAgendaDate || '';
+        const firstOfMonth = new Date(ano, mes, 1);
+        // JS starts on Sunday; rotate it so the visible week starts on Monday.
+        const mondayOffset = (firstOfMonth.getDay() + 6) % 7;
+        const gridStart = new Date(ano, mes, 1 - mondayOffset);
+        const cells = [];
+        for (let index = 0; index < 42; index += 1) {
+            const date = new Date(gridStart);
+            date.setDate(gridStart.getDate() + index);
+            const dateKey = isoDate(date);
+            const lista = porData[dateKey] || [];
+            const isOutside = date.getMonth() !== mes;
+            const isToday = dateKey === isoDate(hoje);
+            const isSelected = dateKey === selectedDate;
+            const hasCommitment = lista.some(item => item.origem === 'agendamento' || item.origem === 'receita');
+            const hasDueDate = lista.some(item => item.origem === 'agendamento' && !isCompleted(item));
+            const hasCompleted = lista.some(isCompleted);
+            const dots = [
+                hasCommitment ? '<span class="calendar-dot calendar-dot--commitment" aria-hidden="true"></span>' : '',
+                hasDueDate ? '<span class="calendar-dot calendar-dot--due-date" aria-hidden="true"></span>' : '',
+                hasCompleted ? '<span class="calendar-dot calendar-dot--completed" aria-hidden="true"></span>' : ''
+            ].join('');
+            const states = [isOutside ? 'is-outside' : '', isToday ? 'is-today agenda-day--today' : '', isSelected ? 'is-selected' : '', lista.length ? 'agenda-day--has-items' : ''].filter(Boolean).join(' ');
+            const label = `${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${lista.length ? `, ${lista.length} ${lista.length === 1 ? 'item' : 'itens'}` : ''}`;
+            cells.push(`<button type="button" data-action="showAgendaDay" onclick="App.showAgendaDay('${dateKey}')" data-payload="${dateKey}" class="calendar-day agenda-day ${states}" aria-label="${Utils.escapeHTML(label)}" aria-current="${isToday ? 'date' : 'false'}" aria-pressed="${isSelected ? 'true' : 'false'}"><span class="calendar-day-number">${date.getDate()}</span>${dots ? `<span class="calendar-day-dots" aria-label="Indicadores do dia">${dots}</span>` : '<span class="calendar-day-dots" aria-hidden="true"></span>'}</button>`);
+        }
+        return `<section class="nv-dashboard-card nv-dashboard-agenda agenda-calendar" aria-label="Agenda financeira"><header class="calendar-header"><div><p class="calendar-eyebrow">Planejamento</p><h3 class="calendar-title">Agenda financeira</h3><p class="calendar-subtitle">${nomes[mes]} de ${ano} · selecione um dia para ver os detalhes</p></div><div class="calendar-controls"><button type="button" data-action="resetAgendaToday" class="calendar-today" aria-label="Ir para hoje">Hoje</button><div class="calendar-nav" role="group" aria-label="Navegação da agenda"><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="calendar-nav-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="calendar-nav-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div></header><div class="calendar-weekdays agenda-weekdays" aria-hidden="true">${diasSemana.map(dia => `<span>${dia}</span>`).join('')}</div><div class="calendar-grid agenda-grid" role="grid" aria-label="${nomes[mes]} de ${ano}">${cells.join('')}</div><footer class="calendar-legend" aria-label="Legenda da agenda"><span><i class="calendar-legend-dot calendar-legend-dot--commitment" aria-hidden="true"></i>Compromisso</span><span><i class="calendar-legend-dot calendar-legend-dot--due-date" aria-hidden="true"></i>Vencimento</span><span><i class="calendar-legend-dot calendar-legend-dot--completed" aria-hidden="true"></i>Concluído</span></footer></section>`;
     },
 
-    dashboardCategories: (transacoesPeriodoAtual) => {
+    dashboardCategories: (transacoesPeriodoAtual, periodLabel = 'Este ano') => {
         const cats = {};
-        transacoesPeriodoAtual.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => { 
+        transacoesPeriodoAtual.filter(isExpense).forEach(t => { 
             cats[t.categoria] = (cats[t.categoria] || 0) + t.valor; 
         });
         
@@ -208,15 +492,18 @@ export const DashboardComponents = {
             </div>`;
         }).join('');
 
+        const safePeriodLabel = Utils.escapeHTML(periodLabel == null ? 'Este ano' : String(periodLabel));
         const emptyState = `
-            <div class="text-center py-10 px-4 bg-bg rounded-[16px] border border-dashed border-border">
-                <i class="fa-solid fa-chart-pie text-brand-soft text-4xl mb-3 block"></i>
-                <p class="text-sm text-text-secondary">Sem despesas registradas no período.</p>
+            <div class="nv-dashboard-categories__empty text-center py-10 px-4 bg-bg rounded-[16px] border border-dashed border-border">
+                <i class="fa-solid fa-chart-pie text-brand-soft text-4xl mb-3 block" aria-hidden="true"></i>
+                <h4 class="text-sm font-bold text-text-primary mb-1">Nenhuma despesa em ${safePeriodLabel}</h4>
+                <p class="text-sm text-text-secondary mb-5">Registre uma despesa para acompanhar suas categorias neste período.</p>
+                <button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-dashboard-categories__empty-action"><i class="fa-solid fa-plus" aria-hidden="true"></i> Adicionar despesa</button>
             </div>
         `;
 
         return `
-        <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft">
+        <section class="nv-dashboard-card nv-dashboard-categories" aria-label="Principais categorias">
             <div class="flex justify-between items-center mb-6">
                 <h3 class="font-bold text-text-primary text-lg font-primary">Principais Categorias</h3>
                 <button data-action="navigate" data-payload="Categorias" class="text-sm font-bold text-text-secondary hover:text-text-primary transition-colors">Ver todas &rarr;</button>
@@ -224,7 +511,7 @@ export const DashboardComponents = {
             <div class="space-y-1">
                 ${listHtml || emptyState}
             </div>
-        </div>`;
+        </section>`;
     },
 
     dashboardRecentTransactions: (transacoes, mentoria = null) => {
@@ -255,7 +542,9 @@ export const DashboardComponents = {
             listHtml += `<div class="mt-6 first:mt-0" data-key="group_${data}"><h4 class="text-[10px] font-bold text-text-secondary tracking-wider mb-3 uppercase">${Utils.escapeHTML(data)}</h4>`;
             
             items.forEach(t => {
-                const isRec = t.transferenciaInterna ? (t.transferenciaEntrada === true || (t.transferenciaInterna && String(t.bancoId) === String(t.contaDestinoId))) : t.tipo === 'receita';
+                const isRec = isTransferTransaction(t)
+                    ? (t.transferenciaEntrada === true || String(t.bancoId) === String(t.contaDestinoId))
+                    : isIncome(t);
                 const signal = isRec ? '+' : '-';
                 const valColor = isRec ? 'text-success' : 'text-danger'; 
                 const txId = t.codigoRef || `TX-${t.id.toString(36).substring(0,6).toUpperCase()}`;

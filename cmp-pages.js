@@ -1,9 +1,193 @@
 import { Utils } from './utils.js';
 import { Database, db } from './db.js';
+import { getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { CoreComponents } from './cmp-core.js';
 import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, invoiceReconciliationKey } from './reconciliation.js';
+import { loadAnoraPreferences } from './anora-preferences.js';
+import { calculatePeriodTotals, isExpense, isIncome, isInvoicePayment, isTransfer as isTransferTransaction } from './financial-ledger.js';
+import { addMoney } from './money-math.js';
+
+export const accountPortfolioSummary = ({
+    banks = [],
+    reserves = [],
+    cards = [],
+    cardPurchases = [],
+} = {}) => {
+    const cashBalance = (Array.isArray(banks) ? banks : []).reduce(
+        (total, bank) => addMoney(total, bank?.saldo),
+        0
+    );
+    const reservedBalance = (Array.isArray(reserves) ? reserves : []).reduce(
+        (total, reserve) => addMoney(total, reserve?.saldo),
+        0
+    );
+    const totalMoney = addMoney(cashBalance, reservedBalance);
+    const availableMoney = addMoney(totalMoney, -reservedBalance);
+
+    const credit = (Array.isArray(cards) ? cards : []).map(card => {
+        const limit = addMoney(card?.limite || card?.limiteTotal || 0);
+        const used = (Array.isArray(cardPurchases) ? cardPurchases : [])
+            .filter(item => String(item?.cartaoId || item?.bancoId) === String(card?.id))
+            .reduce((total, item) => addMoney(total, item?.valor), 0);
+
+        return {
+            ...card,
+            limit,
+            used,
+            available: Math.max(0, addMoney(limit, -used)),
+            utilization: limit ? (used / limit) * 100 : 0,
+        };
+    });
+
+    return {
+        cashBalance,
+        reservedBalance,
+        totalMoney,
+        availableMoney,
+        totalCreditLimit: credit.reduce((total, card) => addMoney(total, card.limit), 0),
+        totalCreditUsed: credit.reduce((total, card) => addMoney(total, card.used), 0),
+        totalCreditAvailable: credit.reduce((total, card) => addMoney(total, card.available), 0),
+        credit,
+    };
+};
+
+const cardTone = utilization => {
+    if (utilization >= 100) return 'danger';
+    if (utilization >= 80) return 'warning';
+    return 'success';
+};
+
+const transactionDateInfo = value => {
+    const raw = String(value || '').slice(0, 10);
+    if (!raw) return { key: 'missing', label: 'Data não informada' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return { key: `invalid:${raw}`, label: 'Data inválida' };
+    const parsed = new Date(`${raw}T12:00:00`);
+    if (Number.isNaN(parsed.getTime()) || parsed.getFullYear() !== Number(raw.slice(0, 4)) || parsed.getMonth() + 1 !== Number(raw.slice(5, 7)) || parsed.getDate() !== Number(raw.slice(8, 10))) {
+        return { key: `invalid:${raw}`, label: 'Data inválida' };
+    }
+    const today = new Date();
+    const startToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const startDate = new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+    const diffDays = Math.round((startToday - startDate) / 86400000);
+    const label = diffDays === 0 ? 'Hoje' : diffDays === 1 ? 'Ontem' : parsed.toLocaleDateString('pt-BR');
+    return { key: raw, label };
+};
 
 export const PageComponents = {
+    /**
+     * Avenera accounts workspace: keeps the existing bank/card records and action
+     * hooks, but presents them as two independent, scannable collections.
+     */
+    accountsPage: (bancos = [], cartoes = [], transacoes = [], reservas = []) => {
+        const hoje = new Date();
+        const anoAtual = hoje.getFullYear();
+        const mesAtual = hoje.getMonth();
+        const money = value => Utils.formatMoney(Number(value) || 0);
+        const dateLabel = date => date ? date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '') : '—';
+        const dateAtNoon = (year, month, day) => new Date(year, month, day, 12, 0, 0);
+        const dueDateFor = card => {
+            const day = Number(card?.vencimento || card?.diaVencimento || 0);
+            if (!Number.isFinite(day) || day < 1) return null;
+            const currentLastDay = new Date(anoAtual, mesAtual + 1, 0).getDate();
+            let due = dateAtNoon(anoAtual, mesAtual, Math.min(day, currentLastDay));
+            const today = dateAtNoon(anoAtual, mesAtual, hoje.getDate());
+            if (due < today) {
+                const nextLastDay = new Date(anoAtual, mesAtual + 2, 0).getDate();
+                due = dateAtNoon(anoAtual, mesAtual + 1, Math.min(day, nextLastDay));
+            }
+            return due;
+        };
+        const invoiceFor = card => {
+            const items = listInvoiceTransactions(transacoes, card, anoAtual, mesAtual);
+            const record = (db.conciliacoesFaturas || []).find(item => item.chave === invoiceReconciliationKey(card.id, anoAtual, mesAtual));
+            return calculateReconciliation(items, record?.valorFaturaReal, record?.ajustes || []);
+        };
+        const cardPurchases = (Array.isArray(transacoes) ? transacoes : [])
+            .filter(item => item?.isCartao && !item.transferenciaInterna);
+        const portfolio = accountPortfolioSummary({ banks: bancos, reserves: reservas, cards: cartoes, cardPurchases });
+        const cardsData = cartoes.map(card => {
+            const portfolioCard = portfolio.credit.find(item => String(item.id) === String(card.id));
+            const committed = portfolioCard?.used || 0;
+            const limit = portfolioCard?.limit || 0;
+            const invoice = invoiceFor(card);
+            return { card, committed, limit, hasLimit: limit > 0, available: portfolioCard?.available || 0, utilization: portfolioCard?.utilization || 0, invoice, dueDate: dueDateFor(card) };
+        });
+        const openInvoiceAmount = cardsData.reduce((sum, item) => addMoney(sum, item.invoice.explainedTotal), 0);
+        const nextDue = cardsData.map(item => item.dueDate).filter(Boolean).sort((a, b) => a - b)[0] || null;
+        const firstBankId = bancos.length ? Utils.escapeHTML(String(bancos[0].id)) : '';
+        // A card can only be linked to an existing bank. Keep the CTA useful in
+        // both states: open the card form when possible, otherwise take the user
+        // to the safe prerequisite (without creating an unlinked card).
+        const cardCtaAction = bancos.length
+            ? 'data-action="openModal" data-modal="modal-cartao"'
+            : 'data-action="openModal" data-modal="modal-banco" data-prerequisite-message="Cadastre uma conta antes de adicionar um cartão."';
+        const cardCtaLabel = bancos.length ? 'Adicionar cartão' : 'Adicionar conta primeiro';
+        const cardMenuTitle = bancos.length ? 'Cartão' : 'Conta necessária';
+        const cardMenuDescription = bancos.length ? 'Fatura e limite' : 'Cadastre uma conta antes';
+        const bankFor = card => bancos.find(bank => String(bank.id) === String(card.bancoId));
+        const cardFinal = card => {
+            const candidate = card.ultimosDigitos ?? card.ultimo4 ?? card.last4 ?? card.lastDigits ?? card.digitosFinais ?? card.numeroFinal;
+            const digits = candidate == null ? '' : String(candidate).replace(/\D/g, '').slice(-4);
+            return digits ? `•••• ${digits}` : 'Final não informado';
+        };
+        const accountType = bank => bank.tipoConta || bank.tipo || 'Conta bancária';
+        const accountStatus = bank => bank.status || (bank.ativo === false ? 'Inativa' : 'Ativa');
+        const accountStatusClass = bank => bank.ativo === false || bank.status === 'inativa' ? 'is-inactive' : 'is-active';
+        const actionButton = (action, label, icon, attrs = '', tone = 'secondary') => `<button type="button" data-action="${action}" ${attrs} class="nv-accounts-action nv-accounts-action--${tone}"><i class="${icon}" aria-hidden="true"></i><span>${label}</span></button>`;
+
+        const accountsHtml = bancos.length ? bancos.map(bank => `
+            <article class="nv-accounts-card nv-accounts-card--account" data-key="banco_${Utils.escapeHTML(String(bank.id))}">
+                <div class="nv-accounts-card-head">
+                    <div class="nv-accounts-card-icon nv-accounts-card-icon--account"><i class="fa-solid fa-building-columns" aria-hidden="true"></i></div>
+                    <div class="nv-accounts-card-heading"><h3>${Utils.escapeHTML(bank.nome || 'Conta sem nome')}</h3><p>${Utils.escapeHTML(bank.instituicao || 'Instituição não informada')}</p></div>
+                    <span class="nv-accounts-status ${accountStatusClass(bank)}"><i class="fa-solid fa-circle" aria-hidden="true"></i>${Utils.escapeHTML(accountStatus(bank))}</span>
+                </div>
+                <div class="nv-accounts-card-meta"><span>${Utils.escapeHTML(accountType(bank))}</span><span>Conta cadastrada</span></div>
+                <div class="nv-accounts-card-balance"><span>Saldo atual</span><strong class="money money--large">${money(bank.saldo)}</strong></div>
+                <div class="nv-accounts-card-actions">
+                    ${actionButton('iniciarImportacaoOFX', 'OFX', 'fa-solid fa-file-import', `data-banco-id="${Utils.escapeHTML(String(bank.id))}"`)}
+                    ${actionButton('iniciarImportacaoCSV', 'CSV', 'fa-solid fa-file-csv', `data-banco-id="${Utils.escapeHTML(String(bank.id))}"`)}
+                    <button type="button" data-action="delete" data-col="bancos" data-id="${Utils.escapeHTML(String(bank.id))}" class="nv-accounts-icon-action nv-accounts-icon-action--danger" title="Excluir conta" aria-label="Excluir conta"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+                </div>
+            </article>`).join('') : `
+            <div class="nv-accounts-empty"><div class="nv-accounts-empty-icon"><i class="fa-solid fa-building-columns" aria-hidden="true"></i></div><div><strong>Nenhuma conta cadastrada</strong><p>Adicione uma conta para acompanhar saldos e importar movimentações.</p></div><button type="button" data-action="openModal" data-modal="modal-banco" class="nv-accounts-empty-action">Adicionar conta</button></div>`;
+
+        const cardsHtml = cardsData.length ? cardsData.map(({ card, committed, limit, hasLimit, available, utilization, invoice, dueDate }) => {
+            const bank = bankFor(card);
+            const usagePercent = hasLimit ? utilization : null;
+            const visualUsagePercent = usagePercent == null ? 0 : Math.min(Math.max(usagePercent, 0), 100);
+            const usageState = usagePercent == null ? 'unknown' : cardTone(usagePercent);
+            const usageClass = `is-${usageState}`;
+            const usageLabel = usagePercent == null ? 'Limite não informado' : `${usagePercent.toFixed(0)}% utilizado`;
+            return `
+            <article class="nv-accounts-card nv-accounts-card--credit nv-credit-card nv-credit-card--outlined" data-key="cartao_${Utils.escapeHTML(String(card.id))}">
+                <div class="nv-credit-card__header nv-credit-card-top">
+                    <div><p class="nv-credit-card__eyebrow nv-accounts-overline">Cartão</p><h3>${Utils.escapeHTML(card.nome || 'Cartão sem nome')}</h3><p>${Utils.escapeHTML(bank?.instituicao || bank?.nome || 'Conta vinculada')} · ${Utils.escapeHTML(cardFinal(card))}</p></div>
+                    <span class="nv-credit-status is-${usageState}">${Utils.escapeHTML(usageLabel)}</span>
+                </div>
+                <div class="nv-credit-card__body">
+                <div class="nv-credit-card-highlight"><strong>${hasLimit ? money(available) : '—'}</strong><p>Limite disponível</p></div>
+                <div class="nv-credit-card-progress nv-credit-progress" data-usage-state="${usageState}"><div class="nv-credit-card-progress-label"><span>Utilizado ${hasLimit ? `· ${money(committed)} de ${money(limit)}` : ''}</span><strong>${Utils.escapeHTML(usageLabel)}</strong></div><div class="nv-credit-card-progress-track" role="progressbar" aria-label="Limite comprometido de ${Utils.escapeHTML(card.nome || 'cartão')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usagePercent == null ? 0 : visualUsagePercent.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(usageLabel)}"><span class="${usageClass}" style="width:${visualUsagePercent}%"></span></div></div>
+                <footer class="nv-credit-card__footer"><span>Fatura atual: ${money(invoice.explainedTotal)}</span><span>Vencimento: dia ${Utils.escapeHTML(String(card.vencimento || card.diaVencimento || '—'))}</span></footer>
+                <div class="nv-accounts-card-actions">
+                    ${actionButton('openInvoiceDetails', 'Abrir fatura', 'fa-solid fa-file-invoice-dollar', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}
+                    ${actionButton('openCardExpenseModal', 'Lançar despesa', 'fa-solid fa-plus', `data-id="${Utils.escapeHTML(String(card.id))}" data-nome="${Utils.escapeHTML(card.nome || 'Cartão')}"`, 'primary')}
+                    <button type="button" data-action="delete" data-col="cartoes" data-id="${Utils.escapeHTML(String(card.id))}" class="nv-accounts-icon-action nv-accounts-icon-action--danger" title="Excluir cartão" aria-label="Excluir cartão"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+                </div>
+                </div>
+            </article>`;
+        }).join('') : `
+            <div class="nv-accounts-empty"><div class="nv-accounts-empty-icon nv-accounts-empty-icon--card"><i class="fa-regular fa-credit-card" aria-hidden="true"></i></div><div><strong>Nenhum cartão cadastrado</strong><p>Cadastre um cartão vinculado a uma conta para acompanhar faturas e limite.</p></div><button type="button" ${cardCtaAction} class="nv-accounts-empty-action" title="${bancos.length ? 'Adicionar cartão' : 'Cadastre uma conta antes de adicionar um cartão'}">${cardCtaLabel}</button></div>`;
+
+        return `<div class="nv-accounts-page">
+            <header class="nv-accounts-header"><div><p class="nv-accounts-eyebrow">Visão financeira</p><h1>Contas e cartões</h1><p class="nv-accounts-subtitle">Acompanhe saldos, faturas e limites em um só lugar.</p></div><div class="nv-accounts-header-actions"><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-import" aria-hidden="true"></i><span>Importar OFX</span></button><button type="button" data-action="iniciarImportacaoCSV" data-banco-id="${firstBankId}" class="nv-accounts-secondary-action" ${bancos.length ? '' : 'disabled'}><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span>Importar CSV</span></button><details class="nv-accounts-add"><summary class="nv-accounts-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Adicionar</span><i class="fa-solid fa-chevron-down nv-accounts-add-chevron" aria-hidden="true"></i></summary><div class="nv-accounts-add-menu"><button type="button" data-action="openModal" data-modal="modal-banco"><i class="fa-solid fa-building-columns" aria-hidden="true"></i><span><strong>Conta</strong><small>Saldo e movimentações</small></span></button><button type="button" ${cardCtaAction}><i class="fa-regular fa-credit-card" aria-hidden="true"></i><span><strong>${cardMenuTitle}</strong><small>${cardMenuDescription}</small></span></button></div></details></div></header>
+            <section class="nv-account-overview" aria-label="Dinheiro, reservas e crédito"><div class="nv-account-overview__credit"><span>Total em contas e reservas</span><strong>${money(portfolio.totalMoney)}</strong><small>O total inclui o saldo bancário e as reservas vinculadas.</small></div><div class="nv-account-overview__credit"><span>Reservado para metas</span><strong>${money(portfolio.reservedBalance)}</strong><small>Valores separados do saldo disponível em conta.</small></div><div class="nv-account-overview__cash"><span>Disponível fora das metas</span><strong>${money(portfolio.availableMoney)}</strong><small>Saldo somado das suas contas bancárias.</small></div><div class="nv-account-overview__credit"><span>Crédito disponível</span><strong>${money(portfolio.totalCreditAvailable)}</strong><small>${money(portfolio.totalCreditUsed)} usados de ${money(portfolio.totalCreditLimit)}</small></div></section>
+            <section class="nv-accounts-overview" aria-labelledby="nv-accounts-overview-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Resumo</p><h2 id="nv-accounts-overview-title">Panorama financeiro</h2></div></div><div class="nv-accounts-summary-grid nv-accounts-summary-grid--single"><div class="nv-accounts-summary-card nv-accounts-summary-card--invoice"><div class="nv-accounts-summary-icon"><i class="fa-solid fa-file-invoice-dollar" aria-hidden="true"></i></div><div><span>Faturas em aberto</span><strong class="money money--large">${money(openInvoiceAmount)}</strong><small>${nextDue ? `Próximo vencimento · ${dateLabel(nextDue)}` : 'Nenhum vencimento informado'}</small></div></div></div></section>
+            <section class="nv-accounts-section" aria-labelledby="nv-accounts-bank-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Patrimônio</p><h2 id="nv-accounts-bank-title">Contas</h2><p>Saldo disponível e origem de cada movimentação.</p></div><span class="nv-accounts-count">${bancos.length}</span></div><div class="nv-accounts-grid">${accountsHtml}</div></section>
+            <section class="nv-accounts-section nv-accounts-section--cards" aria-labelledby="nv-accounts-card-title"><div class="nv-accounts-section-heading"><div><p class="nv-accounts-eyebrow">Crédito</p><h2 id="nv-accounts-card-title">Cartões</h2><p>Faturas abertas, comprometimento e limite disponível.</p></div><span class="nv-accounts-count">${cartoes.length}</span></div><div class="nv-accounts-grid">${cardsHtml}</div></section>
+        </div>`;
+    },
+
     contatosPage: (contatos) => {
         const listHtml = contatos.map(c => `
             <div data-key="${c.id}" class="flex items-center justify-between p-4 bg-surface border border-border rounded-[16px] shadow-soft mb-3 group hover:-translate-y-0.5 transition-all">
@@ -14,7 +198,7 @@ export const PageComponents = {
                         <p class="text-xs text-text-secondary font-mono mt-0.5 tracking-wider">${Utils.escapeHTML(c.documento || 'Documento não informado')}</p>
                     </div>
                 </div>
-                <button data-action="delete" data-col="contatos" data-id="${c.id}" class="text-border hover:text-danger w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg transition-colors"><i class="fa-solid fa-pen"></i></button><button data-action="delete" data-col="categorias" data-id="${id}" class="text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors w-10 h-10 flex items-center justify-center rounded-xl border border-transparent hover:border-danger/20"><i class="fa-solid fa-trash-can"></i></button>
+                <button data-action="delete" data-col="contatos" data-id="${c.id}" class="text-border hover:text-danger w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg transition-colors"><i class="fa-solid fa-trash-can"></i></button>
             </div>
         `).join('');
 
@@ -32,153 +216,136 @@ export const PageComponents = {
         return `<div>${contatos.length ? listHtml : emptyState}</div>`;
     },
 
-    categoriesPage: (db, state) => {
-        const hoje = new Date();
-        const trMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth()).filter(t => t.tipo === 'despesa' && !t.transferenciaInterna);
-        const gastosPorCat = {};
-        let totalDespesas = 0;
-
-        trMes.forEach(t => { 
-            if(!gastosPorCat[t.categoria]) gastosPorCat[t.categoria] = 0; 
-            gastosPorCat[t.categoria] += t.valor;
-            totalDespesas += t.valor;
-        });
-
-        const mesAnt = hoje.getMonth() === 0 ? 11 : hoje.getMonth() - 1;
-        const anoAnt = hoje.getMonth() === 0 ? hoje.getFullYear() - 1 : hoje.getFullYear();
-        const trMesAnt = Database.getTransacoesPorMes(anoAnt, mesAnt).filter(t => t.tipo === 'despesa' && !t.transferenciaInterna);
-        const gastosMesAnt = {};
-        trMesAnt.forEach(t => { 
-            if(!gastosMesAnt[t.categoria]) gastosMesAnt[t.categoria] = 0; 
-            gastosMesAnt[t.categoria] += t.valor;
-        });
-
-        const sortedCats = Object.entries(gastosPorCat).sort((a,b) => b[1] - a[1]);
-        
-        const progressHtml = sortedCats.length > 0 ? sortedCats.map((c) => {
-            const catName = c[0];
-            const current = c[1];
-            const previous = gastosMesAnt[catName] || 0;
-            const catObj = CoreComponents._getCategoryConfig(catName);
-            
-            const percentage = totalDespesas > 0 ? (current / totalDespesas) * 100 : 0;
-            const variation = previous > 0 ? ((current - previous) / previous) * 100 : 0;
-            
-            let varClass = 'text-text-secondary bg-bg';
-            let varText = '—';
-            if (variation > 0) { varClass = 'text-danger bg-danger/10'; varText = `+${variation.toFixed(0)}%`; }
-            else if (variation < 0) { varClass = 'text-success bg-success/10'; varText = `${variation.toFixed(0)}%`; }
-
-            return `
-            <div class="flex items-center justify-between gap-4 group mb-4 last:mb-0">
-                <div class="flex items-center gap-4 w-[140px] md:w-1/3 shrink-0">
-                    <div class="w-12 h-12 rounded-[14px] flex items-center justify-center text-white text-lg shadow-sm shrink-0 border border-border" style="background-color: ${catObj.cor}">
-                        <i class="fa-solid ${catObj.icone}"></i>
-                    </div>
-                    <span class="text-sm font-bold text-text-primary truncate" title="${Utils.escapeHTML(catName)}">${Utils.escapeHTML(catName)}</span>
-                </div>
-                <div class="w-24 text-right shrink-0">
-                    <span class="text-sm font-bold text-text-primary font-mono">${Utils.formatMoney(current)}</span>
-                </div>
-                <div class="flex-1 h-2 bg-border rounded-full overflow-hidden hidden sm:block">
-                    <div class="h-full rounded-full transition-all duration-1000" style="width: ${percentage}%; background-color: ${catObj.cor}"></div>
-                </div>
-                <div class="w-16 text-right shrink-0">
-                    <span class="text-[10px] font-bold ${varClass} font-mono px-2 py-1 rounded-md border border-border/50">${varText}</span>
-                </div>
-            </div>`;
-        }).join('') : '<p class="text-sm text-text-secondary text-center py-6 border border-dashed border-border rounded-[12px] bg-bg mt-4">Nenhuma despesa registrada neste mês.</p>';
-
-        const grupos = {};
-        db.categorias.forEach(c => {
-            const item = typeof c === 'string' ? { nome: c, grupo: 'Sem grupo', subgrupo: c, fixa: false, icone: 'fa-tag', cor: '#9CA3AF' } : c;
-            const grupo = item.grupo || 'Sem grupo';
-            if (!grupos[grupo]) grupos[grupo] = [];
-            grupos[grupo].push(item);
-        });
-        const catList = Object.entries(grupos).map(([grupo, itens]) => {
-            const base = itens[0];
-            const subitens = itens.filter(c => String(c.subgrupo || c.nome) !== String(grupo));
-            const linhas = subitens.map(c => `
-                <div class="flex items-center gap-2 py-2 px-2 border-t border-border/60 group/sub">
-                    <i class="fa-solid ${Utils.escapeHTML(c.icone || 'fa-tag')} text-xs" style="color:${c.cor || '#9CA3AF'}"></i>
-                    <span class="flex-1 min-w-0 text-xs text-text-primary truncate">${Utils.escapeHTML(c.subgrupo || c.nome)}</span>
-                    <button data-action="renameCategory" data-id="${c.id}" data-name="${Utils.escapeHTML(c.nome)}" class="opacity-0 group-hover/sub:opacity-100 text-text-secondary hover:text-brand-medium w-7 h-7 rounded" title="Renomear"><i class="fa-solid fa-pen text-[10px]"></i></button>
-                    ${c.fixa ? '' : `<button data-action="delete" data-col="categorias" data-id="${c.id}" class="opacity-0 group-hover/sub:opacity-100 text-text-secondary hover:text-danger w-7 h-7 rounded" title="Excluir"><i class="fa-solid fa-trash-can text-[10px]"></i></button>`}
-                </div>`).join('');
-            return `<details class="bg-bg border border-border rounded-xl mb-2 overflow-hidden group" open>
-                <summary class="list-none cursor-pointer flex items-center gap-3 px-3 py-3 hover:bg-surface">
-                    <div class="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style="background-color:${base.cor || '#8B5CF6'}"><i class="fa-solid ${Utils.escapeHTML(base.icone || 'fa-tag')}"></i></div>
-                    <span class="flex-1 font-bold text-sm text-text-primary">${Utils.escapeHTML(grupo)}</span>
-                    <span class="text-[10px] text-text-secondary">${subitens.length} subgrupo${subitens.length === 1 ? '' : 's'}</span>
-                    <i class="fa-solid fa-chevron-down text-xs text-text-secondary group-open:rotate-180"></i>
-                </summary>
-                <div class="px-3 pb-2">${linhas}</div>
-            </details>`;
+    categoriesPage: (db) => {
+        // Category management is intentionally separate from reports/analytics.  Normalize
+        // legacy records at the rendering boundary and never mutate persisted data here.
+        const source = Array.isArray(db?.categorias) ? db.categorias : [];
+        const normalize = (raw, index) => {
+            const item = typeof raw === 'string' ? { nome: raw } : (raw && typeof raw === 'object' ? raw : {});
+            const nome = String(item.nome || item.name || `Categoria ${index + 1}`).trim() || `Categoria ${index + 1}`;
+            const grupoRaw = String(item.grupo || item.group || '').trim();
+            const grupo = grupoRaw || nome;
+            const subgrupo = String(item.subgrupo || item.subGroup || nome).trim() || nome;
+            const tipoRaw = String(item.tipo || item.type || '').trim().toLowerCase();
+            const legacyMovement = tipoRaw === 'movimentação' || tipoRaw === 'movimentacao' || tipoRaw === 'transferencia';
+            const isReceita = tipoRaw === 'receita' || tipoRaw === 'income' || (!tipoRaw && grupo.toLocaleLowerCase('pt-BR') === 'renda');
+            const tipo = legacyMovement ? 'movimentação' : (isReceita ? 'receita' : 'despesa');
+            const fixa = isCategoriaPadrao({ ...item, nome, grupo, subgrupo }, null);
+            const icon = getCategoriaIcon({ ...item, nome, grupo, subgrupo, fixa });
+            const color = /^#[0-9a-f]{3,8}$/i.test(String(item.cor || '')) ? String(item.cor) : 'var(--c-brand-medium)';
+            const archived = item.ativo === false || item.arquivada === true;
+            const principal = !legacyMovement && (item.tipoCategoria === 'principal' || !grupoRaw || (grupo === nome && subgrupo === nome));
+            return {
+                raw, id: item.id, nome, grupo, subgrupo, tipo,
+                tipoLabel: legacyMovement ? 'Legado · movimentação' : (isReceita ? 'Receita' : 'Despesa'),
+                icon, color, fixa, archived, principal, legacyMovement,
+                statusLabel: archived ? 'Arquivada' : (fixa ? 'Padrão' : 'Personalizada')
+            };
+        };
+        const all = source.map(normalize);
+        const legacy = all.filter(item => item.legacyMovement);
+        const categories = all.filter(item => !item.legacyMovement);
+        const receitas = categories.filter(item => item.tipo === 'receita');
+        const despesas = categories.filter(item => item.tipo === 'despesa');
+        const padrao = categories.filter(item => item.fixa);
+        const personalizadas = categories.filter(item => !item.fixa);
+        const groupBy = (items) => {
+            const grouped = new Map();
+            items.forEach(item => {
+                if (!grouped.has(item.grupo)) grouped.set(item.grupo, []);
+                grouped.get(item.grupo).push(item);
+            });
+            return Array.from(grouped.entries()).sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
+        };
+        const escape = value => Utils.escapeHTML(String(value ?? ''));
+        const actionMenu = (item) => {
+            if (item.id === undefined || item.id === null || item.id === '') return '';
+            if (item.fixa) return `<details class="nv-category-actions-menu"><summary title="Ver ações de ${escape(item.nome)}" aria-label="Ver ações de ${escape(item.nome)}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></summary><div class="nv-category-actions-popover"><button type="button" data-action="viewCategory" data-id="${escape(item.id)}"> <i class="fa-regular fa-eye" aria-hidden="true"></i>Ver</button></div></details>`;
+            const manage = item.archived
+                ? `<button type="button" data-action="editCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i>Editar</button><button type="button" data-action="restoreCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Restaurar</button>`
+                : `<button type="button" data-action="editCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-pen" aria-hidden="true"></i>Editar</button><button type="button" data-action="archiveCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-box-archive" aria-hidden="true"></i>Arquivar</button>`;
+            return `<details class="nv-category-actions-menu"><summary title="Ações de ${escape(item.nome)}" aria-label="Ações de ${escape(item.nome)}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></summary><div class="nv-category-actions-popover">${manage}<button type="button" data-action="deleteCategory" data-id="${escape(item.id)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i>Excluir</button></div></details>`;
+        };
+        const groupCards = (items) => groupBy(items).map(([group, entries]) => {
+            const base = entries.find(item => item.principal) || entries[0];
+            const searchText = entries.map(item => `${item.nome} ${item.grupo} ${item.subgrupo} ${item.tipoLabel} ${item.statusLabel} ${item.principal ? 'categoria principal grupo' : 'subcategoria'}`).join(' ');
+            const rows = entries.map(item => {
+                const rowLabel = item.principal ? item.nome : item.subgrupo || item.nome;
+                const hierarchy = item.principal ? 'Categoria principal · grupo' : `Subcategoria · ${item.grupo}`;
+                const rowSearch = `${item.nome} ${item.grupo} ${item.subgrupo} ${item.tipoLabel} ${item.statusLabel} ${hierarchy}`;
+                return `<div class="nv-category-subrow ${item.archived ? 'is-archived' : ''}" data-category-row data-category-id="${escape(item.id)}" data-search="${escape(rowSearch.toLocaleLowerCase('pt-BR'))}" data-category-status="${item.archived ? 'archived' : 'active'}"><span class="nv-category-row-icon" style="background:${escape(item.color)}" title="${escape(item.nome)}"><i class="fa-solid ${escape(item.icon)}" aria-hidden="true"></i></span><span class="nv-category-subrow__name"><strong>${escape(rowLabel)}</strong><small>${escape(hierarchy)}</small></span><span class="nv-category-type nv-category-type--${item.tipo === 'receita' ? 'income' : 'expense'}">${escape(item.tipoLabel)}</span><span class="nv-category-status ${item.archived ? 'is-archived' : item.fixa ? 'is-fixed' : 'is-custom'}">${escape(item.statusLabel)}</span>${actionMenu(item)}</div>`;
+            }).join('');
+            return `<details class="nv-category-card" data-category-type="${base.tipo}" data-category-count="${entries.length}" data-group-count="1" data-search="${escape(searchText.toLocaleLowerCase('pt-BR'))}" open><summary class="nv-category-card__summary"><span class="nv-category-card__icon" style="background:${escape(base.color)}"><i class="fa-solid ${escape(base.icon)}" aria-hidden="true"></i></span><span class="nv-category-card__main"><strong>${escape(group)}</strong><span>Grupo · ${entries.length} ${entries.length === 1 ? 'categoria' : 'categorias'}</span></span><span class="nv-category-card__type">${escape(base.tipoLabel)}</span><span class="nv-category-card__count">${entries.length} ${entries.length === 1 ? 'registro' : 'registros'}</span><i class="fa-solid fa-chevron-down nv-category-card__chevron" aria-hidden="true"></i></summary><div class="nv-category-subrows">${rows}</div></details>`;
         }).join('');
-
-        return `
-        <div class="flex flex-col lg:flex-row gap-8 mb-8 items-start">
-            <div class="w-full lg:w-3/5 xl:w-2/3 bg-surface p-6 md:p-8 rounded-[24px] border border-border shadow-soft flex flex-col overflow-hidden">
-                <h3 class="text-xl font-bold text-text-primary mb-8 font-primary">Despesas por Categoria</h3>
-                <div class="flex flex-col xl:flex-row items-center gap-10 mb-10">
-                    <div class="relative w-56 h-56 shrink-0 flex items-center justify-center">
-                        <canvas id="categoriasPageChart"></canvas>
-                    </div>
-                    <div class="flex-1 w-full space-y-4 overflow-hidden">
-                        ${sortedCats.slice(0, 5).map(c => {
-                            const pct = totalDespesas > 0 ? (c[1] / totalDespesas) * 100 : 0;
-                            const catObj = CoreComponents._getCategoryConfig(c[0]);
-                            return `
-                            <div class="flex items-center gap-4 p-4 bg-bg rounded-[16px] border border-border shadow-sm">
-                                <div class="w-5 h-5 rounded-full shadow-sm shrink-0 border border-white/20" style="background-color: ${catObj.cor}"></div>
-                                <span class="text-[15px] font-bold text-text-primary flex-1 truncate">${Utils.escapeHTML(c[0])}</span>
-                                <span class="text-sm font-bold text-text-secondary font-mono shrink-0 bg-surface px-3 py-1 rounded-lg border border-border">${pct.toFixed(1)}%</span>
-                            </div>`;
-                        }).join('')}
-                        ${sortedCats.length === 0 ? '<p class="text-sm text-text-secondary text-center py-4 bg-bg rounded-[16px] border border-dashed border-border">Sem dados no período.</p>' : ''}
-                    </div>
-                </div>
-                
-                <div class="border-t border-border pt-8 mt-auto">
-                    <h4 class="text-xs font-bold text-text-secondary uppercase tracking-wider mb-6">Progresso do Mês Atual</h4>
-                    <div class="max-h-[400px] overflow-y-auto pr-4 scrollbar-hide">
-                        ${progressHtml}
-                    </div>
-                </div>
-            </div>
-
-            <div class="w-full lg:w-2/5 xl:w-1/3 bg-surface p-6 md:p-8 rounded-[24px] border border-border shadow-soft flex flex-col overflow-hidden">
-                <div class="flex justify-between items-center mb-8">
-                    <h3 class="text-xl font-bold text-text-primary font-primary">Categorias Ativas</h3>
-                    <button data-action="openModal" data-modal="modal-categoria" class="bg-brand-medium text-white px-4 py-2 rounded-[10px] text-sm font-bold hover:bg-brand-dark transition-colors shadow-soft flex items-center gap-2"><i class="fa-solid fa-plus"></i> Nova</button>
-                </div>
-                
-                <div class="flex-1">
-                    <div class="max-h-[700px] overflow-y-auto pr-2 scrollbar-hide">
-                        ${catList || '<p class="text-center py-6 text-sm text-text-secondary">Nenhuma categoria registrada.</p>'}
-                    </div>
-                </div>
-            </div>
+        const section = (type, title, icon, items, emptyText) => `<section class="nv-category-section" data-category-section="${type}" aria-labelledby="nv-category-${type}-title"><div class="nv-category-section__heading"><div><p class="nv-category-eyebrow">Organização</p><h3 id="nv-category-${type}-title"><i class="fa-solid ${icon}" aria-hidden="true"></i>${title}</h3></div><span class="nv-category-section__count" data-section-count>${items.length} ${items.length === 1 ? 'categorias' : 'categorias'} · ${groupBy(items).length} ${groupBy(items).length === 1 ? 'grupo' : 'grupos'}</span></div><div class="nv-category-list">${groupCards(items) || `<div class="nv-category-empty"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>${emptyText}</span></div>`}</div></section>`;
+        const card = (value, label, icon, extra = '') => `<div class="nv-category-summary-card ${extra}"><span class="nv-category-summary-card__icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></span><span><strong>${value}</strong><small>${label}</small></span></div>`;
+        const total = categories.length;
+        return `<div class="nv-categories-page" data-category-management data-category-type="all" data-category-status="active">
+            <div class="nv-category-summary" aria-label="Resumo das categorias">${card(despesas.length, 'Despesas', 'fa-arrow-trend-down', 'is-expense')}${card(receitas.length, 'Receitas', 'fa-arrow-trend-up', 'is-income')}${card(padrao.length, 'Padrão', 'fa-lock')}${card(personalizadas.length, 'Personalizadas', 'fa-sliders')}</div>
+            <div class="nv-category-toolbar"><label class="nv-category-search"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span class="sr-only">Buscar categoria</span><input type="search" data-input="categorySearch" placeholder="Buscar por nome, grupo, subcategoria, tipo ou status" autocomplete="off"></label><div class="nv-category-filters" role="group" aria-label="Filtrar por tipo"><button type="button" class="nv-category-filter is-active" data-action="setCategoryType" data-payload="all" aria-pressed="true">Todas</button><button type="button" class="nv-category-filter" data-action="setCategoryType" data-payload="despesa" aria-pressed="false">Despesas</button><button type="button" class="nv-category-filter" data-action="setCategoryType" data-payload="receita" aria-pressed="false">Receitas</button></div><div class="nv-category-filters" role="group" aria-label="Filtrar por status"><button type="button" class="nv-category-filter is-active" data-action="setCategoryStatus" data-payload="active" aria-pressed="true">Ativas</button><button type="button" class="nv-category-filter" data-action="setCategoryStatus" data-payload="archived" aria-pressed="false">Arquivadas</button><button type="button" class="nv-category-filter" data-action="setCategoryStatus" data-payload="all" aria-pressed="false">Todos os status</button></div><span class="nv-category-results-count" aria-live="polite">${total} ${total === 1 ? 'categoria' : 'categorias'} · ${groupBy(categories).length} ${groupBy(categories).length === 1 ? 'grupo' : 'grupos'}</span></div>
+            <div class="nv-category-sections">${section('despesa', 'Despesas', 'fa-arrow-trend-down', despesas, 'Nenhuma categoria de despesa cadastrada.')}${section('receita', 'Receitas', 'fa-arrow-trend-up', receitas, 'Nenhuma categoria de receita cadastrada.')}</div>${legacy.length ? `<p class="nv-category-legacy-note"><i class="fa-solid fa-circle-info" aria-hidden="true"></i>${legacy.length} registro(s) legado(s) de movimentação permanecem apenas para compatibilidade histórica; transferências continuam fora das categorias.</p>` : ''}<div class="nv-category-filter-empty" hidden><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><strong>Nenhuma categoria encontrada</strong><span>Tente outro nome ou escolha outro filtro.</span></div>
         </div>`;
     },
 
     filtersSection: (f, bancos, categorias = [], cartoes = []) => {
         const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
-        let contas = '<option value="">Todas</option>';
-        if (bancos?.length) contas += '<optgroup label="Contas">' + bancos.map(b => `<option value="banco_${b.id}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${Utils.escapeHTML(b.instituicao && b.instituicao !== 'Outro' ? b.instituicao + ' (' + b.nome + ')' : b.nome)}</option>`).join('') + '</optgroup>';
-        if (cartoes?.length) contas += '<optgroup label="Cartões">' + cartoes.map(c => `<option value="cartao_${c.id}" ${f.bancoId === 'cartao_'+c.id ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('') + '</optgroup>';
-        const cats = categorias.map(c => { const nome = typeof c === 'string' ? c : c.nome; return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}</option>`; }).join('');
-        return `<div class="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end"><div class="sm:col-span-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Buscar</label><input type="text" placeholder="Descrição ou ID" value="${Utils.escapeHTML(f.desc)}" data-input="setFilterDesc" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Mês</label><select data-change="setFilter" data-filter-key="mes" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todos</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Tipo</label><select data-change="setFilter" data-filter-key="tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todos</option><option value="receita" ${f.tipo==='receita'?'selected':''}>Receitas</option><option value="despesa" ${f.tipo==='despesa'?'selected':''}>Despesas</option></select></div></div><details class="mt-3 border-t border-border pt-3 group"><summary class="cursor-pointer list-none text-xs font-bold text-brand-medium"><i class="fa-solid fa-sliders mr-1"></i>Mais filtros <i class="fa-solid fa-chevron-down text-[10px] ml-1 group-open:rotate-180 transition-transform"></i></summary><div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3"><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Categoria</label><select data-change="setFilter" data-filter-key="categoria" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Todas</option>${cats}</select></div><div><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Conta/Cartão</label><select data-change="setFilter" data-filter-key="bancoId" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary">${contas}</select></div><div class="flex gap-2"><div class="flex-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">De</label><input type="date" data-change="setFilter" data-filter-key="dataInicio" value="${f.dataInicio || ''}" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div><div class="flex-1"><label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase">Até</label><input type="date" data-change="setFilter" data-filter-key="dataFim" value="${f.dataFim || ''}" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div></div><button data-action="clearFilters" class="sm:col-span-3 justify-self-start px-3 py-2 bg-bg text-text-primary rounded-[10px] text-xs font-bold"><i class="fa-solid fa-eraser mr-1"></i>Limpar filtros</button></div></details>`;
+        const currentType = f.tipo || '';
+        const filterKeys = ['desc', 'categoria', 'bancoId', 'mes', 'tipo', 'dataInicio', 'dataFim'];
+        const activeFilterCount = filterKeys.reduce((count, key) => {
+            const value = f?.[key];
+            return count + (value !== null && value !== undefined && String(value).trim() !== '' ? 1 : 0);
+        }, 0);
+        const tabs = [
+            ['', 'Todas', 'fa-layer-group'],
+            ['receita', 'Receitas', 'fa-arrow-trend-up'],
+            ['despesa', 'Despesas', 'fa-arrow-trend-down'],
+            ['transferencia', 'Transferências', 'fa-right-left']
+        ];
+        const tabHtml = tabs.map(([value, label, icon]) => `<button type="button" role="tab" data-action="setTransactionTypeFilter" data-payload="${value}" class="nv-tx-tab ${currentType === value ? 'is-active' : ''}" aria-selected="${currentType === value ? 'true' : 'false'}" aria-pressed="${currentType === value ? 'true' : 'false'}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`).join('');
+
+        let contas = '<option value="">Todas as contas</option>';
+        if (bancos?.length) contas += '<optgroup label="Contas bancárias">' + bancos.map(b => `<option value="banco_${Utils.escapeHTML(String(b.id))}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${Utils.escapeHTML(b.instituicao && b.instituicao !== 'Outro' ? b.instituicao + ' (' + b.nome + ')' : b.nome)}</option>`).join('') + '</optgroup>';
+        if (cartoes?.length) contas += '<optgroup label="Cartões">' + cartoes.map(c => `<option value="cartao_${Utils.escapeHTML(String(c.id))}" ${f.bancoId === 'cartao_'+c.id ? 'selected' : ''}>${Utils.escapeHTML(c.nome)}</option>`).join('') + '</optgroup>';
+        const cats = categorias.filter(c => typeof c === 'string' || (c.ativo !== false && !c.arquivada) || (f.categoria && c.nome === f.categoria)).map(c => {
+            const nome = typeof c === 'string' ? c : c.nome;
+            const archived = typeof c !== 'string' && (c.ativo === false || c.arquivada === true);
+            return `<option value="${Utils.escapeHTML(nome)}" ${f.categoria === nome ? 'selected' : ''}>${Utils.escapeHTML(nome)}${archived ? ' (arquivada · histórico)' : ''}</option>`;
+        }).join('');
+
+        const clearFiltersHtml = activeFilterCount > 0
+            ? `<button type="button" data-action="clearFilters" class="nv-tx-clear"><i class="fa-solid fa-eraser" aria-hidden="true"></i> Limpar ${activeFilterCount} filtros</button>`
+            : '';
+
+        return `<div class="nv-tx-filters">
+            <div class="nv-tx-filter-tabs" role="tablist" aria-label="Filtrar por tipo">${tabHtml}</div>
+            <div class="nv-tx-filter-grid">
+                <div class="nv-tx-filter-search"><label for="transactions-search" class="nv-tx-label">Buscar movimentação</label><div class="nv-tx-search-wrap"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="transactions-search" type="search" autocomplete="off" placeholder="Descrição ou identificador" value="${Utils.escapeHTML(f.desc || '')}" data-input="setFilterDesc" class="nv-tx-input"></div></div>
+                <div><label for="transactions-month" class="nv-tx-label">Período</label><select id="transactions-month" data-change="setFilter" data-filter-key="mes" class="nv-tx-input"><option value="">Todos os meses</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>
+                <div><label for="transactions-type" class="nv-tx-label">Tipo</label><select id="transactions-type" data-change="setFilter" data-filter-key="tipo" class="nv-tx-input"><option value="">Todos os tipos</option><option value="receita" ${f.tipo==='receita'?'selected':''}>Receitas</option><option value="despesa" ${f.tipo==='despesa'?'selected':''}>Despesas</option><option value="transferencia" ${f.tipo==='transferencia'?'selected':''}>Transferências</option></select></div>
+            </div>
+            <details class="nv-tx-more-filters" ${activeFilterCount > 0 ? 'open' : ''}><summary>Mais filtros <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid">
+                <div><label for="transactions-category" class="nv-tx-label">Categoria</label><select id="transactions-category" data-change="setFilter" data-filter-key="categoria" class="nv-tx-input"><option value="">Todas as categorias</option>${cats}</select></div>
+                <div><label for="transactions-account" class="nv-tx-label">Conta ou cartão</label><select id="transactions-account" data-change="setFilter" data-filter-key="bancoId" class="nv-tx-input">${contas}</select></div>
+                <div class="nv-tx-date-range"><div><label for="transactions-start" class="nv-tx-label">De</label><input id="transactions-start" type="date" data-change="setFilter" data-filter-key="dataInicio" value="${Utils.escapeHTML(f.dataInicio || '')}" class="nv-tx-input"></div><div><label for="transactions-end" class="nv-tx-label">Até</label><input id="transactions-end" type="date" data-change="setFilter" data-filter-key="dataFim" value="${Utils.escapeHTML(f.dataFim || '')}" class="nv-tx-input"></div></div>
+                ${clearFiltersHtml}
+            </div></details>
+        </div>`;
     },
 
     transactionSummary: (transacoes = []) => {
-        const receitas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((s,t) => s + (Number(t.valor)||0), 0);
-        const despesas = transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((s,t) => s + (Number(t.valor)||0), 0);
-        const cats = {}; transacoes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => cats[t.categoria] = (cats[t.categoria] || 0) + (Number(t.valor)||0));
-        const topCats = Object.entries(cats).sort((a,b)=>b[1]-a[1]).slice(0,3);
-        const card=(label,value,cor)=>`<div class="bg-surface border border-border rounded-[10px] px-3 py-2 min-w-0"><span class="block text-[9px] uppercase font-bold text-text-secondary truncate">${label}</span><strong class="block text-sm font-mono ${cor} mt-0.5 truncate">${value}</strong></div>`;
-        return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">${card('Receitas',Utils.formatMoney(receitas),'text-success')}${card('Despesas',Utils.formatMoney(despesas),'text-danger')}${card('Saldo',Utils.formatMoney(receitas-despesas),receitas-despesas>=0?'text-success':'text-danger')}${card('Transações',transacoes.length,'text-text-primary')}<div class="col-span-2 sm:col-span-4 flex items-center gap-2 px-2 py-1.5 overflow-x-auto whitespace-nowrap"><span class="text-[9px] uppercase font-bold text-text-secondary">Categorias:</span>${topCats.length ? topCats.map(([cat,val])=>`<span class="text-[10px] text-text-primary"><strong>${Utils.escapeHTML(cat)}</strong> ${Utils.formatMoney(val)}</span>`).join('<span class="text-border">•</span>') : '<span class="text-[10px] text-text-secondary">Sem despesas</span>'}</div></div>`;
+        const totals = calculatePeriodTotals(transacoes);
+        const receitas = totals.income;
+        const despesas = totals.expense;
+        const saldo = receitas - despesas;
+        const card = (label, value, tone, icon) => `<article class="nv-tx-summary-card ${tone}"><span class="nv-tx-summary-icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></span><div><p>${label}</p><strong class="money">${value}</strong></div></article>`;
+        return `<section class="nv-tx-summary" aria-label="Resumo da consulta">${card('Receitas', Utils.formatMoney(receitas), 'is-income', 'fa-arrow-trend-up')}${card('Despesas', Utils.formatMoney(despesas), 'is-expense', 'fa-arrow-trend-down')}${card('Saldo', Utils.formatMoney(saldo), saldo >= 0 ? 'is-balance-positive' : 'is-balance-negative', 'fa-scale-balanced')}<div class="nv-tx-summary-count"><span>Movimentações</span><strong>${transacoes.length}</strong></div></section>`;
+    },
+
+    uncategorizedTransactionsNotice: (count, active = false) => {
+        if (!count && !active) return '';
+        const label = `${count} ${count === 1 ? 'transação sem categoria' : 'transações sem categoria'}`;
+        if (active) return `<div class="nv-tx-uncategorized-notice is-active" role="status" aria-live="polite"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>Filtro ativo: ${label}.</span><button type="button" data-action="clearUncategorizedFilter" aria-label="Mostrar todas as transações">Limpar filtro</button></div>`;
+        return `<div class="nv-tx-uncategorized-notice" role="status" aria-live="polite"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>${label} nos resultados filtrados.</span><button type="button" data-action="filterUncategorized" aria-label="Filtrar ${label}">Ver sem categoria</button></div>`;
     },
 
     transactionList: (list, state) => {
@@ -186,82 +353,36 @@ export const PageComponents = {
         const allVisibleSelected = list.length > 0 && list.every(t => selected.includes(String(t.id)));
 
         if (!list.length) {
-            return `
-            <div class="text-center py-20 px-6 bg-surface flex flex-col items-center justify-center">
-                <div class="w-24 h-24 bg-bg text-brand-soft border border-border rounded-full flex items-center justify-center text-4xl mb-6 shadow-inner">
-                    <i class="fa-solid fa-file-invoice-dollar"></i>
-                </div>
-                <h4 class="font-bold text-text-primary text-xl mb-2 font-primary">Nenhuma transação encontrada</h4>
-                <p class="text-sm text-text-secondary mb-8 max-w-sm">Os filtros aplicados não retornaram resultados ou você não registrou movimentações.</p>
-                <button data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="bg-brand-deep hover:bg-brand-dark text-white px-8 py-3 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Fazer Lançamento</button>
-            </div>`;
+            return `<div class="nv-tx-empty"><div class="nv-tx-empty-icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div><h4>Nenhuma transação encontrada</h4><p>Os filtros aplicados não retornaram resultados ou você ainda não registrou movimentações.</p><button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-tx-empty-action">Nova transação</button></div>`;
         }
-        
-        return `
-            <div class="flex justify-between items-center mb-6">
-                <div class="flex items-center gap-3">
-                    <input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} class="w-4 h-4 text-brand-medium bg-surface border-border rounded cursor-pointer">
-                    <h4 class="font-bold text-text-primary font-primary">Histórico Completo</h4>
-                </div>
-                ${selected.length > 0 ? `
-                <button data-action="deleteSelectedTx" class="text-xs text-danger px-4 py-2 font-bold hover:bg-bg rounded-[12px] transition-colors flex items-center gap-2 border border-border">
-                    <i class="fa-solid fa-trash-can"></i> Apagar Selecionados (${selected.length})
-                </button>
-                ` : ''}
-            </div>
-            <div class="space-y-0">
-                ${list.map(t => {
-                    const isRec = t.transferenciaInterna ? (t.transferenciaEntrada === true || (t.transferenciaInterna && String(t.bancoId) === String(t.contaDestinoId))) : t.tipo === 'receita';
-                    const signal = isRec ? '+' : '-'; const color = isRec ? 'text-success' : 'text-danger';
-                    
-                    let dataFormatada = 'Hoje';
-                    if (t.data) {
-                        const parsed = new Date(t.data + 'T12:00:00');
-                        dataFormatada = isNaN(parsed.getTime()) ? 'Data Inválida' : parsed.toLocaleDateString('pt-BR');
-                    }
-                    
-                    const contatoStr = t.contatoId && db.contatos ? db.contatos.find(c => c.id === t.contatoId) : null;
-                    const contatoBadge = contatoStr ? `<span class="text-[10px] px-2 py-0.5 rounded bg-bg border border-border text-text-secondary font-bold tracking-wider flex items-center gap-1"><i class="fa-regular fa-address-book"></i> ${Utils.escapeHTML(contatoStr.nome)}</span>` : '';
-                    
-                    const txId = t.codigoRef || `TX-${t.id.toString(36).substring(0,6).toUpperCase()}`;
-                    const badgeRecorrente = t.recorrente && !t.isCartao ? `<span class="text-[10px] text-reserve bg-bg border border-border px-1.5 py-0.5 rounded font-bold flex items-center gap-1"><i class="fa-solid fa-repeat"></i> Fixa ${t.parcelaAtual ? `${t.parcelaAtual}/${t.totalParcelas}` : ''}</span>` : '';
-                    const isSelected = selected.includes(t.id.toString());
-                    
-                    const catObj = CoreComponents._getCategoryConfig(t.categoria);
 
-                    return `
-                    <div data-key="${t.id}" class="flex items-center justify-between p-4 hover:bg-bg rounded-[16px] transition-all group border-b border-border last:border-0 ${isSelected ? 'bg-bg' : ''}">
-                        <div class="flex items-center gap-4">
-                            <input type="checkbox" data-change="toggleSelectTx" value="${t.id}" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-brand-medium bg-surface border-border rounded cursor-pointer">
-                            <div class="w-10 h-10 rounded-[12px] flex items-center justify-center shadow-sm text-white border border-border" style="background-color: ${catObj.cor}">
-                                <i class="fa-solid ${catObj.icone}"></i>
-                            </div>
-                            <div>
-                                <div class="flex items-center gap-2 mb-1">
-                                    <p class="font-bold text-text-primary text-sm tracking-tight font-primary">${Utils.escapeHTML(t.desc)}</p>
-                                    <span class="text-[9px] font-mono text-text-secondary bg-bg border border-border px-1.5 py-0.5 rounded" title="ID de Registro">#${txId}</span>
-                                </div>
-                                <div class="flex flex-wrap items-center gap-2 mt-1.5">
-                                    <span class="text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider text-white" style="background-color: ${catObj.cor}99">${Utils.escapeHTML(t.categoria)}</span>
-                                    <span class="text-[10px] text-text-secondary flex items-center gap-1"><i class="fa-regular fa-calendar"></i> ${dataFormatada}</span>
-                                    ${(() => { const banco = db.bancos.find(b => String(b.id) === String(t.bancoId)); return banco ? `<span class="text-[10px] text-text-secondary flex items-center gap-1"><i class="fa-solid fa-building-columns"></i> ${Utils.escapeHTML(banco.nome || banco.instituicao)}</span>` : ''; })()}
-                                    ${t.isCartao ? `<span class="text-[10px] text-credit bg-bg border border-border px-1.5 py-0.5 rounded flex items-center gap-1 font-bold"><i class="fa-regular fa-credit-card"></i> Cartão (Parc. ${t.parcelaAtual}/${t.totalParcelas})</span>` : ''}
-                                    ${!t.isCartao && t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="text-[10px] text-text-secondary border border-border px-1.5 py-0.5 rounded flex items-center gap-1"><i class="fa-solid fa-money-check"></i> ${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}
-                                    ${badgeRecorrente}
-                                    ${contatoBadge}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="text-right flex flex-col items-end">
-                            <span class="block font-bold text-sm ${color} font-mono tracking-tight">${signal} ${Utils.formatMoney(t.valor)}</span>
-                            <div class="flex gap-2 mt-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button data-action="openEditModal" data-id="${t.id}" class="text-[10px] text-text-primary hover:text-brand-medium font-bold border border-border bg-surface px-2 py-1 rounded-[8px]"><i class="fa-solid fa-pen mr-1"></i> Editar</button>
-                                <button data-action="deleteExpense" data-id="${t.id}" class="text-[10px] text-danger font-bold hover:bg-surface border border-transparent hover:border-border px-2 py-1 rounded-[8px]"><i class="fa-solid fa-trash-can mr-1"></i> Apagar</button>
-                            </div>
-                        </div>
-                    </div>`;
-                }).join('')}
-            </div>`;
+        return `<div class="nv-tx-list-head"><label class="nv-tx-select-all"><input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} aria-label="Selecionar todas as movimentações visíveis"><span>Selecionar página</span></label>${selected.length > 0 ? `<button type="button" data-action="deleteSelectedTx" class="nv-tx-bulk-delete"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Apagar selecionadas (${selected.length})</button>` : ''}</div><div class="nv-tx-list">${list.map((t, index) => {
+            const isTransfer = isTransferTransaction(t);
+            const isRec = isTransfer ? !!t.transferenciaEntrada : isIncome(t);
+            const valColor = isRec ? 'is-income' : 'is-expense';
+            const sign = isRec ? '+' : '-';
+            const dateInfo = transactionDateInfo(t.data);
+            const previousDateKey = index > 0
+                ? transactionDateInfo(list[index - 1]?.data).key
+                : (state?.previousTransactionDate !== undefined ? transactionDateInfo(state.previousTransactionDate).key : null);
+            const dateHeading = dateInfo.key !== previousDateKey
+                ? `<div class="nv-tx-date-heading" role="heading" aria-level="3"><span>${Utils.escapeHTML(dateInfo.label)}</span></div>`
+                : '';
+            const contato = t.contatoId && db.contatos ? db.contatos.find(c => c.id === t.contatoId) : null;
+            const banco = db.bancos?.find(b => String(b.id) === String(t.bancoId));
+            const reserva = (db.reservas || []).find(item => String(item.id) === String(t.bancoId));
+            const metaReserva = reserva && db.metas?.find(item => String(item.id) === String(reserva.goalId));
+            const cartao = t.isCartao ? db.cartoes?.find(c => String(c.id) === String(t.bancoId)) : null;
+            const contaLabel = cartao?.nome || banco?.nome || banco?.instituicao || reserva?.nome || (metaReserva ? `Reserva: ${metaReserva.nome}` : '');
+            const txId = t.codigoRef || `TX-${String(t.id).substring(0, 8).toUpperCase()}`;
+            const catObj = CoreComponents._getCategoryConfig(t.categoria);
+            const catColor = Utils.escapeHTML(String(catObj.cor || 'var(--c-text-secondary)'));
+            const isSelected = selected.includes(String(t.id));
+            const typeLabel = isInvoicePayment(t) ? 'Pagamento de fatura' : isTransfer ? 'Transferência' : (isIncome(t) ? 'Receita' : 'Despesa');
+            const uncategorized = !String(t.categoria || '').trim() || String(t.categoria).trim().toLocaleLowerCase('pt-BR') === 'sem categoria';
+            const categoryLabel = uncategorized ? 'Sem categoria' : t.categoria;
+            return `${dateHeading}<div class="swipe-container nv-tx-row ${isSelected ? 'is-selected' : ''} ${uncategorized ? 'is-uncategorized' : ''}" data-id="${Utils.escapeHTML(String(t.id))}"><div class="swipe-front nv-tx-row-front"><div class="nv-tx-row-main"><label class="nv-tx-check"><input type="checkbox" data-change="toggleSelectTx" value="${Utils.escapeHTML(String(t.id))}" ${isSelected ? 'checked' : ''} aria-label="Selecionar ${Utils.escapeHTML(t.desc || typeLabel)}"><span></span></label><span class="nv-tx-category-icon" style="background-color: ${catColor}"><i class="fa-solid ${Utils.escapeHTML(catObj.icone)}" aria-hidden="true"></i></span><div class="nv-tx-description"><div class="nv-tx-title-line"><strong>${Utils.escapeHTML(t.desc || typeLabel)}</strong><span class="nv-tx-reference">#${Utils.escapeHTML(String(txId))}</span></div><div class="nv-tx-meta"><span class="nv-tx-type" style="--tx-category-color: ${catColor}">${Utils.escapeHTML(categoryLabel || typeLabel)}${uncategorized ? ' <span class="sr-only">Sem categoria</span>' : ''}</span><span><i class="fa-regular fa-calendar" aria-hidden="true"></i>${Utils.escapeHTML(dateInfo.label)}</span>${contaLabel ? `<span><i class="fa-solid fa-building-columns" aria-hidden="true"></i>${Utils.escapeHTML(contaLabel)}</span>` : ''}${t.isCartao ? `<span><i class="fa-regular fa-credit-card" aria-hidden="true"></i>Cartão${t.parcelaAtual ? ` · ${Utils.escapeHTML(String(t.parcelaAtual))}/${Utils.escapeHTML(String(t.totalParcelas))}` : ''}</span>` : ''}${t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="nv-tx-meta-optional">${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}${t.recorrente && !t.isCartao ? '<span><i class="fa-solid fa-repeat" aria-hidden="true"></i>Fixa</span>' : ''}${contato ? `<span class="nv-tx-meta-optional"><i class="fa-regular fa-address-book" aria-hidden="true"></i>${Utils.escapeHTML(contato.nome)}</span>` : ''}</div></div></div><div class="nv-tx-row-value"><strong class="money ${valColor}">${sign} ${Utils.formatMoney(t.valor)}</strong><span class="nv-tx-row-kind">${typeLabel}</span><div class="nv-tx-row-actions"><button type="button" data-action="openEditModal" data-id="${Utils.escapeHTML(String(t.id))}" title="Editar transação" aria-label="Editar transação"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Editar</span></button><button type="button" data-action="deleteExpense" data-id="${Utils.escapeHTML(String(t.id))}" title="Apagar transação" aria-label="Apagar transação"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Apagar</span></button></div></div></div></div>`;
+        }).join('')}</div>`;
     },
 
     contasDashboard: (bancos, cartoes, comprasCartao, state) => {
@@ -614,14 +735,23 @@ export const PageComponents = {
         `;
     },
 
-    goalsPage: (metas, transacoes) => {
+    goalsPage: (metas, transacoes, options = {}) => {
+        const readOnly = options.readOnly === true;
+        const reserveSummaryHtml = Array.isArray(options.reservas) && Array.isArray(options.bancos) ? (() => {
+            const reserved = options.reservas.reduce((total, reserve) => addMoney(total, reserve?.saldo), 0);
+            const bankBalance = options.bancos.reduce((total, bank) => addMoney(total, bank?.saldo), 0);
+            const total = addMoney(bankBalance, reserved);
+            const available = addMoney(total, -reserved);
+            return `<section class="nv-account-overview" aria-label="Resumo de dinheiro e reservas"><article class="nv-account-overview__credit"><span>Total em contas e reservas</span><strong>${Utils.formatMoney(total)}</strong><small>O total inclui o saldo bancário e as reservas vinculadas.</small></article><article class="nv-account-overview__credit"><span>Reservado para metas</span><strong>${Utils.formatMoney(reserved)}</strong><small>Valores separados do saldo disponível em conta.</small></article><article class="nv-account-overview__cash"><span>Disponível fora das metas</span><strong>${Utils.formatMoney(available)}</strong><small>Saldo somado das suas contas bancárias.</small></article></section>`;
+        })() : '';
         const hoje = new Date(); 
         const tresMesesAtras = new Date(); 
         tresMesesAtras.setMonth(hoje.getMonth() - 3);
         const transacoesRecentes = transacoes.filter(t => t.id >= tresMesesAtras.getTime()); 
-        const receitas = transacoesRecentes.filter(t => !t.transferenciaInterna && t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b) => a+b.valor, 0); 
-        const despesas = transacoesRecentes.filter(t => !t.transferenciaInterna && t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b) => a+b.valor, 0);
-        const mediaPoupanca = (receitas - despesas) / 3; 
+        const recentTotals = calculatePeriodTotals(transacoesRecentes);
+        const receitas = recentTotals.income;
+        const despesas = recentTotals.expense;
+        const mediaPoupanca = addMoney(receitas, -despesas) / 3; 
         const capacidadeFormatada = mediaPoupanca > 0 ? Utils.formatMoney(mediaPoupanca) : "R$ 0,00";
 
         const emptyState = `
@@ -631,39 +761,52 @@ export const PageComponents = {
                 </div>
                 <h4 class="font-bold text-text-primary text-lg mb-2 font-primary">Sem metas definidas</h4>
                 <p class="text-sm text-text-secondary mb-6 max-w-sm">Criar metas ajuda a dar propósito às suas economias.</p>
-                <button data-action="openModal" data-modal="modal-meta" class="bg-brand-deep hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Criar Nova Meta</button>
+                ${readOnly ? '' : '<button data-action="openModal" data-modal="modal-meta" class="bg-brand-medium hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Criar Nova Meta</button>'}
             </div>
         `;
 
-        const metasHtml = metas.length === 0 ? emptyState : metas.map(m => CoreComponents._buildGoalCard(m, hoje)).join('');
+        const metasHtml = metas.length === 0 ? emptyState : metas.map(m => CoreComponents._buildGoalCard(m, hoje, { readOnly })).join('');
 
         return `
+            ${reserveSummaryHtml}
             <div class="rounded-[16px] p-8 mb-10 shadow-soft text-white relative overflow-hidden" style="background: linear-gradient(135deg, var(--c-brand-deep) 0%, var(--c-brand-dark) 100%);"><div class="relative z-10"><div class="flex items-center gap-3 mb-2"><div class="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm"><i class="fa-solid fa-wallet"></i></div><span class="font-bold text-sm opacity-90 tracking-wide font-primary">Capacidade de Poupança</span></div><h3 class="text-4xl font-bold mb-1 font-mono">${capacidadeFormatada}</h3><p class="text-sm opacity-80">média mensal calculada dos últimos 3 meses</p></div><div class="absolute -right-10 -bottom-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div></div>
             <h3 class="font-bold text-text-primary text-lg mb-6 tracking-tight font-primary">Metas Ativas</h3><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-8">${metasHtml}</div>`;
     },
 
-    budgetView: (orcamentos, transacoes, state = {}) => {
-        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        const anoSelecionado = state.budgetYear || new Date().getFullYear();
-        const mesSelecionado = state.budgetMonth ?? new Date().getMonth();
-        const mesAtualNome = meses[mesSelecionado];
-        const orcamentosDoMes = (orcamentos || []).filter(o => o.ano == null || (Number(o.ano) === Number(anoSelecionado) && Number(o.mes) === Number(mesSelecionado))); 
-        const gastosPorCat = {}; 
-        let totalGastoMes = 0;
-        
+    budgetSummary: (orcamentos, transacoes, state = {}) => {
+        const now = new Date();
+        const anoSelecionado = state.budgetYear ?? now.getFullYear();
+        const mesSelecionado = state.budgetMonth ?? now.getMonth();
+        const orcamentosDoMes = (orcamentos || []).filter(o => o.ano == null || (Number(o.ano) === Number(anoSelecionado) && Number(o.mes) === Number(mesSelecionado)));
+        const gastosPorCat = {};
         const transacoesMes = Database.getTransacoesPorMes(anoSelecionado, mesSelecionado);
-        transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => { 
-            if(!gastosPorCat[t.categoria]) gastosPorCat[t.categoria] = 0; 
-            gastosPorCat[t.categoria] += t.valor; 
-            totalGastoMes += t.valor; 
+        transacoesMes.filter(isExpense).forEach(t => {
+            const categoria = t.categoria || 'Outros';
+            gastosPorCat[categoria] = addMoney(gastosPorCat[categoria] || 0, t.valor);
         });
-        
-        const totalOrcado = orcamentosDoMes.reduce((a, b) => a + b.limite, 0); 
-        const disponivelGeral = totalOrcado - totalGastoMes;
+        const totalOrcado = orcamentosDoMes.reduce((total, item) => addMoney(total, item.limite), 0);
+        const totalGastoMes = Object.values(gastosPorCat).reduce((total, value) => addMoney(total, value), 0);
+        return {
+            ano: Number(anoSelecionado),
+            mes: Number(mesSelecionado),
+            orcamentos: orcamentosDoMes,
+            gastosPorCat,
+            totalOrcado,
+            totalGastoMes,
+            disponivelGeral: addMoney(totalOrcado, -totalGastoMes)
+        };
+    },
+
+    budgetView: (orcamentos, transacoes, state = {}, options = {}) => {
+        const readOnly = options.readOnly === true;
+        const meses = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+        const resumo = PageComponents.budgetSummary(orcamentos, transacoes, state);
+        const { ano: anoSelecionado, mes: mesSelecionado, orcamentos: orcamentosDoMes, gastosPorCat, totalOrcado, totalGastoMes, disponivelGeral } = resumo;
+        const mesAtualNome = meses[mesSelecionado];
 
         const listHTML = orcamentosDoMes.map(o => {
-            const gasto = gastosPorCat[o.categoria] || 0; 
-            return CoreComponents._buildBudgetCard(o, gasto);
+            const gasto = gastosPorCat[o.categoria] || 0;
+            return CoreComponents._buildBudgetCard(o, gasto, { readOnly });
         }).join('');
 
         const emptyState = `
@@ -673,75 +816,64 @@ export const PageComponents = {
                 </div>
                 <h4 class="font-bold text-text-primary text-lg mb-2 font-primary">Sem limites definidos</h4>
                 <p class="text-sm text-text-secondary mb-6 max-w-sm">Estabelecer orçamentos ajuda a manter o controle.</p>
-                <button data-action="openModal" data-modal="modal-orcamento" class="bg-brand-deep hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Definir Orçamento</button>
+                ${readOnly ? '' : '<button data-action="openModal" data-modal="modal-orcamento" class="bg-brand-medium hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Definir Orçamento</button>'}
             </div>
         `;
 
         return `
-        <div class="flex items-center justify-center gap-8 mb-10"><button data-action="changeMonth" data-type="budget" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors"><i class="fa-solid fa-chevron-left"></i></button><span class="text-lg font-bold text-text-primary min-w-[180px] text-center capitalize font-primary">${mesAtualNome} de ${state.budgetYear}</span><button data-action="changeMonth" data-type="budget" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors"><i class="fa-solid fa-chevron-right"></i></button></div>
+        <div class="flex items-center justify-center gap-8 mb-10">${readOnly ? '' : '<button data-action="changeMonth" data-type="budget" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left"></i></button>'}<span class="text-lg font-bold text-text-primary min-w-[180px] text-center capitalize font-primary">${mesAtualNome} de ${anoSelecionado}</span>${readOnly ? '' : '<button data-action="changeMonth" data-type="budget" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right"></i></button>'}</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Orçamento Total</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalOrcado)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Total Gasto</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalGastoMes)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Disponível</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(disponivelGeral)}</h3></div></div>
         <div>${orcamentosDoMes.length > 0 ? listHTML : emptyState}</div>`;
     }, 
 
-    settingsPage: (db) => {
-        return `
-        <div class="grid grid-cols-1 gap-8 mb-8">
-            <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft">
-                <h3 class="font-bold text-text-primary text-lg mb-4 font-primary">Meu Perfil</h3>
-                <form data-submit="usuario" class="flex flex-col gap-4 max-w-xl">
-                    <div class="flex gap-4 items-center mb-2">
-                        <img src="${db.usuario?.fotoUrl || 'assets/perfil.svg'}" id="preview-foto-perfil" class="w-16 h-16 rounded-full object-cover border-2 border-border shadow-sm">
-                        <div>
-                            <input type="file" id="input-foto-perfil" accept="image/*" class="hidden" data-change="processarFotoPerfil">
-                            <button type="button" onclick="document.getElementById('input-foto-perfil').click()" class="bg-bg text-text-primary px-4 py-2 rounded-[12px] text-xs font-bold hover:bg-border transition-colors border border-border shadow-sm"><i class="fa-solid fa-camera mr-2"></i>Alterar Foto</button>
-                            <p class="text-[10px] text-text-secondary mt-2">Formatos: JPG, PNG. Máx: 2MB.</p>
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Nome de Exibição</label>
-                        <input type="text" id="input-usuario-nome" value="${Utils.escapeHTML(db.usuario?.nome || 'Usuário')}" required class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Subtítulo / Cargo</label>
-                        <input type="text" id="input-usuario-subtitulo" value="${Utils.escapeHTML(db.usuario?.subtitulo || '')}" class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
-                    </div>
-                    
-                    <div class="mt-4 border-t border-border pt-4">
-                        <h4 class="text-sm font-bold text-text-primary mb-3">Dados para Mentoria (Anora)</h4>
-                        <div class="space-y-4">
-                            <div>
-                                <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Objetivo Principal</label>
-                                <input type="text" id="input-usuario-objetivoPrincipal" value="${Utils.escapeHTML(db.usuario?.objetivoPrincipal || '')}" placeholder="Ex: Viajar, Fundo de Reserva..." class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors">
-                            </div>
-                            <div class="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Renda Mensal Média (R$)</label>
-                                    <input type="number" step="0.01" id="input-usuario-rendaMensalMedia" value="${db.usuario?.rendaMensalMedia || ''}" placeholder="0.00" class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors font-mono">
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-bold text-text-secondary mb-1 uppercase tracking-wider">Limite Cartão Global (R$)</label>
-                                    <input type="number" step="0.01" id="input-usuario-limiteCartaoGlobal" value="${db.usuario?.limiteCartaoGlobal || ''}" placeholder="0.00" class="w-full p-3 bg-surface text-text-primary border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium transition-colors font-mono">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <button type="submit" class="w-full bg-brand-medium text-white px-5 py-3 mt-2 rounded-[12px] font-bold text-sm hover:bg-brand-dark transition-colors shadow-soft hover:-translate-y-0.5"><i class="fa-solid fa-floppy-disk mr-2"></i> Salvar Perfil</button>
-                </form>
-            </div>
+    settingsPage: (db, settingsGroups = []) => {
+        const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+        const groups = Array.isArray(settingsGroups) ? settingsGroups : [];
+        const preferences = loadAnoraPreferences();
+        let reducedMotion = false;
+        try { reducedMotion = globalThis.localStorage?.getItem('avenera:reduced-motion') === 'true'; } catch { reducedMotion = false; }
+        const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+        const bankId = db.bancos?.[0]?.id ?? '';
+        const itemsList = (items, icon = 'fa-check') => `<ul class="nv-settings-items">${(Array.isArray(items) ? items : []).map(item => `<li><i class="fa-solid ${icon}" aria-hidden="true"></i>${escape(item)}</li>`).join('')}</ul>`;
+        const groupCards = groups.map(group => `
+            <button type="button" data-action="openSettingsGroup" data-group="${escape(group.id)}" class="nv-settings-card" aria-controls="settings-group-${escape(group.id)}">
+                <i class="fa-solid ${escape(group.icon)} nv-settings-card__icon" aria-hidden="true"></i>
+                <span class="nv-settings-card__copy"><strong>${escape(group.title)}</strong><small>${escape(group.description)}</small><span class="nv-settings-card__items">${(group.items || []).length} tópicos</span></span>
+                <i class="fa-solid fa-chevron-right nv-settings-card__chevron" aria-hidden="true"></i>
+            </button>`).join('');
 
-            <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft h-fit">
-                <h3 class="font-bold text-text-primary text-lg mb-4 font-primary">Sobre o Sistema</h3>
-                <div class="space-y-4">
-                    <div class="flex items-center gap-4 p-4 bg-bg rounded-[12px] border border-border hover:-translate-y-0.5 transition-transform">
-                        <div class="w-12 h-12 bg-surface rounded-[12px] flex items-center justify-center text-text-primary shadow-sm text-xl border border-border"><i class="fa-solid fa-shield-halved"></i></div>
-                        <div>
-                            <h4 class="font-bold text-text-primary">Offline-First Funcional</h4>
-                            <p class="text-xs text-text-secondary mt-1">Os seus dados ficam salvos apenas neste navegador, garantindo total privacidade e velocidade.</p>
-                        </div>
+        const contentByGroup = {
+            profile: `
+                <form data-submit="usuario" class="nv-settings-profile-form">
+                    <div class="nv-settings-photo-row"><img src="${escape(db.usuario?.fotoUrl || 'assets/perfil.svg')}" id="preview-foto-perfil" alt="Foto do perfil"><div><input type="file" id="input-foto-perfil" accept="image/*" class="hidden" data-change="processarFotoPerfil"><button type="button" data-action="chooseProfilePhoto" class="nv-settings-secondary-action"><i class="fa-solid fa-camera" aria-hidden="true"></i> Alterar foto</button><small>JPG ou PNG · até 2 MB</small></div></div>
+                    <label class="nv-settings-field"><span>Nome de exibição</span><input type="text" id="input-usuario-nome" value="${escape(db.usuario?.nome || 'Usuário')}" required></label>
+                    <label class="nv-settings-field"><span>Subtítulo / cargo</span><input type="text" id="input-usuario-subtitulo" value="${escape(db.usuario?.subtitulo || '')}"></label>
+                    <label class="nv-settings-field"><span>Moeda</span><select disabled aria-describedby="settings-currency-note"><option selected>Real brasileiro (BRL)</option></select><small id="settings-currency-note">A moeda base atual do Avenera é o real brasileiro.</small></label>
+                    <div class="nv-settings-subsection"><h3>Preferências pessoais e perfil financeiro</h3>
+                        <label class="nv-settings-field"><span>Objetivo principal</span><input type="text" id="input-usuario-objetivoPrincipal" value="${escape(db.usuario?.objetivoPrincipal || '')}" placeholder="Ex.: viagem, reserva de emergência"></label>
+                        <div class="nv-settings-field-grid"><label class="nv-settings-field"><span>Renda mensal média (R$)</span><input type="number" step="0.01" id="input-usuario-rendaMensalMedia" value="${escape(db.usuario?.rendaMensalMedia || '')}" placeholder="0,00"></label><label class="nv-settings-field"><span>Limite global dos cartões (R$)</span><input type="number" step="0.01" id="input-usuario-limiteCartaoGlobal" value="${escape(db.usuario?.limiteCartaoGlobal || '')}" placeholder="0,00"></label></div>
                     </div>
-                </div>
-            </div>
-        </div>`;
+                    <button type="submit" class="nv-settings-primary-action"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Salvar perfil</button>
+                </form>`,
+            appearance: `
+                <div class="nv-settings-option-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i></span><div class="nv-settings-option-copy"><strong>Tema claro ou escuro</strong><small data-settings-theme-state>Modo atual: ${isDark ? 'escuro' : 'claro'}</small></div><button type="button" data-action="toggleTheme" class="nv-settings-secondary-action">Alternar tema</button></div>
+                <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Redução de movimento</strong><small>Reduz animações e transições da interface neste navegador.</small></span><input type="checkbox" data-change="setReducedMotion" ${reducedMotion ? 'checked' : ''} aria-label="Ativar redução de movimento"></label>`,
+            data: `
+                <div class="nv-settings-action-grid"><button type="button" data-action="exportBackup" class="nv-settings-action-card"><i class="fa-solid fa-download" aria-hidden="true"></i><span><strong>Exportar backup</strong><small>Baixar uma cópia dos seus dados.</small></span></button><button type="button" data-action="importBackupPicker" class="nv-settings-action-card"><i class="fa-solid fa-upload" aria-hidden="true"></i><span><strong>Importar backup</strong><small>Restaurar dados de um arquivo JSON.</small></span></button>
+                    <button type="button" data-action="iniciarImportacaoCSV" data-banco-id="${escape(bankId)}" class="nv-settings-action-card" ${bankId === '' ? 'disabled' : ''}><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span><strong>Importar CSV</strong><small>${bankId === '' ? 'Cadastre uma conta antes da importação.' : 'Importar movimentações para uma conta.'}</small></span></button><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${escape(bankId)}" class="nv-settings-action-card" ${bankId === '' ? 'disabled' : ''}><i class="fa-solid fa-file-import" aria-hidden="true"></i><span><strong>Importar OFX</strong><small>${bankId === '' ? 'Cadastre uma conta antes da importação.' : 'Importar movimentações para uma conta.'}</small></span></button></div>`,
+            security: `
+                <div class="nv-settings-security-list"><article><i class="fa-solid fa-hard-drive" aria-hidden="true"></i><span><strong>Proteção local</strong><small>Os dados ficam armazenados neste navegador; não são enviados por esta tela.</small></span><b>Ativa</b></article><article><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span><strong>Confirmação de exclusão</strong><small>A exclusão de registros já pede confirmação antes de prosseguir.</small></span><b>Ativa</b></article><article><i class="fa-solid fa-broom" aria-hidden="true"></i><span><strong>Limpeza de dados</strong><small>A limpeza integral não está disponível nesta tela. Nenhum dado será apagado aqui.</small></span><b>Protegida</b></article></div>`,
+            anora: `
+                <div class="nv-settings-anora-form"><label class="nv-settings-field"><span>Estilo de recomendação</span><select data-change="updateAnoraPreference" data-preference="style" aria-label="Estilo de recomendação da Anora"><option value="suave" ${preferences.style === 'suave' ? 'selected' : ''}>Suave</option><option value="equilibrado" ${preferences.style === 'equilibrado' ? 'selected' : ''}>Equilibrado</option><option value="rigoroso" ${preferences.style === 'rigoroso' ? 'selected' : ''}>Rigoroso</option></select></label>
+                    <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-regular fa-bell" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Alertas financeiros</strong><small>Permitir que o Avenera gere alertas de contas, orçamento e metas.</small></span><input type="checkbox" data-change="updateAnoraPreference" data-preference="notifications" ${preferences.notifications ? 'checked' : ''} aria-label="Ativar alertas financeiros"></label>
+                    <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-solid fa-lock" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Telemetria local</strong><small>Registra apenas interações genéricas neste navegador. Desativada por padrão; nada é enviado à rede.</small></span><input type="checkbox" data-change="updateAnoraPreference" data-preference="localTelemetry" ${preferences.localTelemetry ? 'checked' : ''} aria-label="Ativar telemetria local"></label></div>`
+        };
+
+        const groupSections = groups.map(group => {
+            const id = escape(group.id);
+            return `<section class="nv-settings-panel" id="settings-group-${id}" tabindex="-1" aria-labelledby="settings-title-${id}"><header class="nv-settings-panel__header"><span class="nv-settings-panel__icon"><i class="fa-solid ${escape(group.icon)}" aria-hidden="true"></i></span><div><p class="nv-settings-eyebrow">Configuração</p><h2 id="settings-title-${id}">${escape(group.title)}</h2><p>${escape(group.description)}</p></div></header>${contentByGroup[group.id] || `<div class="nv-settings-empty">${itemsList(group.items, 'fa-circle-info')}</div>`}</section>`;
+        }).join('');
+
+        return `<div class="nv-settings-page"><nav class="nv-settings-grid" aria-label="Grupos de configurações">${groupCards}</nav><div class="nv-settings-sections">${groupSections}</div></div>`;
     }
 };
