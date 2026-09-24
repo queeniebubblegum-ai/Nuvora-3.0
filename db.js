@@ -1,13 +1,9 @@
 import { CATEGORIAS_PADRAO, getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment } from './reconciliation.js';
-<<<<<<< HEAD
 import { calculatePeriodTotals, isIncome, isInvoicePayment, isTransfer } from './financial-ledger.js';
 import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
 import { createTransfer, isValidTransferDate } from './financial-transfers.js';
-=======
-import { calculatePeriodTotals, isIncome, isTransfer } from './financial-ledger.js';
-import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
+import { parseLocalDate } from './util-date.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -127,7 +123,8 @@ const clearCache = () => {
 const buildMonthlyCache = () => {
     Cache.transacoesPorMes = {};
     db.transacoes.forEach(t => {
-        const dt = new Date(t.data || t.id);
+        const dt = parseLocalDate(t?.data || t?.id);
+        if (!dt) return;
         const key = `${dt.getFullYear()}-${dt.getMonth()}`;
         if (!Cache.transacoesPorMes[key]) Cache.transacoesPorMes[key] = [];
         Cache.transacoesPorMes[key].push(t);
@@ -183,7 +180,7 @@ const loadData = async () => {
             reserve = { id: reserveId, goalId: meta.id, nome: `Reserva: ${meta.nome || 'Meta'}`, saldo: fromCents(toCents(meta.atual)) };
             db.reservas.push(reserve);
             reservesChanged = true;
-        } else {"}...commentary -------------- code 424? Let's invoke properly. We must edit existing? Code displays entry. Need tool call. I have syntax weird. Let's actually call. Earlier commentary above is analysis internal? It looks tool? no tag. Need use. I notice meta variable currently after using `meta.reservaId` fallback but no ID reserve. Let's patch. Wait tool call was malformed due my content not namespace. We'll call now. Option: no need. But it'd robust. Do it.*** UNKNOWN? We need only tool calls as assistant. Continue.*** Hmm as the current assistant context, tool namespace available but commentary tag syntax. Let's resume with valid. Ensure no stray message inadvertently.*** We need produce commentary invocation. We'll make call. (Analysis content only.)*** I apparently wrote 
+        } else {
             if (String(reserve.goalId) !== String(meta.id)) { reserve.goalId = meta.id; reservesChanged = true; }
             if (!reserve.nome) { reserve.nome = `Reserva: ${meta.nome || 'Meta'}`; reservesChanged = true; }
             const normalizedBalance = fromCents(toCents(reserve.saldo));
@@ -264,7 +261,10 @@ const loadData = async () => {
                 }
             });
             if (migrated) {
-                db.transacoes.sort((a,b) => new Date(b.data) - new Date(a.data));
+                db.transacoes.sort((a, b) =>
+                    (parseLocalDate(b.data || b.id)?.getTime() ?? -Infinity) -
+                    (parseLocalDate(a.data || a.id)?.getTime() ?? -Infinity)
+                );
                 IDB.set('transacoes', db.transacoes).catch(console.error);
             }
             if (typeof localStorage !== 'undefined') {
@@ -318,7 +318,6 @@ const persist = (col) => {
     }
 };
 
-<<<<<<< HEAD
 const persistAtomically = async cols => {
     const uniqueCols = [...new Set([...(cols || []), 'metadados'])];
     const previousMetadata = db.metadados;
@@ -544,20 +543,6 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-=======
-const applyBalanceDelta = (t, isReverse = false) => {
-    // A confirmed statement balance is an absolute anchor that already includes
-    // these imported ledger rows. Keep their history without applying them twice.
-    if (t.isCartao || t.saldoIncluidoNoSaldoDoExtrato === true) return; 
-    const b = db.bancos.find(x => String(x.id) === String(t.bancoId));
-    if (b) {
-        // Use the same movement rules as reports and analytics when applying account deltas.
-        const amount = isTransfer(t)
-            ? (t.transferenciaEntrada ? t.valor : -t.valor)
-            : (isIncome(t) ? t.valor : -t.valor);
-        b.saldo = addMoney(b.saldo, isReverse ? -amount : amount);
-        persist('bancos');
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     }
 };
 
@@ -838,7 +823,6 @@ export const ReconciliationRepo = {
 };
 
 export const GoalRepo = {
-<<<<<<< HEAD
     add: item => {
         if (!Array.isArray(db.reservas)) db.reservas = [];
         const goalId = item.id ?? `goal-${Date.now()}`;
@@ -880,21 +864,6 @@ export const GoalRepo = {
             description: description || `Depósito em meta: ${goal.nome || 'Meta'}`,
             goalId: goal.id
         });
-=======
-    add: (item) => {
-        db.metas.unshift({
-            ...item,
-            atual: fromCents(toCents(item.atual)),
-            alvo: fromCents(toCents(item.alvo))
-        });
-        persist('metas');
-        return true;
-    },
-    remove: (id) => { db.metas = db.metas.filter(i => i.id.toString() !== id.toString()); persist('metas'); },
-    deposit: (id, val) => {
-        const g = db.metas.find(x => String(x.id) === String(id));
-        if (g) { g.atual = addMoney(g.atual, val); persist('metas'); }
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     }
 };
 
@@ -1151,7 +1120,6 @@ export const Database = {
             }
         }
 
-<<<<<<< HEAD
         const snapshot = Object.fromEntries(collections.map(col => [
             col,
             Array.isArray(db[col]) ? db[col].map(item => item && typeof item === 'object' ? { ...item } : item)
@@ -1208,13 +1176,6 @@ export const Database = {
             clearCache();
             throw error;
         }
-=======
-        db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
-        await Promise.all(collections.map(col => IDB.set(col, db[col])));
-        clearCache();
-        if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
-        return true;
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     },
     saveMentoriaSnapshot: MentoriaRepo.saveSnapshot,
     add: (col, item) => {
@@ -1275,7 +1236,6 @@ export const Database = {
     markAllNotificationsRead: NotificationRepo.markAllRead,
     getTotals: () => {
         const totals = calculatePeriodTotals(db.transacoes);
-<<<<<<< HEAD
         const saldoDisponivel = db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0);
         const saldoReservado = (db.reservas || []).reduce((total, reserve) => addMoney(total, reserve.saldo), 0);
         return {
@@ -1285,12 +1245,6 @@ export const Database = {
             saldoDisponivel,
             saldoReservado,
             saldoTotal: addMoney(saldoDisponivel, saldoReservado)
-=======
-        return {
-            receitas: totals.income,
-            despesas: totals.expense,
-            saldo: db.bancos.reduce((total, bank) => addMoney(total, bank.saldo), 0)
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
         };
     }
 };

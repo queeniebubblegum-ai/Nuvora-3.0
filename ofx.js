@@ -309,7 +309,6 @@ export const OFXManager = {
             ? `${transacoesImportadas.length} importadas`
             : (saldoFinalAplicado ? 'Saldo atualizado' : 'Importação');
         undoButton.innerHTML = `${undoDescription} · Desfazer`;
-<<<<<<< HEAD
         undoButton.onclick = async () => {
             undoButton.disabled = true;
             try {
@@ -328,20 +327,6 @@ export const OFXManager = {
                 undoButton.disabled = false;
                 Utils.showToast(error?.message || 'Não foi possível desfazer a importação.', 'error');
             }
-=======
-        undoButton.onclick = () => {
-            Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id));
-            if (saldoFinalAplicado && saldoAjusteReversivel !== 0) {
-                const bancoAtual = db.bancos.find(b => String(b.id) === String(bancoId));
-                if (bancoAtual) {
-                    bancoAtual.saldo = reverseStatementBalanceAdjustment({ currentBalance: bancoAtual.saldo, adjustment: saldoAjusteReversivel });
-                    Database.save('bancos');
-                }
-            }
-            undoButton.remove();
-            Utils.showToast('Importação desfeita.', 'success');
-            if (scheduleRenderCallback) scheduleRenderCallback();
->>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
         };
         document.body.appendChild(undoButton);
         setTimeout(() => undoButton.remove(), 8000);
