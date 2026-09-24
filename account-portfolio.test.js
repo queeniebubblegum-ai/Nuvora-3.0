@@ -23,6 +23,7 @@ describe('separação entre patrimônio e crédito', () => {
         expect(summary.credit[1]).toMatchObject({ used: 100, available: 400, utilization: 20 });
     });
 
+<<<<<<< HEAD
     it('separa dinheiro total, reservas vinculadas a metas e disponibilidade fora das metas', () => {
         const summary = accountPortfolioSummary({
             banks: [{ saldo: 2700 }],
@@ -34,6 +35,8 @@ describe('separação entre patrimônio e crédito', () => {
         expect(summary.availableMoney).toBe(2700);
     });
 
+=======
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     it('soma saldos, limites e compras de cartão sem ruído decimal', () => {
         const summary = accountPortfolioSummary({
             banks: [{ saldo: 0.1 }, { saldo: 0.2 }],
@@ -78,7 +81,11 @@ describe('separação entre patrimônio e crédito', () => {
         );
 
         expect(html).toContain('nv-account-overview');
+<<<<<<< HEAD
         expect(html).toContain('Disponível fora das metas');
+=======
+        expect(html).toContain('Dinheiro disponível');
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
         expect(html).toContain('Crédito disponível');
         expect(html).toContain('nv-credit-card');
         expect(html).toContain('nv-credit-card__body');
@@ -92,38 +99,7 @@ describe('separação entre patrimônio e crédito', () => {
         expect(html).toContain('Fatura atual:');
         expect(html).toContain('Utilizado ·');
     });
-
-    it('exibe a ação de pagamento dentro do cartão para uma fatura pendente', () => {
-        const html = PageComponents.accountsPage(
-            [{ id: 'bank-pay', nome: 'Conta pagamento', saldo: 900 }],
-            [{ id: 'card-pay', nome: 'Cartão principal', bancoId: 'bank-pay', limite: 2000, fechamento: 20, vencimento: 10 }],
-            [],
-            [],
-            [
-                { id: 'invoice-pending', categoria: 'Fatura Cartão', cartaoId: 'card-pay', status: 'pendente', dataVencimento: '2026-09-25', valor: 123.45 },
-                { id: 'invoice-cancelled', categoria: 'Fatura Cartão', cartaoId: 'card-pay', status: 'cancelado', dataVencimento: '2026-10-25', valor: 88 },
-            ]
-        );
-
-        expect(html).toContain('data-action="openInvoicePaymentForCard" data-id="card-pay"');
-        expect(html).toContain('aria-label="Registrar pagamento da fatura de Cartão principal"');
-        expect(html).toContain('Registrar pagamento da fatura');
-        expect(html).toContain('123,45');
-        expect(html).not.toContain('invoice-cancelled');
-    });
-
-    it('mantém o acesso visível no cartão mesmo sem agendamento pendente', () => {
-        const html = PageComponents.accountsPage(
-            [{ id: 'bank-no-invoice', nome: 'Conta' }],
-            [{ id: 'card-no-invoice', nome: 'Cartão sem agenda', bancoId: 'bank-no-invoice', limite: 1000 }],
-            [],
-            [],
-            []
-        );
-
-        expect(html).toContain('data-action="openInvoicePaymentForCard" data-id="card-no-invoice"');
-        expect(html).toContain('Registrar pagamento da fatura');
-    });
+<<<<<<< HEAD
 
     it('mostra total, reservado e disponível também na página de metas', () => {
         const html = PageComponents.goalsPage([], [], {
@@ -151,4 +127,6 @@ describe('separação entre patrimônio e crédito', () => {
         expect(html).toContain('2.700,00');
         expect(html).not.toContain('9.200,00');
     });
+=======
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
 });

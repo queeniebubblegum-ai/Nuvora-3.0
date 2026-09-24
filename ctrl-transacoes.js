@@ -58,6 +58,7 @@ const clearUndoSnapshot = () => {
     undoContext.items = [];
 };
 
+<<<<<<< HEAD
 const undoDeletedTransactions = async () => {
     const snapshot = undoContext.items.map(cloneTransaction);
     if (!snapshot.length) return false;
@@ -110,6 +111,58 @@ const executeSoftDelete = async (itemsToDelete, toastMsg) => {
         Utils.showToast(error?.message || 'Não foi possível apagar as transações; saldos e dados foram mantidos.', 'error');
         refreshTransactionsAfterMutation();
     }
+=======
+const undoDeletedTransactions = () => {
+    const snapshot = undoContext.items;
+    if (!snapshot.length) return false;
+
+    clearUndoSnapshot();
+    // Restore through the repository method so bank balance deltas are applied
+    // exactly as they are for a newly added transaction. Card installments do
+    // not alter bank balances, and transfer legs preserve their original
+    // metadata, keeping transfer semantics intact.
+    snapshot.forEach(transaction => {
+        if (!db.transacoes.some(current => String(current.id) === String(transaction.id))) {
+            Database.add('transacoes', cloneTransaction(transaction));
+        }
+    });
+    db.transacoes.sort((a, b) => new Date(b.data || b.id) - new Date(a.data || a.id));
+    Database.save('transacoes');
+    refreshTransactionsAfterMutation();
+    Utils.showToast('Ação desfeita. Transações restauradas.', 'success');
+    return true;
+};
+
+const showUndoToast = (message) => {
+    Utils.showToast(message, 'success', {
+        id: 'transaction-undo-toast',
+        duration: 8000,
+        action: {
+            action: 'undoTransactions',
+            label: 'Desfazer',
+            ariaLabel: 'Desfazer exclusão das transações'
+        }
+    });
+};
+
+const executeSoftDelete = (itemsToDelete, toastMsg) => {
+    if (!itemsToDelete || itemsToDelete.length === 0) return;
+
+    // Keep a complete snapshot (including every card installment and both
+    // transfer legs selected by the caller) before the destructive operation.
+    clearUndoSnapshot();
+    undoContext.items = itemsToDelete.map(cloneTransaction);
+    Database.removeMultiple('transacoes', undoContext.items.map(t => t.id));
+    refreshTransactionsAfterMutation();
+    showUndoToast(toastMsg);
+
+    undoContext.timeout = setTimeout(() => {
+        // The database deletion has already happened; expiry only discards the
+        // in-memory restoration snapshot and the action becomes a no-op.
+        undoContext.items = [];
+        undoContext.timeout = null;
+    }, 8000);
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
 };
 
 export const TransacoesController = {
@@ -124,6 +177,7 @@ export const TransacoesController = {
         const desc = valueOf('inline-transfer-desc', 'transfer-desc').trim() || 'Transferência entre contas';
         if (!origemId || !destinoId || origemId === destinoId) { Utils.showToast('Selecione contas de origem e destino diferentes.', 'error'); return; }
         if (!valor || valor <= 0 || !data) { Utils.showToast('Informe valor e data válidos.', 'error'); return; }
+<<<<<<< HEAD
         try {
             await Database.addTransfer({
                 sourceAccountId: origemId,
@@ -137,6 +191,14 @@ export const TransacoesController = {
         } catch (error) {
             Utils.showToast(error?.message || 'Não foi possível salvar a transferência.', 'error');
         }
+=======
+        const transferenciaId = `TR-${Date.now()}`;
+        // Two ledger entries keep each account balance correct; the explicit type is excluded from income/expense analytics.
+        Database.add('transacoes', { id: Date.now(), desc, valor, tipo: 'despesa', transferenciaInterna: true, transferenciaId, bancoId: origemId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna' });
+        Database.add('transacoes', { id: Date.now() + 1, desc, valor, tipo: 'receita', transferenciaInterna: true, transferenciaId, bancoId: destinoId, contaOrigemId: origemId, contaDestinoId: destinoId, categoria: 'Transferência entre contas', data, isCartao: false, formaPagamento: 'Transferência interna', transferenciaEntrada: true });
+        showTransactionSavedToast('Transferência registrada sem alterar receitas e despesas.');
+        App.closeModal();
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     },
 
     submitTransacao: (e) => {
@@ -318,6 +380,7 @@ export const TransacoesController = {
                 const contatoId = contatoIdRaw ? parseInt(contatoIdRaw) : null;
                 const updated = await Database.updateTransaction(id, { desc, valor, data, categoria, contatoId });
 
+<<<<<<< HEAD
                 if (updated) {
                     showTransactionSavedToast('Transação atualizada!');
                     markSaved(form);
@@ -333,6 +396,18 @@ export const TransacoesController = {
             } finally {
                 SubmitGuard.release(form);
             }
+=======
+            if(Database.updateTransaction(id, { desc, valor, data, categoria, contatoId })) {
+                showTransactionSavedToast('Transação atualizada!');
+                markSaved(form);
+                trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_updated' });
+                App.closeModal();
+            } else {
+                Utils.showToast('Erro ao atualizar.', 'error');
+                SubmitFeedback.set(form, 'idle');
+            }
+            SubmitGuard.release(form);
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
         }, 350);
     },
 

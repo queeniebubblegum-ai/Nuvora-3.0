@@ -1,5 +1,4 @@
 import { Utils } from './utils.js';
-import { parseLocalDate } from './util-date.js';
 import { db, Database } from './db.js';
 import { Components } from './components.js';
 import { MentorEngine } from './mentorEngine.js';
@@ -7,7 +6,6 @@ import { UIRenderer } from './rnd-ui.js';
 import { FinancialAnalytics } from './analytics.js';
 import { calculatePeriodTotals, isTransfer } from './financial-ledger.js';
 import { projectionSourcesFromDatabase, getLastUpdatedIndicator, financialValueClass, calculateSpendableAmount } from './financial-refinements.js';
-import { cashflowProjectionFromDatabase } from './cashflow-projection.js';
 import { PRIORITY_KEYS, resolvePriority } from './priority.js';
 
 export const settingsGroups = [
@@ -185,12 +183,12 @@ export const PageRenderers = {
         }
 
         const transacoesPeriodoAtual = db.transacoes.filter(t => {
-            const d = parseLocalDate(t.data || t.id);
-            return d && d >= dateStart && d <= dateEnd;
+            const d = new Date((t.data || t.id) + 'T12:00:00');
+            return d >= dateStart && d <= dateEnd;
         });
         const transacoesAnteriores = db.transacoes.filter(t => {
-            const d = parseLocalDate(t.data || t.id);
-            return d && d >= prevDateStart && d <= prevDateEnd;
+            const d = new Date((t.data || t.id) + 'T12:00:00');
+            return d >= prevDateStart && d <= prevDateEnd;
         });
 
         const hojeObj = new Date();
@@ -384,7 +382,7 @@ export const PageRenderers = {
         else if (f.tipo) filtered = filtered.filter(t => t.tipo === f.tipo);
         if (f.dataInicio) filtered = filtered.filter(t => String(t.data || '') >= f.dataInicio);
         if (f.dataFim) filtered = filtered.filter(t => String(t.data || '') <= f.dataFim);
-        if (f.mes !== '') filtered = filtered.filter(t => parseLocalDate(t.data || t.id)?.getMonth() === parseInt(f.mes, 10));
+        if (f.mes !== '') filtered = filtered.filter(t => new Date(t.data || t.id).getMonth() === parseInt(f.mes, 10));
         if (f.bancoId) {
             const [type, id] = f.bancoId.split('_');
             if (type === 'banco') filtered = filtered.filter(t => !t.isCartao && t.bancoId == id);
@@ -392,7 +390,7 @@ export const PageRenderers = {
         }
         const uncategorizedCount = filtered.filter(isUncategorized).length;
         if (appState.uncategorizedOnly) filtered = filtered.filter(isUncategorized);
-        filtered.sort((a, b) => (parseLocalDate(b.data || b.id)?.getTime() ?? -Infinity) - (parseLocalDate(a.data || a.id)?.getTime() ?? -Infinity));
+        filtered.sort((a, b) => new Date(b.data || b.id) - new Date(a.data || a.id));
 
         const totalItems = filtered.length;
         const perPage = appState.txPerPage || 10;
@@ -514,29 +512,21 @@ export const PageRenderers = {
         const budgetSummaryHtml = budget.orcamentos.length ? `<div class="nv-planning-budget-summary"><div><span>Planejado</span><strong>${money(budget.totalOrcado)}</strong></div><div><span>Gasto</span><strong class="is-expense">${money(budget.totalGastoMes)}</strong></div><div><span>Disponível</span><strong class="${budget.disponivelGeral < 0 ? 'is-expense' : 'is-positive'}">${money(budget.disponivelGeral)}</strong></div></div><p class="nv-planning-summary-note">Valores calculados a partir dos limites e despesas registrados neste mês.</p>` : `<div class="nv-planning-empty nv-planning-empty--compact nv-planning-budget-empty"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><div><strong>Sem orçamento definido para ${Utils.escapeHTML(periodLabel)}.</strong><p>Cadastre pelo menos um limite para ver o planejado, o gasto e o disponível com dados reais.</p></div><button data-action="openModal" data-modal="modal-orcamento">Definir limite</button></div>`;
         const spendableValueClass = spendable.available && spendable.value >= 0 ? 'is-positive' : 'is-expense';
         const spendableHtml = `<section class="nv-spendable-card" aria-labelledby="nv-spendable-title"><div><p class="nv-planning-eyebrow">Decisão do mês</p><h2 id="nv-spendable-title">Quanto ainda posso gastar?</h2><p class="nv-spendable-description">${Utils.escapeHTML(spendable.reason)}</p></div><strong class="${spendableValueClass}" data-currency-value="${spendable.available ? spendable.value : ''}">${spendable.available ? money(spendable.value) : '—'}</strong></section>`;
-        const dailyProjection = cashflowProjectionFromDatabase(db, { now, horizonDays: 30 });
-        const projectionMovementDays = dailyProjection.available ? dailyProjection.days.filter(day => day.movements.length > 0) : [];
-        const projectionRows = projectionMovementDays.map(day => {
-            const dateLabel = day.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
-            const descriptions = day.movements.map(item => `${item.description}${item.overdue ? ' · atrasada' : ''}`).join(' · ');
-            return `<div class="nv-report-table-row"><div>${Utils.escapeHTML(dateLabel)}<small class="block text-[10px] font-normal text-text-secondary mt-1">${Utils.escapeHTML(descriptions)}</small></div><div class="is-income">${day.expectedIncome > 0 ? '+ ' + money(day.expectedIncome) : '–'}</div><div class="is-expense">${day.pendingExpenses > 0 ? '− ' + money(day.pendingExpenses) : '–'}</div><div class="${day.closingBalance < 0 ? 'is-expense' : 'is-positive'}">${money(day.closingBalance)}</div></div>`;
-        }).join('');
-        const projectionReason = Utils.escapeHTML(dailyProjection.reason);
-        const projectionUnavailable = `<div class="nv-report-empty" role="status"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><div><strong>Projeção indisponível</strong><span>${projectionReason}</span></div></div>`;
-        const projectionSummary = dailyProjection.available ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5"><div class="nv-report-metric is-income"><p>Entradas previstas ${estimatedBadge('Receitas ainda não recebidas no horizonte de 30 dias.')}</p><h3 class="${financialValueClass(dailyProjection.expectedIncome)}">${money(dailyProjection.expectedIncome)}</h3></div><div class="nv-report-metric is-expense"><p>Saídas previstas ${estimatedBadge('Contas pendentes e assinaturas com data no horizonte de 30 dias.')}</p><h3 class="${financialValueClass(-dailyProjection.pendingExpenses)}">${money(dailyProjection.pendingExpenses)}</h3></div><div class="nv-report-metric is-net"><p>Saldo estimado em 30 dias ${estimatedBadge('Projeção diária; não representa um saldo realizado.')}</p><h3 class="${financialValueClass(dailyProjection.endingBalance)}">${money(dailyProjection.endingBalance)}</h3></div></div><p class="text-xs text-text-secondary mb-4">Menor saldo diário estimado: <strong class="${financialValueClass(dailyProjection.minimumClosingBalance)}">${money(dailyProjection.minimumClosingBalance)}</strong> em ${Utils.escapeHTML(Utils.formatToBR(dailyProjection.minimumDate))}. ${dailyProjection.firstNegativeDate ? `<strong class="is-expense">Projeção abaixo de zero em ${Utils.escapeHTML(Utils.formatToBR(dailyProjection.firstNegativeDate))}.</strong>` : 'Nenhum fechamento diário abaixo de zero neste horizonte.'}</p><div class="overflow-x-auto"><div class="min-w-[560px]"><div class="nv-report-table-header"><div>Data prevista</div><div>Entradas</div><div>Saídas</div><div>Saldo no fim do dia</div></div><div class="nv-report-table-body">${projectionRows}</div></div></div>` : projectionUnavailable;
-        const dailyProjectionHtml = `<section class="nv-report-panel mb-6" aria-labelledby="nv-daily-projection-title"><div class="nv-report-panel-heading"><div><h4 id="nv-daily-projection-title">Projeção diária de caixa ${estimatedBadge('Estimativa baseada apenas em previsões pendentes com data.')}</h4><p>Próximos 30 dias · somente movimentos futuros ainda não realizados.</p></div></div>${projectionSummary}</section>`;
 
         UIRenderer.updateDOM('main-content', `<div class="nv-planning-page">
             <header class="nv-planning-header"><div><p class="nv-planning-eyebrow">Visão de planejamento</p><h1>Planejamento</h1><p class="nv-planning-subtitle">Organize decisões financeiras para <strong>${Utils.escapeHTML(periodLabel)}</strong>.</p></div><div class="nv-planning-header-actions"><button data-action="changeMonth" data-type="budget" data-dir="-1" class="nv-planning-period-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left"></i></button><span class="nv-planning-period">${Utils.escapeHTML(periodLabel)}</span><button data-action="changeMonth" data-type="budget" data-dir="1" class="nv-planning-period-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right"></i></button><button data-action="openModal" data-modal="modal-agendamento" class="nv-planning-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Novo lançamento</span></button></div></header>
             <div class="nv-planning-quick-actions"><button class="nv-planning-action" data-action="openModal" data-modal="modal-transacao" data-type="receita"><i class="fa-solid fa-arrow-trend-up"></i><span>Adicionar receita</span></button><button class="nv-planning-action" data-action="openModal" data-modal="modal-transacao" data-type="despesa"><i class="fa-solid fa-arrow-trend-down"></i><span>Adicionar despesa</span></button><button class="nv-planning-action" data-action="openModal" data-modal="modal-meta"><i class="fa-regular fa-star"></i><span>Criar meta</span></button><button class="nv-planning-action" data-action="openModal" data-modal="modal-orcamento"><i class="fa-solid fa-chart-pie"></i><span>Definir limite</span></button></div>
             <dl class="nv-planning-signal-strip" aria-label="Compromissos registrados"><div class="nv-planning-signal-card nv-planning-signal-card--income"><dt>Receitas previstas ${estimatedBadge('Receita futura ainda não recebida.')}</dt><dd class="is-positive ${financialValueClass(receitaTotal)}" data-currency-value="${receitaTotal}">${money(receitaTotal)}</dd></div><div class="nv-planning-signal-card nv-planning-signal-card--expense"><dt>Contas pendentes ${estimatedBadge('Compromissos agendados ainda não pagos.')}</dt><dd class="is-expense ${financialValueClass(-contasTotal)}" data-currency-value="${contasTotal}">${money(contasTotal)}</dd></div><div class="nv-planning-signal-card nv-planning-signal-card--commitments"><dt>Compromissos ${estimatedBadge('Assinaturas e parcelas futuras previstas.')}</dt><dd data-currency-value="${compromissoTotal}" class="${financialValueClass(null)}">${money(compromissoTotal)}</dd></div></dl>
             ${spendableHtml}
-            ${dailyProjectionHtml}
             <section class="nv-planning-overview" aria-label="Resumo do planejamento"><div class="nv-planning-overview-head"><div><p class="nv-planning-eyebrow">Resumo mensal</p><h2>${Utils.escapeHTML(periodLabel)}</h2></div><button data-action="navigate" data-payload="Orcamento" class="nv-planning-text-action">Ver orçamento completo <i class="fa-solid fa-arrow-up-right-from-square"></i></button></div>${budgetSummaryHtml}</section>
             <aside class="nv-planning-mobile-summary" aria-label="Resumo rápido do planejamento"><div><span>Disponível no mês</span><strong class="${budget.disponivelGeral < 0 ? 'is-expense' : 'is-positive'}">${money(budget.disponivelGeral)}</strong></div><button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" aria-label="Adicionar uma despesa neste mês"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Adicionar despesa</span></button></aside>
             <div class="nv-planning-main-grid"><section class="nv-planning-panel" aria-labelledby="nv-budget-title"><div class="nv-planning-panel-head"><div><p class="nv-planning-eyebrow">Acompanhamento</p><h2 id="nv-budget-title">Orçamento por categoria</h2></div><span class="nv-planning-count">${budget.orcamentos.length} ${budget.orcamentos.length === 1 ? 'limite' : 'limites'}</span></div><div class="nv-planning-budget-list">${budgetCategoriesHtml}</div></section><section class="nv-planning-panel" aria-labelledby="nv-due-title"><div class="nv-planning-panel-head"><div><p class="nv-planning-eyebrow">Prioridade</p><h2 id="nv-due-title">Próximos vencimentos</h2></div><button data-action="navigate" data-payload="Agendamentos" class="nv-planning-text-action">Ver agenda</button></div><div class="nv-planning-due-list">${dueHtml}</div></section></div>
             <section class="nv-planning-panel nv-planning-goals-panel" aria-labelledby="nv-goals-title"><div class="nv-planning-panel-head"><div><p class="nv-planning-eyebrow">Progresso financeiro</p><h2 id="nv-goals-title">Metas e reservas</h2></div><button data-action="navigate" data-payload="Metas" class="nv-planning-text-action">Ver todas</button></div><div class="nv-planning-goals-list">${goalsSection}</div></section>
+<<<<<<< HEAD
             <section class="nv-planning-details" aria-labelledby="nv-planning-details-title"><div class="nv-planning-details-head"><div><p class="nv-planning-eyebrow">Dados completos</p><h2 id="nv-planning-details-title">Detalhes do planejamento</h2><p>Abra uma seção para revisar os registros. As alterações continuam disponíveis nas ações principais acima.</p></div></div><div class="nv-planning-details-list">${box('Receitas recorrentes', 'fa-solid fa-arrow-trend-up', quantidade(receitas.length, 'Previsões de entrada'), lista(receitas, 'Nenhuma receita recorrente.', i => linha(i.desc || 'Receita prevista', i.data, i.valor, 'text-success')))}${box('Despesas recorrentes', 'fa-solid fa-arrow-trend-down', quantidade(contas.length, 'Previsões de saída'), lista(contas, 'Nenhuma despesa recorrente.', i => linha(i.desc || 'Despesa prevista', 'Vencimento: ' + (i.dataVencimento || ''), i.valor, 'text-danger')))}${box('Assinaturas', 'fa-solid fa-repeat', quantidade(assinaturas.length, 'Serviços recorrentes'), lista(assinaturas, 'Nenhuma assinatura ativa.', i => linha(i.nome || i.desc || 'Assinatura', i.periodicidade || 'Mensal', i.valor, 'text-brand-medium')))}${box('Investimentos', 'fa-solid fa-chart-line', quantidade(investimentos.length, 'Posições cadastradas'), lista(investimentos, 'Nenhum investimento cadastrado.', i => linha(i.nome || i.ativo || 'Investimento', 'Valor atual', i.valorAtual || i.valor, 'text-success')))}${box('Orçamento mensal', 'fa-solid fa-chart-pie', quantidade(budget.orcamentos.length, 'Limites por categoria'), Components.budgetView(db.orcamentos, db.transacoes, appState, { readOnly: true }))}${box('Metas e reservas', 'fa-solid fa-bullseye', quantidade((db.metas || []).length, 'Objetivos financeiros'), Components.goalsPage(db.metas, db.transacoes, { readOnly: true, reservas: db.reservas, bancos: db.bancos }))}${box('Parcelamentos', 'fa-regular fa-credit-card', quantidade(parcelamentos.length, 'Parcelas pendentes'), lista(parcelamentos, 'Nenhum parcelamento pendente.', i => linha(i.desc, `Parcela ${i.parcelaAtual}/${i.totalParcelas}`, i.valor)))}</div></section>
+=======
+            <section class="nv-planning-details" aria-labelledby="nv-planning-details-title"><div class="nv-planning-details-head"><div><p class="nv-planning-eyebrow">Dados completos</p><h2 id="nv-planning-details-title">Detalhes do planejamento</h2><p>Abra uma seção para revisar os registros. As alterações continuam disponíveis nas ações principais acima.</p></div></div><div class="nv-planning-details-list">${box('Receitas recorrentes', 'fa-solid fa-arrow-trend-up', quantidade(receitas.length, 'Previsões de entrada'), lista(receitas, 'Nenhuma receita recorrente.', i => linha(i.desc || 'Receita prevista', i.data, i.valor, 'text-success')))}${box('Despesas recorrentes', 'fa-solid fa-arrow-trend-down', quantidade(contas.length, 'Previsões de saída'), lista(contas, 'Nenhuma despesa recorrente.', i => linha(i.desc || 'Despesa prevista', 'Vencimento: ' + (i.dataVencimento || ''), i.valor, 'text-danger')))}${box('Assinaturas', 'fa-solid fa-repeat', quantidade(assinaturas.length, 'Serviços recorrentes'), lista(assinaturas, 'Nenhuma assinatura ativa.', i => linha(i.nome || i.desc || 'Assinatura', i.periodicidade || 'Mensal', i.valor, 'text-brand-medium')))}${box('Investimentos', 'fa-solid fa-chart-line', quantidade(investimentos.length, 'Posições cadastradas'), lista(investimentos, 'Nenhum investimento cadastrado.', i => linha(i.nome || i.ativo || 'Investimento', 'Valor atual', i.valorAtual || i.valor, 'text-success')))}${box('Orçamento mensal', 'fa-solid fa-chart-pie', quantidade(budget.orcamentos.length, 'Limites por categoria'), Components.budgetView(db.orcamentos, db.transacoes, appState, { readOnly: true }))}${box('Metas e reservas', 'fa-solid fa-bullseye', quantidade((db.metas || []).length, 'Objetivos financeiros'), Components.goalsPage(db.metas, db.transacoes, { readOnly: true }))}${box('Parcelamentos', 'fa-regular fa-credit-card', quantidade(parcelamentos.length, 'Parcelas pendentes'), lista(parcelamentos, 'Nenhum parcelamento pendente.', i => linha(i.desc, `Parcela ${i.parcelaAtual}/${i.totalParcelas}`, i.valor)))}</div></section>
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
         </div>`);
     },
 
@@ -550,7 +540,11 @@ export const PageRenderers = {
             selectBancosCartao.innerHTML = '<option value="" disabled selected>Selecione a conta</option>' + bankOptions;
         }
 
-        UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, db.reservas, db.agendamentos));
+<<<<<<< HEAD
+        UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, db.reservas));
+=======
+        UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, appState));
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     },
 
     Metas: (appState) => {
