@@ -1,12 +1,13 @@
 import { MentorMath } from './mnt-math.js';
 import { MentorSemantics } from './mnt-semantics.js';
+import { isExpense, isIncome } from './financial-ledger.js';
 
 export const MentorEngine = {
     calculateMentorScore: (data) => {
         const {
             hasBancos,
             hasTransacoes,
-            totalTransacoes,
+            hasBudget,
             totalIncome,
             totalExpenses,
             creditCardUsage,
@@ -41,13 +42,13 @@ export const MentorEngine = {
             };
         }
 
-        if (totalTransacoes < 4) {
+        if (!hasBudget) {
             const texts = MentorSemantics.getOnboardingText(3);
             return {
                 score: "-", classification: texts.classification, tone: "positivo_estrategico",
                 pillars: { fluxoCaixa: 0, reservas: 0, credito: 0, futuro: 0 },
                 insights: texts.insights, knowledgeInfo, recommendation: texts.recommendation,
-                onboardingAction: { label: "Continuar Lançando", action: "openModal", modal: "modal-transacao", type: "despesa" },
+                onboardingAction: { label: "Definir um limite", action: "openModal", modal: "modal-orcamento" },
                 isOnboarding: true, userLevel: 1
             };
         }
@@ -133,8 +134,8 @@ export const MentorEngine = {
         const dataLimite = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1);
 
         const despesasRecentes = db.transacoes.filter(t =>
-            !t.transferenciaInterna && t.tipo === 'despesa' &&
-            !t.recorrente && 
+            isExpense(t) &&
+            !t.recorrente &&
             new Date(t.data || t.id) >= dataLimite
         );
 
@@ -183,25 +184,27 @@ export const MentorEngine = {
         let pastIncome = 0; let pastExpenses = 0; let expensesByCategory = {};
 
         db.transacoes.forEach(t => {
-            if (t.transferenciaInterna) return;
             const dataTransacao = new Date((t.data || t.id) + 'T12:00:00');
             const mesTrans = dataTransacao.getMonth(); const anoTrans = dataTransacao.getFullYear();
+            const income = isIncome(t);
+            const expense = isExpense(t);
+            const value = Number(t.valor) || 0;
 
             if (mesTrans === mesAtual && anoTrans === anoAtual) {
-                if (t.tipo === 'receita') totalIncome += t.valor;
-                else if (t.tipo === 'despesa') {
-                    totalExpenses += t.valor;
-                    if (t.isCartao) creditCardUsage += t.valor;
+                if (income) totalIncome += value;
+                else if (expense) {
+                    totalExpenses += value;
+                    if (t.isCartao) creditCardUsage += value;
                     const cat = t.categoria || 'Outros';
-                    expensesByCategory[cat] = (expensesByCategory[cat] || 0) + t.valor;
+                    expensesByCategory[cat] = (expensesByCategory[cat] || 0) + value;
                 }
             }
             if (mesTrans === mesPassado && anoTrans === anoPassado) {
-                 if (t.tipo === 'receita') pastIncome += t.valor;
-                 else if (t.tipo === 'despesa') pastExpenses += t.valor;
+                 if (income) pastIncome += value;
+                 else if (expense) pastExpenses += value;
             }
             if (anoTrans > anoAtual || (anoTrans === anoAtual && mesTrans > mesAtual)) {
-                if (t.tipo === 'despesa') futureCommitments += t.valor;
+                if (expense) futureCommitments += value;
             }
         });
 
@@ -224,7 +227,8 @@ export const MentorEngine = {
 
         return {
             hasBancos: db.bancos.length > 0,
-            hasTransacoes: db.transacoes.length > 0,
+            hasTransacoes: db.transacoes.some(t => isIncome(t) || isExpense(t)),
+            hasBudget: (db.orcamentos || []).some(item => Number.isFinite(Number(item?.limite)) && Number(item.limite) > 0),
             hasMetas: db.metas && db.metas.length > 0,
             totalTransacoes: db.transacoes.length,
             totalIncome, totalExpenses, creditCardUsage, futureCommitments,

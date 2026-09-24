@@ -1,54 +1,86 @@
-import { Database } from './db.js';
+import { buildCashflowModel } from './report-data.js';
+
+const cssToken = (name, fallback) => {
+    if (typeof document === 'undefined') return fallback;
+    const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return value || fallback;
+};
+
+const formatMoney = value => Number(value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const formatAxisMoney = value => {
+    const amount = Number(value || 0);
+    const absolute = Math.abs(amount);
+    if (absolute >= 1000000) return `R$ ${(amount / 1000000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+    if (absolute >= 1000) return `R$ ${(amount / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+    return `R$ ${amount.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}`;
+};
 
 export const ChartFluxo = {
-    render: (dbData, instances) => {
-        const ctxFluxo = document.getElementById('reportsFluxoChart');
-        if (!ctxFluxo) return;
-
-        const hoje = new Date();
-        const diasMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
-        const labels = []; const saldos = [];
-        let acumulado = 0;
-        
-        const transacoesMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth());
-
-        for(let i = 1; i <= diasMes; i++) {
-            labels.push(`${i < 10 ? '0'+i : i}/${hoje.getMonth() < 9 ? '0'+(hoje.getMonth()+1) : hoje.getMonth()+1}`);
-            const trDia = transacoesMes.filter(t => {
-                const dt = new Date(t.data || t.id);
-                return dt.getDate() === i;
-            });
-            const rec = trDia.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
-            const des = trDia.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
-            acumulado += (rec - des);
-            saldos.push(acumulado);
+    render: (state, dbData, instances) => {
+        const canvas = document.getElementById('reportsFluxoChart');
+        if (instances.reportsFluxo) {
+            instances.reportsFluxo.destroy();
+            instances.reportsFluxo = null;
         }
-        
-        if (instances.reportsFluxo) instances.reportsFluxo.destroy();
-        
-        instances.reportsFluxo = new Chart(ctxFluxo, {
+        if (!canvas) return;
+
+        const model = buildCashflowModel(dbData, state?.reportCashflowPeriod || 1);
+        if (!model.hasMovement) return;
+        const labels = model.buckets.map(bucket => bucket.label);
+        const values = model.buckets.map(bucket => bucket.acumulado);
+        const text = cssToken('--c-text-secondary', '#65716B');
+        const border = cssToken('--c-border', '#DCE2DB');
+        const brand = cssToken('--c-brand-medium', '#8170B5');
+        const surface = cssToken('--c-surface', '#FFFEFB');
+        const labelStep = model.isDaily ? Math.max(1, Math.ceil(labels.length / 8)) : 1;
+
+        instances.reportsFluxo = new Chart(canvas, {
             type: 'line',
-            data: { 
-                labels: labels, 
-                datasets: [{ 
-                    label: 'Saldo Acumulado', 
-                    data: saldos, 
-                    borderColor: '#2563EB', 
-                    backgroundColor: 'rgba(37, 99, 235, 0.12)', 
-                    fill: true, 
-                    tension: 0.4 
-                }] 
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Fluxo acumulado',
+                    data: values,
+                    borderColor: brand,
+                    backgroundColor: `${brand}22`,
+                    fill: true,
+                    tension: 0.28,
+                    pointRadius: model.isDaily ? 0 : 3,
+                    pointHoverRadius: 5,
+                    pointBackgroundColor: brand,
+                    borderWidth: 2
+                }]
             },
-            options: { 
-                responsive: true, 
-                maintainAspectRatio: false, 
-                plugins: { 
-                    legend: { position: 'bottom', labels: { usePointStyle: true } } 
-                }, 
-                scales: { 
-                    y: { grid: { borderDash: [5, 5], color: '#E6E8EF' } }, 
-                    x: { grid: { display: false } } 
-                } 
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: text, usePointStyle: true, padding: 18, font: { family: 'Inter', size: 11 } } },
+                    tooltip: {
+                        backgroundColor: surface,
+                        titleColor: text,
+                        bodyColor: text,
+                        borderColor: border,
+                        borderWidth: 1,
+                        callbacks: {
+                            label: context => ` ${formatMoney(context.parsed.y)}`
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        border: { display: false },
+                        grid: { color: border, borderDash: [4, 4] },
+                        ticks: { color: text, maxTicksLimit: 6, callback: value => formatAxisMoney(value) }
+                    },
+                    x: {
+                        border: { display: false },
+                        grid: { display: false },
+                        ticks: { color: text, autoSkip: false, maxRotation: 0, callback: (_, index) => index % labelStep === 0 ? labels[index] : '' }
+                    }
+                }
             }
         });
     }

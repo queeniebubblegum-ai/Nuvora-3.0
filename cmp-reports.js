@@ -1,99 +1,100 @@
 import { Utils } from './utils.js';
 import { Database } from './db.js';
+import { buildCashflowModel, reportPeriodLabel, formatReportDateRange, signedPeriodVariation } from './report-data.js';
+import { financialValueClass } from './financial-refinements.js';
+import { calculatePeriodTotals } from './financial-ledger.js';
+
+const reportSource = text => `<details class="nv-report-source"><summary>Fonte dos dados</summary><p>${Utils.escapeHTML(text)}</p></details>`;
+const estimatedBadge = (explanation = 'Valor calculado a partir de previsões e compromissos futuros; não representa uma movimentação realizada.') => `<span class="nv-estimated-badge" title="${Utils.escapeHTML(explanation)}" aria-label="Estimado. ${Utils.escapeHTML(explanation)}">Estimado</span>`;
+
+const reportPeriodContext = (database, state = {}, tab) => {
+    if (tab === 'fluxo') {
+        const model = buildCashflowModel(database, state.reportCashflowPeriod || 1);
+        return `${reportPeriodLabel(model.period)} · ${formatReportDateRange(model)}`;
+    }
+    const period = state.reportPeriod || 6;
+    if (tab === 'cartoes') return `Próximos ${period} meses`;
+    // These reports are multi-month views. Keep the context neutral rather than
+    // inventing a month label that is not part of their selected model.
+    return `Últimos ${period} meses`;
+};
 
 export const ReportComponents = {
-    reportsPage: (database, state) => {
-        const h = new Date();
-        const firstDay = `01/${h.getMonth() < 9 ? '0'+(h.getMonth()+1) : h.getMonth()+1}`;
-        const lastDay = new Date(h.getFullYear(), h.getMonth() + 1, 0).getDate();
-        const lastDayStr = `${lastDay}/${h.getMonth() < 9 ? '0'+(h.getMonth()+1) : h.getMonth()+1}/${h.getFullYear()}`;
-        
+    reportsPage: (database, state, actionsHtml = '', analysisHtml = '') => {
+        const reportMeta = {
+            fluxo: { eyebrow: 'Movimentação', title: 'Fluxo de Caixa', description: 'Entradas, saídas e fluxo acumulado no período selecionado.', icon: 'fa-arrow-trend-up' },
+            compare: { eyebrow: 'Desempenho', title: 'Comparativo', description: 'Receitas e despesas organizadas mês a mês.', icon: 'fa-chart-simple' },
+            cartoes: { eyebrow: 'Compromissos', title: 'Cartões', description: 'Projeção de faturas e uso dos cartões.', icon: 'fa-credit-card' },
+            patrimonio: { eyebrow: 'Visão patrimonial', title: 'Patrimônio', description: 'Saldos, metas e compromissos em uma visão consolidada.', icon: 'fa-briefcase' }
+        };
+        const selectedTab = reportMeta[state.reportTab] ? state.reportTab : 'fluxo';
+        const selected = reportMeta[selectedTab];
+        const selectedPeriod = reportPeriodContext(database, state, selectedTab);
         let contentHtml = '';
-        if (state.reportTab === 'fluxo') contentHtml = ReportComponents.reportFluxo(database);
-        else if (state.reportTab === 'compare') contentHtml = ReportComponents.reportComparativo(database, state);
-        else if (state.reportTab === 'cartoes') contentHtml = ReportComponents.reportCartoesVisual(database, state);
-        else if (state.reportTab === 'patrimonio') contentHtml = ReportComponents.reportPatrimonio(database, state);
+        if (selectedTab === 'fluxo') contentHtml = ReportComponents.reportFluxo(database, state);
+        else if (selectedTab === 'compare') contentHtml = ReportComponents.reportComparativo(database, state);
+        else if (selectedTab === 'cartoes') contentHtml = ReportComponents.reportCartoesVisual(database, state);
+        else if (selectedTab === 'patrimonio') contentHtml = ReportComponents.reportPatrimonio(database, state);
 
         return `
-            <div class="flex gap-2 mb-8 bg-surface p-2 rounded-[16px] w-fit shadow-soft border border-border overflow-x-auto max-w-full">
-                <button data-action="setReportTab" data-payload="fluxo" class="px-5 py-2.5 rounded-[12px] text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${state.reportTab === 'fluxo' ? 'bg-brand-deep text-white' : 'text-text-secondary hover:bg-bg'}">
-                    <i class="fa-solid fa-arrow-trend-up"></i> Fluxo de Caixa
-                </button>
-                <button data-action="setReportTab" data-payload="compare" class="px-5 py-2.5 rounded-[12px] text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${state.reportTab === 'compare' ? 'bg-brand-deep text-white' : 'text-text-secondary hover:bg-bg'}">
-                    <i class="fa-solid fa-chart-simple"></i> Comparativo
-                </button>
-                <button data-action="setReportTab" data-payload="cartoes" class="px-5 py-2.5 rounded-[12px] text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${state.reportTab === 'cartoes' ? 'bg-brand-deep text-white' : 'text-text-secondary hover:bg-bg'}">
-                    <i class="fa-regular fa-credit-card"></i> Cartões
-                </button>
-                <button data-action="setReportTab" data-payload="patrimonio" class="px-5 py-2.5 rounded-[12px] text-sm font-bold flex items-center gap-2 transition-all whitespace-nowrap ${state.reportTab === 'patrimonio' ? 'bg-brand-deep text-white' : 'text-text-secondary hover:bg-bg'}">
-                    <i class="fa-solid fa-briefcase"></i> Patrimônio
-                </button>
-            </div>
-
-            <div id="relatorio-export" class="animate-fadeIn pb-4">
-                ${contentHtml}
-            </div>
+            <section class="nv-reports-workspace" aria-label="Relatórios financeiros">
+                <header class="nv-reports-selected-heading" aria-label="Relatório selecionado">
+                    <div class="nv-reports-selected-icon"><i class="fa-solid ${selected.icon}"></i></div>
+                    <div class="nv-reports-selected-copy"><p>${selected.eyebrow}</p><h1>${selected.title}</h1><span class="nv-reports-selected-period">Período: ${Utils.escapeHTML(selectedPeriod)}</span><span>${selected.description}</span></div>
+                    ${actionsHtml ? `<div class="nv-reports-actions" aria-label="Ações dos relatórios">${actionsHtml}</div>` : ''}
+                </header>
+                ${analysisHtml}
+                <div class="nv-reports-navigation nv-reports-context-card" aria-label="Navegação dos relatórios">
+                    <div class="nv-reports-navigation-copy">
+                        <h2>Relatórios</h2>
+                        <p>Análises detalhadas da sua inteligência financeira.</p>
+                    </div>
+                    <nav class="nv-reports-tabs" aria-label="Tipos de relatório" role="tablist">
+                        <button data-action="setReportTab" data-payload="fluxo" role="tab" aria-selected="${state.reportTab === 'fluxo'}" class="nv-reports-tab ${state.reportTab === 'fluxo' ? 'is-active' : ''}"><i class="fa-solid fa-arrow-trend-up"></i><span>Fluxo de Caixa</span></button>
+                        <button data-action="setReportTab" data-payload="compare" role="tab" aria-selected="${state.reportTab === 'compare'}" class="nv-reports-tab ${state.reportTab === 'compare' ? 'is-active' : ''}"><i class="fa-solid fa-chart-simple"></i><span>Comparativo</span></button>
+                        <button data-action="setReportTab" data-payload="cartoes" role="tab" aria-selected="${state.reportTab === 'cartoes'}" class="nv-reports-tab ${state.reportTab === 'cartoes' ? 'is-active' : ''}"><i class="fa-regular fa-credit-card"></i><span>Cartões</span></button>
+                        <button data-action="setReportTab" data-payload="patrimonio" role="tab" aria-selected="${state.reportTab === 'patrimonio'}" class="nv-reports-tab ${state.reportTab === 'patrimonio' ? 'is-active' : ''}"><i class="fa-solid fa-briefcase"></i><span>Patrimônio</span></button>
+                    </nav>
+                </div>
+                <div id="relatorio-export" class="nv-report-export animate-fadeIn">${contentHtml}</div>
+            </section>
         `;
     },
 
-    reportFluxo: (db) => {
-        const hoje = new Date();
-        const trMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth());
-        
-        const entradas = trMes.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
-        const saidas = trMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
-        const liquido = entradas - saidas;
-
-        const diasMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
-        let tableRows = '';
-        let acum = db.bancos.reduce((a,b)=>a+b.saldo,0); 
-        
-        for(let i=1; i<=diasMes; i++){
-            const tDia = trMes.filter(t => new Date(t.data || t.id).getDate() === i);
-            const rec = tDia.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
-            const des = tDia.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a,b)=>a+b.valor,0);
-            acum += (rec - des);
-            
-            if(rec > 0 || des > 0) {
-                tableRows += `
-                <div class="flex items-center justify-between p-4 border-b border-border hover:bg-bg transition-colors">
-                    <div class="w-1/4 text-sm text-text-secondary">${i} de ${["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"][hoje.getMonth()]}</div>
-                    <div class="w-1/4 text-sm font-bold text-success text-center font-mono">${rec > 0 ? '+ '+Utils.formatMoney(rec) : '-'}</div>
-                    <div class="w-1/4 text-sm font-bold text-danger text-center font-mono">${des > 0 ? '- '+Utils.formatMoney(des) : '-'}</div>
-                    <div class="w-1/4 text-sm font-bold text-text-primary text-right font-mono">${Utils.formatMoney(acum)}</div>
-                </div>`;
-            }
-        }
+    reportFluxo: (db, state = {}) => {
+        const period = state.reportCashflowPeriod || 1;
+        const model = buildCashflowModel(db, period);
+        const liquido = model.entradas - model.saidas;
+        const tableRows = model.activeBuckets.map(bucket => `
+            <div class="nv-report-table-row">
+                <div>${model.isDaily ? `${bucket.date.getDate()} de ${['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'][bucket.date.getMonth()]}` : bucket.label}</div>
+                <div class="is-income ${financialValueClass(bucket.entradas)}">${bucket.entradas > 0 ? '+ ' + Utils.formatMoney(bucket.entradas) : '–'}</div>
+                <div class="is-expense ${financialValueClass(-bucket.saidas)}">${bucket.saidas > 0 ? '− ' + Utils.formatMoney(bucket.saidas) : '–'}</div>
+                <div class="${financialValueClass(null)}">${Utils.formatMoney(bucket.acumulado)}</div>
+            </div>`).join('');
+        const emptyState = `<div class="nv-report-empty" role="status"><i class="fa-regular fa-chart-line"></i><div><strong>Sem movimentações no período</strong><span>Não há receitas ou despesas reais registradas entre ${formatReportDateRange(model)}. O relatório não exibe valores estimados.</span></div></div>`;
 
         return `
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
-                    <p class="text-xs font-bold text-text-secondary flex items-center gap-2 mb-2 tracking-wider uppercase"><i class="fa-solid fa-arrow-trend-up text-success"></i> Entradas</p>
-                    <h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(entradas)}</h3>
-                </div>
-                <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
-                    <p class="text-xs font-bold text-text-secondary flex items-center gap-2 mb-2 tracking-wider uppercase"><i class="fa-solid fa-arrow-trend-down text-danger"></i> Saídas</p>
-                    <h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(saidas)}</h3>
-                </div>
-                <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
-                    <p class="text-xs font-bold text-text-secondary flex items-center gap-2 mb-2 tracking-wider uppercase"><i class="fa-solid fa-arrow-right-arrow-left text-reserve"></i> Fluxo Líquido</p>
-                    <h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(liquido)}</h3>
-                </div>
+            <div class="nv-report-toolbar mb-6">
+                <div><span class="nv-report-filter-label">Período analisado</span><span class="nv-report-filter-context">${reportPeriodLabel(period)} · ${formatReportDateRange(model)}</span></div>
+                <label class="nv-report-select-wrap"><span class="sr-only">Selecionar período do fluxo de caixa</span><select data-change="setReportCashflowPeriod" class="nv-report-select">
+                    <option value="1" ${period === 1 ? 'selected' : ''}>Mês atual</option>
+                    <option value="3" ${period === 3 ? 'selected' : ''}>Últimos 3 meses</option>
+                    <option value="6" ${period === 6 ? 'selected' : ''}>Últimos 6 meses</option>
+                    <option value="12" ${period === 12 ? 'selected' : ''}>Últimos 12 meses</option>
+                </select></label>
             </div>
-            
-            <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft mb-6">
-                <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Evolução do Saldo</h4>
-                <div class="relative h-[300px] w-full"><canvas id="reportsFluxoChart"></canvas></div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 nv-report-metrics">
+                <div class="nv-report-metric is-income"><p><i class="fa-solid fa-arrow-trend-up"></i> Entradas</p><h3 data-currency-value="${model.entradas}" class="${financialValueClass(model.entradas)}">${Utils.formatMoney(model.entradas)}</h3>${reportSource('Soma das receitas realizadas, excluindo transferências e pagamentos de fatura das receitas comuns.')}</div>
+                <div class="nv-report-metric is-expense"><p><i class="fa-solid fa-arrow-trend-down"></i> Saídas</p><h3 data-currency-value="${model.saidas}" class="${financialValueClass(-model.saidas)}">${Utils.formatMoney(model.saidas)}</h3>${reportSource('Soma das despesas realizadas, excluindo transferências e pagamentos de fatura das despesas comuns.')}</div>
+                <div class="nv-report-metric is-net"><p><i class="fa-solid fa-arrow-right-arrow-left"></i> Fluxo líquido</p><h3 data-currency-value="${liquido}" class="${financialValueClass(liquido)}">${Utils.formatMoney(liquido)}</h3>${reportSource('Entradas menos saídas, calculadas a partir das transações do período selecionado.')}</div>
             </div>
-
-            <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft">
-                <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Movimentação Diária</h4>
-                <div class="flex text-xs font-bold text-text-secondary uppercase tracking-wider pb-3 border-b border-border px-4">
-                    <div class="w-1/4">Data</div><div class="w-1/4 text-center">Entradas</div><div class="w-1/4 text-center">Saídas</div><div class="w-1/4 text-right">Saldo Acumulado</div>
-                </div>
-                <div class="overflow-y-auto max-h-[400px]">
-                    ${tableRows || '<div class="text-center py-10 text-text-secondary text-sm">Nenhuma movimentação neste período.</div>'}
-                </div>
+            <div class="nv-report-panel mb-6"><div class="nv-report-panel-heading"><div><h4>Evolução do fluxo</h4><p>${model.isDaily ? 'Acompanhamento diário' : 'Acompanhamento mensal'} · fluxo acumulado no período</p></div></div>
+                <div class="relative h-[300px] w-full">${model.hasMovement ? '<canvas id="reportsFluxoChart" aria-label="Gráfico do fluxo acumulado"></canvas>' : emptyState}</div>
+            </div>
+            <div class="nv-report-panel"><div class="nv-report-panel-heading"><div><h4>Movimentação do período</h4><p>Somente períodos com entradas ou saídas são listados.</p></div></div>
+                <div class="nv-report-table-header"><div>${model.isDaily ? 'Data' : 'Mês'}</div><div>Entradas</div><div>Saídas</div><div>Fluxo acumulado</div></div>
+                <div class="nv-report-table-body">${tableRows || emptyState}</div>
             </div>
         `;
     },
@@ -104,16 +105,19 @@ export const ReportComponents = {
         const today = new Date();
         let totalRec = 0; let totalDes = 0;
         let tableRows = '';
+        const monthlyTotals = [];
 
         for (let i = period - 1; i >= 0; i--) {
             const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
             const tr = Database.getTransacoesPorMes(d.getFullYear(), d.getMonth());
-            const rec = tr.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0);
-            const des = tr.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((a, b) => a + b.valor, 0);
+            const periodTotals = calculatePeriodTotals(tr);
+            const rec = periodTotals.income;
+            const des = periodTotals.expense;
             totalRec += rec; totalDes += des;
             
             const saldo = rec - des;
             const poup = rec > 0 ? (saldo / rec) * 100 : 0;
+            monthlyTotals.push({ rec, des, saldo, label: `${monthNames[d.getMonth()]} de ${d.getFullYear()}` });
 
             tableRows += `
                 <div class="flex items-center justify-between p-4 border-b border-border hover:bg-bg transition-colors">
@@ -125,33 +129,53 @@ export const ReportComponents = {
                 </div>`;
         }
 
+        const currentTotals = monthlyTotals[monthlyTotals.length - 1] || null;
+        const previousTotals = monthlyTotals.length > 1 ? monthlyTotals[monthlyTotals.length - 2] : null;
+        const comparisonRows = [
+            ['Entradas', 'rec'],
+            ['Saídas', 'des'],
+            ['Saldo', 'saldo']
+        ].map(([label, key]) => {
+            const variation = signedPeriodVariation(currentTotals?.[key], previousTotals?.[key]);
+            const icon = variation.tone === 'positive' ? 'fa-arrow-trend-up' : variation.tone === 'negative' ? 'fa-arrow-trend-down' : 'fa-minus';
+            return `<div class="nv-report-comparison-row is-${variation.tone}"><span>${label}</span><strong aria-label="${label}: ${variation.label}"><i class="fa-solid ${icon}" aria-hidden="true"></i>${variation.label}</strong></div>`;
+        }).join('');
+        const comparisonContext = currentTotals && previousTotals
+            ? `${currentTotals.label} em relação a ${previousTotals.label}`
+            : 'Histórico anterior insuficiente para uma comparação válida';
+
         return `
-            <div class="flex gap-4 mb-6">
-                <select data-change="setReportPeriod" class="p-2 border border-border rounded-[12px] text-sm bg-surface shadow-sm text-text-primary focus:outline-none focus:border-brand-medium">
+            <div class="nv-report-toolbar mb-6">
+                <div><span class="nv-report-filter-label">Período analisado</span><span class="nv-report-filter-context">Últimos ${period} meses</span></div>
+                <select data-change="setReportPeriod" class="nv-report-select">
                     <option value="3" ${period === 3 ? 'selected' : ''}>Últimos 3 meses</option>
                     <option value="6" ${period === 6 ? 'selected' : ''}>Últimos 6 meses</option>
                     <option value="12" ${period === 12 ? 'selected' : ''}>Últimos 12 meses</option>
                 </select>
-                <select class="p-2 border border-border rounded-[12px] text-sm bg-surface shadow-sm text-text-primary focus:outline-none"><option>Gráfico Barras</option></select>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média de Receitas</p>
                     <h3 class="text-2xl font-bold text-success font-mono">${Utils.formatMoney(totalRec/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das receitas comuns realizadas no período comparado; transferências e pagamentos de fatura são excluídos.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média de Despesas</p>
                     <h3 class="text-2xl font-bold text-danger font-mono">${Utils.formatMoney(totalDes/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal das despesas comuns realizadas no período comparado; transferências e pagamentos de fatura são excluídos.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft relative hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Saldo Médio</p>
                     <h3 class="text-2xl font-bold text-reserve font-mono">${Utils.formatMoney((totalRec - totalDes)/period)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>
+                    <p class="text-[10px] text-text-secondary mt-1">por mês</p>${reportSource('Média mensal de receitas menos despesas nas transações do período comparado.')}
                 </div>
             </div>
+
+            <section class="nv-report-comparison-insight" aria-labelledby="nv-report-comparison-title" aria-live="polite">
+                <div><p class="nv-report-comparison-eyebrow">Leitura rápida</p><h4 id="nv-report-comparison-title">Comparação com período anterior</h4><p>${comparisonContext}</p></div>
+                <div class="nv-report-comparison-grid">${comparisonRows}</div>
+            </section>
 
             <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft mb-6">
                 <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Comparativo Mensal</h4>
@@ -210,9 +234,9 @@ export const ReportComponents = {
         }
 
         return `
-            <div class="flex gap-4 mb-6">
-                <select class="p-2 border border-border rounded-[12px] text-sm bg-surface shadow-sm text-text-primary focus:outline-none"><option>Todos os cartões</option></select>
-                <select data-change="setReportPeriod" class="p-2 border border-border rounded-[12px] text-sm bg-surface shadow-sm text-text-primary focus:outline-none focus:border-brand-medium">
+            <div class="nv-report-toolbar mb-6">
+                <div><span class="nv-report-filter-label">Período projetado ${estimatedBadge('Este relatório projeta compromissos futuros de cartão.')}</span><span class="nv-report-filter-context">Próximos ${period} meses</span></div>
+                <select data-change="setReportPeriod" class="nv-report-select">
                     <option value="3" ${period === 3 ? 'selected' : ''}>Próximos 3 meses</option>
                     <option value="6" ${period === 6 ? 'selected' : ''}>Próximos 6 meses</option>
                     <option value="12" ${period === 12 ? 'selected' : ''}>Próximos 12 meses</option>
@@ -221,13 +245,14 @@ export const ReportComponents = {
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
-                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Total Provisionado</p>
+                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Total Provisionado ${estimatedBadge()}</p>
                     <h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalProx)}</h3>
-                    <p class="text-[10px] text-text-secondary mt-1">próximos ${period} meses</p>
+                    <p class="text-[10px] text-text-secondary mt-1">próximos ${period} meses</p>${reportSource('Soma das parcelas de cartão previstas nos próximos meses do período projetado.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
-                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média Mensal</p>
+                    <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Média Mensal ${estimatedBadge()}</p>
                     <h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalProx/period)}</h3>
+                    ${reportSource('Total provisionado dividido pela quantidade de meses selecionada.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold uppercase tracking-wider">Cartões Ativos</p>
@@ -236,7 +261,7 @@ export const ReportComponents = {
             </div>
 
             <div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft mb-6">
-                <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Projeção de Faturas</h4>
+                <h4 class="font-bold text-text-primary text-sm mb-4 font-primary">Projeção de Faturas ${estimatedBadge('Faturas calculadas com base nas parcelas de cartão previstas.')}</h4>
                 <div class="relative h-[250px] w-full"><canvas id="reportsCartoesChart"></canvas></div>
             </div>
 
@@ -284,8 +309,9 @@ export const ReportComponents = {
         }
 
         return `
-            <div class="flex gap-4 mb-6">
-                <select data-change="setReportPeriod" class="p-2 border border-border rounded-[12px] text-sm bg-surface shadow-sm text-text-primary focus:outline-none focus:border-brand-medium">
+            <div class="nv-report-toolbar mb-6">
+                <div><span class="nv-report-filter-label">Período de evolução</span><span class="nv-report-filter-context">Últimos ${period} meses</span></div>
+                <select data-change="setReportPeriod" class="nv-report-select">
                     <option value="3" ${period === 3 ? 'selected' : ''}>Últimos 3 meses</option>
                     <option value="6" ${period === 6 ? 'selected' : ''}>Últimos 6 meses</option>
                     <option value="12" ${period === 12 ? 'selected' : ''}>Últimos 12 meses</option>
@@ -296,18 +322,22 @@ export const ReportComponents = {
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold tracking-wider uppercase">Saldo Bancário</p>
                     <h3 class="text-xl font-bold text-reserve font-mono">${Utils.formatMoney(saldoBancario)}</h3>
+                    ${reportSource('Soma dos saldos atuais registrados nas contas bancárias.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold tracking-wider uppercase">Metas/Investimentos</p>
                     <h3 class="text-xl font-bold text-investment font-mono">${Utils.formatMoney(metasAcumuladas)}</h3>
+                    ${reportSource('Soma dos valores atuais registrados nas metas.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform">
                     <p class="text-xs text-text-secondary mb-2 font-bold tracking-wider uppercase">Dívida Cartões</p>
                     <h3 class="text-xl font-bold text-credit font-mono">${Utils.formatMoney(dividaCartoes)}</h3>
+                    ${reportSource('Soma das parcelas de cartão registradas em aberto.')}
                 </div>
                 <div class="bg-surface border border-border p-6 rounded-[16px] shadow-soft hover:-translate-y-1 transition-transform border-l-4 border-l-brand-deep">
                     <p class="text-xs font-brand-deep mb-2 font-bold tracking-wider uppercase text-brand-deep">Patrimônio</p>
                     <h3 class="text-xl font-bold text-brand-deep font-mono">${Utils.formatMoney(patrimonioLiquido)}</h3>
+                    ${reportSource('Saldo bancário mais metas acumuladas, menos a dívida dos cartões.')}
                 </div>
             </div>
 

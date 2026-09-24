@@ -6,6 +6,8 @@ const parseMoney = (raw) => {
     return Number.isFinite(value) ? value : 0;
 };
 
+import { ImportError, IMPORT_ERROR_CODES } from './import-errors.js';
+
 const parseDate = (raw) => {
     const value = String(raw ?? '').trim();
     if (/^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
@@ -33,8 +35,9 @@ const splitLine = (line, delimiter) => {
 
 export const CSVImport = {
     parse: (csv) => {
-        const lines = String(csv || '').split(/\r?\n/).filter(line => line.trim());
-        if (lines.length < 2) return [];
+        const raw = String(csv ?? '');
+        const lines = raw.split(/\r?\n/).filter(line => line.trim());
+        if (!raw.trim() || lines.length < 2) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
         const delimiter = (lines[0].match(/;/g) || []).length > (lines[0].match(/,/g) || []).length ? ';' : ',';
         const headers = splitLine(lines[0], delimiter).map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
         const find = names => names.map(n => headers.indexOf(n)).find(i => i >= 0);
@@ -42,11 +45,13 @@ export const CSVImport = {
         const valueIndex = find(['valor', 'value', 'amount']);
         const descIndex = find(['descricao', 'description', 'historico', 'memo']);
         const idIndex = find(['identificador', 'id', 'identifier', 'fitid']);
-        if (dateIndex === undefined || valueIndex === undefined) throw new Error('CSV precisa ter colunas Data e Valor');
-        return lines.slice(1).map(line => {
+        if (dateIndex === undefined || valueIndex === undefined) throw new ImportError(IMPORT_ERROR_CODES.CSV_INVALID_FORMAT);
+        const rows = lines.slice(1).map(line => {
             const cells = splitLine(line, delimiter);
             const signed = parseMoney(cells[valueIndex]);
             return { data: parseDate(cells[dateIndex]), identificador: idIndex === undefined ? '' : (cells[idIndex] || ''), desc: cells[descIndex] || 'Lançamento importado', valor: Math.abs(signed), tipo: signed >= 0 ? 'receita' : 'despesa', importadoCSV: true };
         }).filter(item => item.data && item.valor > 0);
+        if (!rows.length) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
+        return rows;
     }
 };

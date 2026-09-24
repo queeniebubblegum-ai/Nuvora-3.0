@@ -168,12 +168,12 @@ export const MentorSemantics = {
         }
         if (step === 3) {
             return {
-                classification: "Fase de Aprendizado",
+                classification: "Passo 3 de 3",
                 insights: [
-                    "Ótimo começo! Já registrei as suas primeiras movimentações.",
-                    "Para eu conseguir calcular a sua saúde financeira de forma precisa, preciso de mais alguns lançamentos."
+                    "Ótimo começo! Você já tem uma conta e registrou seu primeiro lançamento.",
+                    "Agora defina um limite para transformar seus gastos em um plano claro."
                 ],
-                recommendation: "Continue registrando os seus gastos de hoje. Em breve destravaremos seu Nível Financeiro!"
+                recommendation: "Sua última missão inicial: defina um limite de orçamento para acompanhar seu mês."
             };
         }
     },

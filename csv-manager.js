@@ -1,6 +1,7 @@
 import { db } from './db.js';
 import { CSVImport } from './csv-import.js';
 import { Utils } from './utils.js';
+import { asImportError } from './import-errors.js';
 
 export const CSVManager = {
     iniciarImportacao: (bancoId, viewState) => {
@@ -51,10 +52,28 @@ export const CSVManager = {
                 const saldoLabel = document.getElementById('ofx-saldo-final-lbl');
                 if (saldoLabel) saldoLabel.innerText = 'Não informado';
                 const confirmarSaldo = document.getElementById('ofx-confirmar-saldo');
-                if (confirmarSaldo) confirmarSaldo.checked = false;
+                if (confirmarSaldo) {
+                    confirmarSaldo.checked = false;
+                    confirmarSaldo.disabled = true;
+                    confirmarSaldo.title = 'Arquivos CSV não fornecem um saldo final de extrato.';
+                }
                 openModalCallback('modal-revisao-ofx');
                 window.App?.renderOFXReviewList();
-            } catch (error) { Utils.showToast(error.message || 'CSV inválido.', 'error'); }
+            } catch (error) {
+                // Parsing happens before any Database write, so a failed import
+                // cannot partially alter financial data. The action opens the
+                // existing picker contract; it is not a dead "retry" CTA.
+                const importError = asImportError(error);
+                Utils.showToast(importError.message, 'error', {
+                    action: { action: 'iniciarImportacaoCSV', label: 'Escolher outro arquivo', payload: viewState.bancoAlvoOFX || '' }
+                });
+            }
+            event.target.value = '';
+        };
+        reader.onerror = () => {
+            Utils.showToast('Não foi possível ler o arquivo CSV.', 'error', {
+                action: { action: 'iniciarImportacaoCSV', label: 'Escolher outro arquivo', payload: viewState.bancoAlvoOFX || '' }
+            });
             event.target.value = '';
         };
         reader.readAsText(file);

@@ -1,6 +1,6 @@
-// Increment when shell behavior/markup changes so an already-installed SW
-// cannot keep the pre-fix modal shell around.
-const APP_CACHE_NAME = 'avenera-app-shell-v2';
+// Increment when local application assets change so installed clients fetch
+// the latest modules, including the shared cent-precision money helpers.
+const APP_CACHE_NAME = 'avenera-app-shell-v7';
 const CDN_CACHE_NAME = 'avenera-cdn-cache-v1';
 
 // Ficheiros locais essenciais da sua aplicação (Mapeamento Completo e Atualizado)
@@ -9,6 +9,9 @@ const LOCAL_ASSETS = [
     './index.html',
     './styles.css',
     './manifest.json',
+    './privacidade/index.html',
+    './termos/index.html',
+    './suporte/index.html',
     
     // Core & Estado
     './app.js',
@@ -27,6 +30,14 @@ const LOCAL_ASSETS = [
     './evt-click.js',
     './evt-change.js',
     './evt-submit.js',
+    './submit-guard.js',
+    './submit-feedback.js',
+    './ui-tracking.js',
+    './anora-preferences.js',
+    './ofx-balance.js',
+    './financial-ledger.js',
+    './reconciliation.js',
+    './money-math.js',
     
     // Controladores
     './controllers.js',
@@ -39,6 +50,7 @@ const LOCAL_ASSETS = [
     './components.js',
     './cmp-core.js',
     './cmp-dashboard.js',
+    './priority.js',
     './cmp-reports.js',
     './cmp-pages.js',
     './cmp-modals.js',

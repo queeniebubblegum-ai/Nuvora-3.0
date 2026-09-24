@@ -4,20 +4,77 @@ import { ClickEvents } from './evt-click.js';
 import { ChangeEvents } from './evt-change.js';
 import { SubmitEvents } from './evt-submit.js';
 import { Controllers } from './controllers.js';
+import { shouldHandleNewTransactionShortcut } from './financial-refinements.js';
+
+let newTransactionShortcutBound = false;
+
+const bindNewTransactionShortcut = () => {
+    if (newTransactionShortcutBound) return;
+    newTransactionShortcutBound = true;
+    document.addEventListener('keydown', event => {
+        if (!shouldHandleNewTransactionShortcut(event, document)) return;
+        const selector = document.querySelector('.nv-dashboard-new-menu > summary');
+        const floating = document.getElementById('btn-flutuante-main');
+        // Prefer the existing desktop Dashboard type selector. When a
+        // contextual CTA owns that slot, use the existing global speed dial.
+        const action = selector || floating;
+        if (!action || action.hidden || action.disabled) return;
+        event.preventDefault();
+        action.click();
+    });
+};
+
+// Description search is the only transaction filter that waits for typing to
+// settle. Keeping the timer at module scope lets a second setup call cancel the
+// previous listener's pending work and avoids stale renders after navigation.
+let transactionDescriptionSearchTimer = null;
+let transactionDescriptionSearchGeneration = 0;
+
+const applyTransactionDescriptionSearch = (value, pageAtInput) => {
+    const generation = ++transactionDescriptionSearchGeneration;
+    const normalizedValue = String(value ?? '');
+    if (transactionDescriptionSearchTimer) clearTimeout(transactionDescriptionSearchTimer);
+    transactionDescriptionSearchTimer = null;
+
+    const apply = () => {
+        transactionDescriptionSearchTimer = null;
+        // A delayed search must never render into a page that replaced the
+        // transaction list while the user was typing.
+        if (generation !== transactionDescriptionSearchGeneration || App.currentPage !== pageAtInput) return;
+        App.setFilter('desc', normalizedValue);
+        App.scheduleRender();
+    };
+
+    // Clearing is intentionally immediate so the user can recover the full
+    // list without waiting for the debounce window.
+    if (!normalizedValue) {
+        apply();
+        return;
+    }
+
+    transactionDescriptionSearchTimer = setTimeout(apply, 250);
+};
 
 export const EventManager = {
+    cancelTransactionDescriptionSearch: () => {
+        transactionDescriptionSearchGeneration += 1;
+        if (transactionDescriptionSearchTimer) clearTimeout(transactionDescriptionSearchTimer);
+        transactionDescriptionSearchTimer = null;
+    },
     setup: () => {
+        EventManager.cancelTransactionDescriptionSearch();
+        bindNewTransactionShortcut();
+        document.addEventListener('nuvora:navigate', () => EventManager.cancelTransactionDescriptionSearch());
         ClickEvents.setup();
         ChangeEvents.setup();
         SubmitEvents.setup();
 
-        const handleSearchInput = Utils.debounce((val) => {
-            App.setFilter('desc', val);
-        }, 300);
-
         document.body.addEventListener('input', (e) => {
-            if (e.target.matches('[data-input="setFilterDesc"]')) { 
-                handleSearchInput(e.target.value); 
+            if (e.target.matches('[data-input="setFilterDesc"]')) {
+                applyTransactionDescriptionSearch(e.target.value, App.currentPage);
+            }
+            if (e.target.matches('[data-input="categorySearch"]')) {
+                App.filterCategoriesDOM(e.target.value);
             }
             if (e.target.matches('[data-input="preview503020"]')) {
                 Controllers.preview503020(e.target.value);

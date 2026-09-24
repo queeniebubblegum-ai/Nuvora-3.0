@@ -1,4 +1,5 @@
 import { Database } from './db.js';
+import { isExpense } from './financial-ledger.js';
 
 export const ChartCategorias = {
     renderReportChart: (instances) => {
@@ -8,7 +9,7 @@ export const ChartCategorias = {
         const cats = {}; const hoje = new Date();
         const transacoesMes = Database.getTransacoesPorMes(hoje.getFullYear(), hoje.getMonth());
         
-        transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).forEach(t => {
+        transacoesMes.filter(isExpense).forEach(t => {
             if(!cats[t.categoria]) cats[t.categoria] = 0;
             cats[t.categoria] += t.valor;
         });
@@ -35,7 +36,7 @@ export const ChartCategorias = {
 
         const hoje = new Date();
         const trMes = db.transacoes.filter(t => {
-            if (t.tipo !== 'despesa') return false;
+            if (!isExpense(t)) return false;
             const d = new Date(t.data || t.id);
             return d.getMonth() === hoje.getMonth() && d.getFullYear() === hoje.getFullYear();
         });

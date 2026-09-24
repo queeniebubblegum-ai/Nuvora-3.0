@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calculateReconciliation, listInvoiceTransactions, getInvoicePeriod, RECONCILIATION_STATUS } from './reconciliation.js';
+import { calculateAdjustmentTotal, calculateReconciliation, listInvoiceTransactions, getInvoicePeriod, RECONCILIATION_STATUS } from './reconciliation.js';
 
 describe('Conciliação de faturas (fase 1)', () => {
   const card = { id: 7, fechamento: 10 };
@@ -20,6 +20,20 @@ describe('Conciliação de faturas (fase 1)', () => {
     expect(calculateReconciliation(tx, 30.01).status).toBe(RECONCILIATION_STATUS.RECONCILED);
     expect(calculateReconciliation([], null).status).toBe(RECONCILIATION_STATUS.OPEN);
   });
+  it('soma compras e ajustes em centavos inteiros sem ruído decimal', () => {
+    expect(calculateReconciliation([{ valor: 0.1 }, { valor: 0.2 }], 0.3)).toMatchObject({
+      totalRecorded: 0.3,
+      explainedTotal: 0.3,
+      difference: 0,
+      status: RECONCILIATION_STATUS.RECONCILED
+    });
+    expect(calculateAdjustmentTotal([
+      { amount: 0.1, effect: 'charge' },
+      { amount: 0.2, effect: 'charge' },
+      { amount: 0.1, effect: 'credit' }
+    ])).toBe(0.2);
+  });
+
   it('mantém o período inclusivo, inclusive no fechamento', () => {
     const { start, end } = getInvoicePeriod(card, 2026, 7);
     expect(start.toISOString().slice(0, 10)).toBe('2026-07-11');

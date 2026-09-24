@@ -1,5 +1,6 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
+import { calculatePeriodTotals, isExpense } from './financial-ledger.js';
 
 export const AnoraNLP = {
     processarMensagem: (mensagem) => {
@@ -11,6 +12,7 @@ export const AnoraNLP = {
         const dataHojeStr = hoje.toISOString().split('T')[0];
         
         const transacoesMes = Database.getTransacoesPorMes(anoAtual, mesAtual);
+        const totaisMes = calculatePeriodTotals(transacoesMes);
 
         // =======================================================================
         // INTENÇÃO ALPHA: Lançamento Fast-Track (NLP de Inserção Direta)
@@ -111,13 +113,13 @@ export const AnoraNLP = {
             
             if (termo.length >= 2) {
                 const gastosTermo = transacoesMes.filter(t => {
-                    if (t.tipo !== 'despesa') return false;
+                    if (!isExpense(t)) return false;
                     const descLimpa = t.desc.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                     const catLimpa = t.categoria.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                     return descLimpa.includes(termo) || catLimpa.includes(termo);
                 });
                 
-                const totalTermo = gastosTermo.reduce((acc, t) => acc + t.valor, 0);
+                const totalTermo = gastosTermo.reduce((acc, t) => acc + (Number(t.valor) || 0), 0);
                 
                 if (totalTermo > 0) {
                     return `Você gastou **${Utils.formatMoney(totalTermo)}** com "${termo}" este mês, distribuídos em ${gastosTermo.length} lançamento(s).`;
@@ -129,13 +131,13 @@ export const AnoraNLP = {
 
         // 4. Intenção: Gastos Totais do Mês
         if (msgLimpa.match(/(gastei|gastos|despesa|despesas|saiu)/)) {
-            const despesas = transacoesMes.filter(t => t.tipo === 'despesa' && !t.transferenciaInterna).reduce((acc, t) => acc + t.valor, 0);
+            const despesas = totaisMes.expense;
             return `Até agora, as suas despesas neste mês somam **${Utils.formatMoney(despesas)}**.`;
         }
 
         // 5. Intenção: Receitas do Mês
         if (msgLimpa.match(/(ganhei|recebi|receita|receitas|renda|entrou|salario)/)) {
-            const receitas = transacoesMes.filter(t => t.tipo === 'receita' && !t.transferenciaInterna).reduce((acc, t) => acc + t.valor, 0);
+            const receitas = totaisMes.income;
             return `A sua receita acumulada deste mês é de **${Utils.formatMoney(receitas)}**.`;
         }
 

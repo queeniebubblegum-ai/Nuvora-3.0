@@ -8,9 +8,11 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        primary: ['Montserrat', 'sans-serif'],
-        mentor: ['Playfair Display', 'serif'],
-        mono: ['Space Grotesk', 'monospace'],
+        // Legacy aliases intentionally resolve to one UI/product family.
+        primary: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        mentor: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        mono: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
       },
       colors: {
         bg: 'var(--c-bg)',
@@ -22,11 +24,13 @@ module.exports = {
         'brand-dark': 'var(--c-brand-dark)',
         'brand-medium': 'var(--c-brand-medium)',
         'brand-soft': 'var(--c-brand-soft)',
-        success: '#16A34A',
-        danger: '#DC2626',
-        reserve: '#2563EB',
-        credit: '#D97706',
-        investment: '#7C3AED',
+        success: 'var(--c-success)',
+        danger: 'var(--c-danger)',
+        warning: 'var(--c-warning)',
+        info: 'var(--c-info)',
+        reserve: 'var(--c-info)',
+        credit: 'var(--c-accent-orange)',
+        investment: 'var(--c-brand-medium)',
       },
       boxShadow: {
         soft: '0 4px 18px rgba(0, 0, 0, 0.08)',

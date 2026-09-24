@@ -14,10 +14,19 @@ export const UtilDOM = {
         });
     },
 
-    showToast: (msg, type = 'success') => {
+    // Optional action keeps confirmations actionable without embedding dead
+    // data-action text in the message. The action is rendered as a real button
+    // and is handled by the existing delegated click contracts.
+    showToast: (msg, type = 'success', options = {}) => {
         const container = document.getElementById('toast-container');
         if(!container) return;
         const toast = document.createElement('div');
+        const toastId = options && options.id;
+        if (toastId) {
+            const previous = document.getElementById(String(toastId));
+            if (previous) previous.remove();
+            toast.id = String(toastId);
+        }
         
         const isError = type === 'error';
         const bgColor = isError ? 'bg-[#E11D48] text-white' : 'bg-surface border border-border text-text-primary';
@@ -26,10 +35,28 @@ export const UtilDOM = {
         
         toast.className = `pointer-events-auto w-full sm:w-auto max-w-full flex items-center gap-3 px-4 py-3 rounded-[12px] shadow-2xl font-semibold text-sm transition-all transform duration-300 translate-y-[20px] opacity-0 cursor-pointer ${bgColor}`;
         toast.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        toast.dataset.toast = 'true';
         toast.setAttribute('title', 'Clique para fechar');
         toast.innerHTML = `<i class="fa-solid ${icon} ${iconColor} text-lg shrink-0"></i><span class="min-w-0 break-words">${UtilDOM.escapeHTML(msg)}</span><button type="button" aria-label="Fechar aviso" class="ml-auto shrink-0 opacity-70 hover:opacity-100"><i class="fa-solid fa-xmark"></i></button>`;
+
+        const action = options && options.action;
+        if (action && action.action && action.label) {
+            const actionButton = document.createElement('button');
+            actionButton.type = 'button';
+            actionButton.className = 'shrink-0 text-brand-medium hover:text-brand-dark font-black whitespace-nowrap focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium';
+            actionButton.textContent = String(action.label);
+            actionButton.setAttribute('aria-label', String(action.ariaLabel || action.label));
+            actionButton.setAttribute('data-action', String(action.action));
+            if (action.payload !== undefined && action.payload !== null) actionButton.setAttribute('data-payload', String(action.payload));
+            const closeButton = toast.querySelector('button[aria-label="Fechar aviso"]');
+            toast.insertBefore(actionButton, closeButton);
+        }
+
         const remove = () => { toast.classList.add('opacity-0', 'translate-y-[20px]'); setTimeout(() => toast.remove(), 300); };
-        toast.addEventListener('click', remove);
+        toast.addEventListener('click', event => {
+            if (event.target.closest?.('[data-action]')) return;
+            remove();
+        });
         container.appendChild(toast);
         
         requestAnimationFrame(() => {
@@ -37,11 +64,12 @@ export const UtilDOM = {
             toast.classList.add('translate-y-0', 'opacity-100');
         });
 
+        const duration = Number.isFinite(Number(options?.duration)) ? Math.max(0, Number(options.duration)) : 4000;
         setTimeout(() => {
             toast.classList.remove('translate-y-0', 'opacity-100');
             toast.classList.add('translate-y-[-20px]', 'opacity-0');
             setTimeout(() => toast.remove(), 300);
-        }, 4000);
+        }, duration);
     },
 
     debounce: (func, wait) => {

@@ -23,6 +23,7 @@ describe('separação entre patrimônio e crédito', () => {
         expect(summary.credit[1]).toMatchObject({ used: 100, available: 400, utilization: 20 });
     });
 
+<<<<<<< HEAD
     it('separa dinheiro total, reservas vinculadas a metas e disponibilidade fora das metas', () => {
         const summary = accountPortfolioSummary({
             banks: [{ saldo: 2700 }],
@@ -34,6 +35,8 @@ describe('separação entre patrimônio e crédito', () => {
         expect(summary.availableMoney).toBe(2700);
     });
 
+=======
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
     it('soma saldos, limites e compras de cartão sem ruído decimal', () => {
         const summary = accountPortfolioSummary({
             banks: [{ saldo: 0.1 }, { saldo: 0.2 }],
@@ -78,7 +81,11 @@ describe('separação entre patrimônio e crédito', () => {
         );
 
         expect(html).toContain('nv-account-overview');
+<<<<<<< HEAD
         expect(html).toContain('Disponível fora das metas');
+=======
+        expect(html).toContain('Dinheiro disponível');
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
         expect(html).toContain('Crédito disponível');
         expect(html).toContain('nv-credit-card');
         expect(html).toContain('nv-credit-card__body');
@@ -92,6 +99,7 @@ describe('separação entre patrimônio e crédito', () => {
         expect(html).toContain('Fatura atual:');
         expect(html).toContain('Utilizado ·');
     });
+<<<<<<< HEAD
 
     it('mostra total, reservado e disponível também na página de metas', () => {
         const html = PageComponents.goalsPage([], [], {
@@ -119,4 +127,6 @@ describe('separação entre patrimônio e crédito', () => {
         expect(html).toContain('2.700,00');
         expect(html).not.toContain('9.200,00');
     });
+=======
+>>>>>>> 0d7f538c4d82ad8d46d4668aee3e0633e36aa8d0
 });

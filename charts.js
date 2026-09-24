@@ -16,15 +16,10 @@ export const ChartManager = {
     
     renderAll: (state, dbData) => {
         // Delega o desenho de cada gráfico para a sua respectiva fábrica modular
-        ChartFluxo.render(dbData, ChartManager.instances);
+        ChartFluxo.render(state, dbData, ChartManager.instances);
         ChartCategorias.renderReportChart(ChartManager.instances);
         ChartCompare.render(state, ChartManager.instances);
         ChartCartoes.render(state, ChartManager.instances);
         ChartPatrimonio.render(state, dbData, ChartManager.instances);
-    },
-
-    renderCategoriasPageChart: (db) => {
-        // Gráfico específico da aba de Categorias
-        ChartCategorias.renderPageChart(db);
     }
 };

@@ -38,7 +38,12 @@ export const ContasController = {
 
     submitCartao: (e) => {
         e.preventDefault();
-        const bancoId = parseInt(document.getElementById('cartao-bancoId').value);
+        // Select values are strings, while persisted bank IDs may be numbers or
+        // application-generated strings. Resolve against the stored record and
+        // keep its original ID type instead of coercing it with parseInt().
+        const bancoIdRaw = document.getElementById('cartao-bancoId').value;
+        const bancoRelacionado = db.bancos.find(b => String(b.id) === String(bancoIdRaw));
+        const bancoId = bancoRelacionado ? bancoRelacionado.id : bancoIdRaw;
         const modeloElement = document.getElementById('cartao-modelo');
         const modelo = modeloElement ? modeloElement.value : 'custom';
         const nome = document.getElementById('cartao-nome').value;
@@ -64,7 +69,6 @@ export const ContasController = {
         }
 
         if (!cor) {
-            const bancoRelacionado = db.bancos.find(b => b.id === bancoId);
             if (bancoRelacionado && bancoRelacionado.cor) {
                 cor = bancoRelacionado.cor;
             } else {
@@ -80,22 +84,43 @@ export const ContasController = {
 
     submitCategoria: (e) => {
         e.preventDefault();
-        const nome = document.getElementById('nova-categoria-nome').value.trim();
-        const grupo = document.getElementById('nova-categoria-grupo').value.trim();
-        const tipo = document.getElementById('nova-categoria-tipo')?.value || 'despesa';
-        const icone = document.getElementById('nova-categoria-icone').value;
-        const cor = document.getElementById('nova-categoria-cor').value || '#3B82F6';
-        
-        if (Database.add('categorias', { id: 'cat_' + Date.now(), nome, grupo, subgrupo: nome, tipo, icone, cor, fixa: false })) {
-            Utils.showToast('Categoria adicionada!', 'success');
+        const id = document.getElementById('nova-categoria-id')?.value || '';
+        const nome = String(document.getElementById('nova-categoria-nome')?.value || '').trim();
+        const nivel = document.getElementById('nova-categoria-nivel')?.value === 'subcategoria' ? 'subcategoria' : 'principal';
+        const grupo = String(document.getElementById('nova-categoria-grupo')?.value || '').trim();
+        const tipoRaw = document.getElementById('nova-categoria-tipo')?.value || 'despesa';
+        const tipo = ['despesa', 'receita'].includes(tipoRaw) ? tipoRaw : '';
+        const icone = document.getElementById('nova-categoria-icone')?.value || 'fa-tag';
+        const cor = document.getElementById('nova-categoria-cor')?.value || '#3B82F6';
+
+        if (!nome) {
+            Utils.showToast('Informe um nome para a categoria.', 'error');
+            return;
+        }
+        if (!tipo) {
+            Utils.showToast('O tipo deve ser Despesa ou Receita.', 'error');
+            return;
+        }
+        if (nivel === 'subcategoria' && !grupo) {
+            Utils.showToast('Escolha uma categoria principal válida para a subcategoria.', 'error');
+            return;
+        }
+        const payload = { nome, grupo, tipo, tipoCategoria: nivel, icone, cor };
+        const saved = id
+            ? Database.updateCategory(id, payload)
+            : Database.add('categorias', { id: 'cat_' + Date.now(), ...payload, fixa: false });
+        if (saved) {
+            Utils.showToast(id ? 'Categoria atualizada!' : 'Categoria adicionada!', 'success');
             App.updateCategorySelects();
             App.closeModal();
             App.scheduleRender();
         } else {
-            Utils.showToast('Esta categoria já existe.', 'error');
+            const reason = Database.getCategoryError?.() || 'Categoria inválida, protegida ou já utilizada.';
+            Utils.showToast(reason, 'error');
+            // Keep the entered values so the user can correct the exact invalid
+            // field; a later open/close always resets the form to clean defaults.
         }
     },
-
     submitContato: (e) => {
         e.preventDefault();
         const nome = document.getElementById('contato-nome').value;

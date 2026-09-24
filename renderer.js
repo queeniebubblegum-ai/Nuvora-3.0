@@ -8,8 +8,14 @@ export const Renderer = {
         try {
             // Atualizar o menu de navegação ativo
             document.querySelectorAll('.nav-item').forEach(el => {
-                el.classList.remove('bg-white/10', 'text-white', 'font-bold');
-                if(el.id === `nav-${currentPage}`) el.classList.add('bg-white/10', 'text-white', 'font-bold');
+                // Keep the existing utility-class state for compatibility, and add
+                // a scoped marker for the neutral Avenera sidebar treatment.
+                el.classList.remove('bg-white/10', 'text-white', 'font-bold', 'nv-sidebar__item--active');
+                el.removeAttribute('aria-current');
+                if(el.id === `nav-${currentPage}`) {
+                    el.classList.add('bg-white/10', 'text-white', 'font-bold', 'nv-sidebar__item--active');
+                    el.setAttribute('aria-current', 'page');
+                }
             });
 
             // Delegar a renderização para a estratégia correta baseada no nome da página
