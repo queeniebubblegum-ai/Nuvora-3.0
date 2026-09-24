@@ -687,19 +687,11 @@ export const PageRenderers = {
     },
 
     Contatos: (appState) => {
-        const actionsHtml = `<button data-action="openModal" data-modal="modal-contato" class="bg-brand-medium text-white px-6 py-2.5 rounded-[12px] font-bold text-sm shadow-brand-glow hover:-translate-y-0.5 hover:bg-brand-dark transition-all"><i class="fa-solid fa-plus mr-2"></i> Novo Registro</button>`;
-        
-        UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Contatos</h2>
-                    <p class="text-text-secondary text-sm">Associe nomes às suas transações.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
+        const total = Array.isArray(db.contatos) ? db.contatos.length : 0;
+        UIRenderer.updateDOM('main-content', `<div class="nv-contacts-page">
+            <header class="nv-contacts-header"><div><p class="nv-contacts-eyebrow">Organização</p><h1>Pessoas</h1><p>Associe contatos aos lançamentos e identifique rapidamente cada relação financeira.</p></div><button type="button" data-action="openModal" data-modal="modal-contato" class="nv-contacts-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i>Novo contato</button></header>
+            <section class="nv-contacts-summary" aria-label="Resumo de contatos"><span class="nv-contacts-summary__icon"><i class="fa-regular fa-address-book" aria-hidden="true"></i></span><div><strong>${total}</strong><span>${total === 1 ? 'contato cadastrado' : 'contatos cadastrados'}</span></div><p>Use contatos para tornar os lançamentos mais fáceis de reconhecer.</p></section>
             ${Components.contatosPage(db.contatos)}
-        `);
+        </div>`);
     }
 };

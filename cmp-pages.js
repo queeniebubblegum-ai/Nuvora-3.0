@@ -200,32 +200,39 @@ export const PageComponents = {
         </div>`;
     },
 
-    contatosPage: (contatos) => {
-        const listHtml = contatos.map(c => `
-            <div data-key="${c.id}" class="flex items-center justify-between p-4 bg-surface border border-border rounded-[16px] shadow-soft mb-3 group hover:-translate-y-0.5 transition-all">
-                <div class="flex items-center gap-4">
-                    <div class="w-10 h-10 bg-bg text-text-secondary rounded-[12px] flex items-center justify-center border border-border"><i class="fa-solid fa-address-book"></i></div>
-                    <div>
-                        <h4 class="font-bold text-text-primary text-sm font-primary">${Utils.escapeHTML(c.nome)}</h4>
-                        <p class="text-xs text-text-secondary font-mono mt-0.5 tracking-wider">${Utils.escapeHTML(c.documento || 'Documento não informado')}</p>
-                    </div>
-                </div>
-                <button data-action="delete" data-col="contatos" data-id="${c.id}" class="text-border hover:text-danger w-8 h-8 flex items-center justify-center rounded-lg hover:bg-bg transition-colors"><i class="fa-solid fa-trash-can"></i></button>
-            </div>
-        `).join('');
+    contatosPage: (contatos = []) => {
+        const source = Array.isArray(contatos) ? contatos : [];
+        const escape = value => Utils.escapeHTML(String(value ?? ''));
+        const initials = name => String(name || 'Contato')
+            .trim()
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map(part => part[0])
+            .join('')
+            .toLocaleUpperCase('pt-BR') || 'CT';
+        const documentLabel = document => document ? String(document) : 'Documento não informado';
 
-        const emptyState = `
-            <div class="text-center py-16 px-6 bg-surface rounded-[16px] border border-border shadow-soft flex flex-col items-center justify-center mt-6">
-                <div class="w-20 h-20 bg-bg text-brand-medium border border-border rounded-full flex items-center justify-center text-3xl mb-4 shadow-inner">
-                    <i class="fa-regular fa-address-book"></i>
-                </div>
-                <h4 class="font-bold text-text-primary text-lg mb-2 font-primary">Nenhum contato registrado</h4>
-                <p class="text-sm text-text-secondary mb-6 max-w-sm">Associe nomes, CPFs ou CNPJs às suas transações para um controle financeiro mais detalhado.</p>
-                <button data-action="openModal" data-modal="modal-contato" class="bg-brand-medium hover:bg-brand-dark text-white px-6 py-2.5 rounded-[12px] font-bold shadow-soft transition-all hover:-translate-y-0.5">Criar Registro</button>
-            </div>
-        `;
+        const listHtml = source.map(contact => {
+            const name = String(contact?.nome || 'Contato sem nome').trim() || 'Contato sem nome';
+            const id = escape(contact?.id);
+            return `<article data-key="${id}" class="nv-contact-row">
+                <span class="nv-contact-avatar" aria-hidden="true">${escape(initials(name))}</span>
+                <div class="nv-contact-copy"><h3>${escape(name)}</h3><p>${escape(documentLabel(contact?.documento))}</p></div>
+                <span class="nv-contact-type"><i class="fa-regular fa-address-card" aria-hidden="true"></i>Contato</span>
+                <button type="button" data-action="delete" data-col="contatos" data-id="${id}" class="nv-contact-delete" title="Excluir ${escape(name)}" aria-label="Excluir ${escape(name)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+            </article>`;
+        }).join('');
 
-        return `<div>${contatos.length ? listHtml : emptyState}</div>`;
+        const emptyState = `<section class="nv-contacts-empty" aria-labelledby="nv-contacts-empty-title">
+            <span class="nv-contacts-empty__icon"><i class="fa-regular fa-address-book" aria-hidden="true"></i></span>
+            <div><h3 id="nv-contacts-empty-title">Nenhum contato registrado</h3><p>Adicione pessoas ou empresas para dar contexto aos seus lançamentos.</p></div>
+            <button type="button" data-action="openModal" data-modal="modal-contato" class="nv-contacts-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i>Adicionar pessoa</button>
+        </section>`;
+
+        return source.length
+            ? `<section class="nv-contacts-list" aria-label="Contatos cadastrados">${listHtml}</section>`
+            : emptyState;
     },
 
     categoriesPage: (db) => {

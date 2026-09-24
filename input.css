@@ -2034,3 +2034,235 @@ html.avenera-reduced-motion *, html.avenera-reduced-motion *::before, html.avene
 @media (max-width: 900px) { .nv-onboarding-steps { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .nv-onboarding-checklist { padding: 15px; } .nv-onboarding-step { flex-wrap: wrap; } .nv-onboarding-step__action { margin-left: 36px; } }
 @media (prefers-reduced-motion: reduce) { .nv-onboarding-checklist__progress span { transition: none; } }
+
+/* --------------------------------------------------------------------------
+   Premium system consolidation
+   The product has several mature screens. These shared rules deliberately
+   align the shell, controls, page headers and surface hierarchy without
+   changing the financial meaning or the interaction contracts of a screen.
+---------------------------------------------------------------------------- */
+:root {
+  --c-brand-panel: #282438;
+  --c-brand-panel-strong: #201C2D;
+  --control-height: 42px;
+  --control-height-compact: 36px;
+  --page-max-width: 1280px;
+  --page-gutter: clamp(16px, 2.5vw, 32px);
+  --surface-border-subtle: color-mix(in srgb, var(--c-border) 82%, transparent);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* One visible focus language is safer and less visually noisy than each
+   screen inventing its own outline. */
+:where(button, [role="button"], summary, a, input, select, textarea):focus-visible {
+  outline: 0;
+  box-shadow: var(--focus-ring);
+}
+
+.nv-main { background: var(--surface-page); }
+#main-content {
+  max-width: var(--page-max-width) !important;
+  padding: var(--page-gutter) var(--page-gutter) 96px !important;
+  row-gap: 28px !important;
+}
+
+/* The application shell is intentionally quiet: navigation has presence,
+   while the work area remains the visual focus. */
+.nv-header {
+  background: color-mix(in srgb, var(--c-surface) 94%, transparent) !important;
+  border-bottom-color: var(--surface-border-subtle) !important;
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--c-text-primary) 4%, transparent);
+  backdrop-filter: blur(14px);
+}
+.nv-sidebar {
+  background: linear-gradient(180deg, var(--c-brand-panel-strong), var(--c-brand-panel)) !important;
+  border-right-color: rgba(255, 255, 255, .08) !important;
+}
+.nv-sidebar .nav-item {
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, .68);
+  min-height: 42px;
+}
+.nv-sidebar .nav-item:hover {
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+}
+.nv-sidebar .nav-item.active {
+  background: rgba(255, 255, 255, .12);
+  border-color: rgba(255, 255, 255, .10);
+  box-shadow: inset 3px 0 0 var(--c-brand-medium);
+  color: #fff;
+}
+.nv-sidebar .nav-item.active i { color: #D9CEFF; }
+.nv-sidebar__section-label { letter-spacing: .11em; }
+
+/* Shared page rhythm. A title introduces a workspace; a single, decisive CTA
+   closes the header. This brings Accounts, Planning, Categories and Dashboard
+   into the same hierarchy without forcing their content into one template. */
+.nv-dashboard-header,
+.nv-accounts-header,
+.nv-planning-header,
+.nv-category-page-header {
+  border-bottom: 1px solid var(--surface-border-subtle);
+  margin-bottom: 24px !important;
+  padding-bottom: 20px;
+}
+.nv-dashboard-header h1,
+.nv-accounts-header h1,
+.nv-planning-header h1,
+.nv-category-page-header h2 {
+  letter-spacing: -.045em;
+}
+.nv-dashboard-eyebrow,
+.nv-accounts-eyebrow,
+.nv-planning-eyebrow,
+.nv-category-eyebrow,
+.nv-reports-eyebrow,
+.nv-settings-eyebrow {
+  color: var(--c-brand-medium);
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+
+/* Primary controls have one cadence; secondary controls remain clearly
+   available but never compete with the main decision. */
+.nv-dashboard-primary-action,
+.nv-accounts-primary-action,
+.nv-planning-primary-action,
+.nv-category-primary-action,
+.nv-settings-primary-action {
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  min-height: var(--control-height);
+  padding-inline: 15px;
+}
+.nv-dashboard-secondary-action,
+.nv-accounts-secondary-action,
+.nv-settings-secondary-action,
+.nv-category-filter,
+.nv-dashboard-filter__option {
+  border-radius: var(--radius-control);
+  font-size: 12px;
+  min-height: 40px;
+}
+
+/* Keep elevation reserved for actionable or raised content. Passive data cards
+   should not jump on hover; a subtle border state is calmer and more premium. */
+.nv-dashboard-card,
+.nv-planning-overview,
+.nv-planning-panel,
+.nv-accounts-card,
+.nv-settings-panel,
+.nv-category-section,
+.nv-report-panel {
+  border-color: var(--surface-border-subtle);
+  box-shadow: var(--elevation-1);
+}
+.nv-dashboard-card:hover,
+.nv-planning-overview:hover,
+.nv-planning-panel:hover {
+  box-shadow: var(--elevation-1);
+  transform: none;
+}
+.nv-accounts-card:hover,
+.nv-settings-card:hover,
+.nv-category-section:hover {
+  border-color: color-mix(in srgb, var(--c-brand-medium) 38%, var(--c-border));
+}
+
+/* Form controls share comfortable touch targets, clear boundaries and a single
+   focus treatment. This also prevents iOS from zooming on compact inputs. */
+.nv-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.nv-main select,
+.nv-main textarea {
+  border-radius: var(--radius-control);
+  border-color: var(--c-border);
+}
+.nv-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.nv-main select {
+  min-height: var(--control-height);
+}
+.nv-main textarea { min-height: 96px; }
+.nv-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.nv-main select:focus,
+.nv-main textarea:focus {
+  border-color: var(--c-brand-medium);
+  box-shadow: var(--focus-ring);
+  outline: 0;
+}
+
+/* The global import/export buttons are useful operationally, but they are not
+   a primary day-to-day action. Keep them out of the header below wide desktop
+   widths; the same actions remain available in Settings and Accounts. */
+@media (max-width: 1100px) {
+  .nv-header__data-tools,
+  .nv-header__data-tools + .nv-header__action { display: none; }
+}
+
+@media (max-width: 640px) {
+  #main-content { padding-bottom: 88px !important; }
+  .nv-dashboard-header,
+  .nv-accounts-header,
+  .nv-planning-header,
+  .nv-category-page-header { margin-bottom: 20px !important; padding-bottom: 16px; }
+  .nv-dashboard-header h1,
+  .nv-accounts-header h1,
+  .nv-planning-header h1,
+  .nv-category-page-header h2 { font-size: 28px; }
+  .nv-main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  .nv-main select,
+  .nv-main textarea { font-size: 16px; }
+  .nv-dashboard-card,
+  .nv-planning-overview,
+  .nv-planning-panel,
+  .nv-accounts-card,
+  .nv-settings-panel { border-radius: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .nv-accounts-card,
+  .nv-settings-card,
+  .nv-category-section { transition: none; }
+}
+
+/* People and companies are supporting data, not a second transaction screen.
+   The compact list makes identification fast while retaining one clear action. */
+.nv-contacts-page { margin: 0 auto; max-width: var(--page-max-width); padding-bottom: 36px; }
+.nv-contacts-header { align-items: flex-end; border-bottom: 1px solid var(--surface-border-subtle); display: flex; gap: 24px; justify-content: space-between; margin-bottom: 20px; padding-bottom: 20px; }
+.nv-contacts-eyebrow { color: var(--c-brand-medium); font-size: 10px; font-weight: 800; letter-spacing: .12em; margin: 0 0 5px; text-transform: uppercase; }
+.nv-contacts-header h1 { color: var(--c-text-primary); font-size: clamp(26px, 3vw, 36px); font-weight: 750; letter-spacing: -.045em; line-height: 1.1; margin: 0; }
+.nv-contacts-header p:last-child { color: var(--c-text-secondary); font-size: 12px; line-height: 1.5; margin: 7px 0 0; max-width: 620px; }
+.nv-contacts-primary-action { align-items: center; background: var(--c-action-purple); border: 1px solid var(--c-action-purple); border-radius: var(--radius-control); box-shadow: var(--elevation-1); color: #fff; cursor: pointer; display: inline-flex; flex: 0 0 auto; font: inherit; font-size: 12px; font-weight: 750; gap: 8px; justify-content: center; min-height: var(--control-height); padding: 0 15px; white-space: nowrap; }
+.nv-contacts-primary-action:hover { background: color-mix(in srgb, var(--c-action-purple) 82%, #000); border-color: color-mix(in srgb, var(--c-action-purple) 82%, #000); transform: translateY(-1px); }
+.nv-contacts-summary { align-items: center; background: var(--c-surface-soft); border: 1px solid var(--surface-border-subtle); border-radius: var(--radius-lg); display: flex; gap: 12px; margin-bottom: 16px; min-height: 78px; padding: 15px 17px; }
+.nv-contacts-summary__icon, .nv-contact-avatar, .nv-contacts-empty__icon { align-items: center; background: var(--c-brand-soft); border-radius: 12px; color: var(--c-brand-deep); display: inline-flex; flex: 0 0 auto; justify-content: center; }
+.nv-contacts-summary__icon { height: 38px; width: 38px; }
+.nv-contacts-summary div { display: grid; gap: 2px; }
+.nv-contacts-summary strong { color: var(--c-text-primary); font-size: 22px; font-weight: 800; letter-spacing: -.04em; line-height: 1; }
+.nv-contacts-summary span:not(.nv-contacts-summary__icon) { color: var(--c-text-secondary); font-size: 10px; }
+.nv-contacts-summary p { color: var(--c-text-secondary); font-size: 11px; margin: 0 0 0 auto; text-align: right; }
+.nv-contacts-list { background: var(--c-surface); border: 1px solid var(--surface-border-subtle); border-radius: var(--radius-lg); box-shadow: var(--elevation-1); overflow: hidden; }
+.nv-contact-row { align-items: center; border-bottom: 1px solid var(--surface-border-subtle); display: grid; gap: 12px; grid-template-columns: 40px minmax(0, 1fr) auto 34px; min-height: 72px; padding: 12px 16px; }
+.nv-contact-row:last-child { border-bottom: 0; }
+.nv-contact-row:hover { background: color-mix(in srgb, var(--c-surface-soft) 72%, var(--c-surface)); }
+.nv-contact-avatar { font-size: 11px; font-weight: 800; height: 40px; letter-spacing: .04em; width: 40px; }
+.nv-contact-copy { min-width: 0; }
+.nv-contact-copy h3 { color: var(--c-text-primary); font-size: 13px; font-weight: 750; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-contact-copy p { color: var(--c-text-secondary); font-size: 10px; font-variant-numeric: tabular-nums; margin: 4px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nv-contact-type { align-items: center; background: var(--c-surface-soft); border: 1px solid var(--surface-border-subtle); border-radius: var(--radius-pill); color: var(--c-text-secondary); display: inline-flex; font-size: 9px; font-weight: 750; gap: 5px; padding: 5px 8px; white-space: nowrap; }
+.nv-contact-delete { align-items: center; background: transparent; border: 1px solid transparent; border-radius: 9px; color: var(--c-text-secondary); cursor: pointer; display: inline-flex; height: 34px; justify-content: center; width: 34px; }
+.nv-contact-delete:hover { background: var(--c-danger-soft); border-color: color-mix(in srgb, var(--c-danger) 28%, var(--c-border)); color: var(--c-danger); }
+.nv-contacts-empty { align-items: center; background: var(--c-surface); border: 1px dashed var(--c-border); border-radius: var(--radius-lg); display: flex; gap: 15px; min-height: 152px; padding: 24px; }
+.nv-contacts-empty__icon { height: 48px; width: 48px; }
+.nv-contacts-empty div { flex: 1 1 auto; min-width: 0; }
+.nv-contacts-empty h3 { color: var(--c-text-primary); font-size: 14px; margin: 0; }
+.nv-contacts-empty p { color: var(--c-text-secondary); font-size: 11px; line-height: 1.5; margin: 5px 0 0; max-width: 520px; }
+@media (max-width: 640px) { .nv-contacts-page { padding-bottom: 24px; } .nv-contacts-header { align-items: stretch; flex-direction: column; gap: 15px; padding-bottom: 16px; } .nv-contacts-primary-action { width: 100%; } .nv-contacts-summary { align-items: flex-start; } .nv-contacts-summary p { display: none; } .nv-contact-row { grid-template-columns: 40px minmax(0, 1fr) 34px; padding: 12px; } .nv-contact-type { display: none; } .nv-contacts-empty { align-items: flex-start; flex-wrap: wrap; } .nv-contacts-empty div { flex-basis: calc(100% - 63px); } .nv-contacts-empty .nv-contacts-primary-action { margin-left: 63px; width: calc(100% - 63px); } }
+@media (prefers-reduced-motion: reduce) { .nv-contacts-primary-action { transition: none; } }
