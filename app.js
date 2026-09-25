@@ -976,6 +976,60 @@ export const App = {
     },
     
     setDashboardPeriod: (period) => { App.viewState.dashboardPeriod = period; },
+    openContatoPerfil: (contatoId) => {
+        const c = (db.contatos || []).find(x => String(x.id) === String(contatoId));
+        if (!c) return;
+        const txs = (db.transacoes || []).filter(t => String(t.contatoId || '') === String(contatoId));
+        let pago = 0, recebido = 0;
+        txs.forEach(t => {
+            if (t.transferenciaInterna) return;
+            const v = Number(t.valor) || 0;
+            if (t.tipo === 'despesa') pago += v;
+            else if (t.tipo === 'receita') recebido += v;
+        });
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = (val === undefined || val === null || val === '') ? '—' : String(val); };
+        set('contato-perfil-nome', c.nome);
+        set('contato-perfil-documento', c.documento);
+        set('contato-perfil-tipo', c.tipo === 'pj' ? 'Pessoa Jurídica' : 'Pessoa Física');
+        set('contato-perfil-telefone', c.telefone);
+        set('contato-perfil-email', c.email);
+        set('contato-perfil-endereco', c.endereco);
+        set('contato-perfil-pago', Utils.formatMoney(pago));
+        set('contato-perfil-recebido', Utils.formatMoney(recebido));
+        set('contato-perfil-qtd', String(txs.length));
+        const lista = document.getElementById('contato-perfil-historico');
+        if (lista) {
+            if (!txs.length) {
+                lista.innerHTML = '<p class="text-xs text-text-secondary text-center py-6 border border-dashed border-border rounded-[10px] bg-bg">Nenhuma transação vinculada a este contato ainda.</p>';
+            } else {
+                const recentes = [...txs].sort((a,b) => String(b.data || '').localeCompare(String(a.data || ''))).slice(0, 15);
+                lista.innerHTML = recentes.map(t => {
+                    const isDespesa = t.tipo === 'despesa' && !t.transferenciaInterna;
+                    const cor = isDespesa ? 'text-danger' : 'text-success';
+                    const sinal = isDespesa ? '-' : '+';
+                    return `<div class="flex items-center justify-between gap-2 py-2 border-b border-border text-xs">
+                        <div class="min-w-0"><p class="font-medium text-text-primary truncate">${Utils.escapeHTML(t.desc || 'Lançamento')}</p><p class="text-text-secondary">${Utils.escapeHTML(t.data || '')} · ${Utils.escapeHTML(t.categoria || 'Sem categoria')}</p></div>
+                        <strong class="font-mono ${cor} shrink-0">${sinal} ${Utils.formatMoney(t.valor)}</strong>
+                    </div>`;
+                }).join('');
+            }
+        }
+        const btnExp = document.getElementById('contato-perfil-exportar');
+        if (btnExp) {
+            btnExp.onclick = () => {
+                const escapeCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+                const rows = [['Data','Descrição','Categoria','Tipo','Valor'], ...txs.map(t => [t.data || '', t.desc || '', t.categoria || '', t.tipo || '', t.tipo === 'despesa' && !t.transferenciaInterna ? -(Number(t.valor)||0) : (Number(t.valor)||0)])];
+                const csv = rows.map(r => r.map(escapeCsv).join(';')).join('\n');
+                const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `contato-${String(c.nome||'contato').replace(/\s+/g,'_')}.csv`;
+                a.click(); URL.revokeObjectURL(url);
+                Utils.showToast('CSV exportado com sucesso!', 'success');
+            };
+        }
+        App.openModal('modal-contato-perfil');
+    },
     setReportPeriod: (months) => {
         const value = parseInt(months, 10);
         if (!isValidReportPeriod(value)) return;

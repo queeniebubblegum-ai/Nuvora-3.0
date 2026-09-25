@@ -228,6 +228,7 @@ export const PageComponents = {
                 <span class="nv-contact-avatar" aria-hidden="true">${escape(initials(name))}</span>
                 <div class="nv-contact-copy"><h3>${escape(name)}</h3><p>${metaHtml}</p></div>
                 <span class="nv-contact-type"><i class="fa-solid ${tipoIcon}" aria-hidden="true"></i>${tipoLabel}</span>
+                <button type="button" onclick="App.openContatoPerfil('${id}')" class="nv-contact-delete" style="color:var(--c-brand-medium)" title="Ver perfil de ${escape(name)}" aria-label="Ver perfil"><i class="fa-solid fa-eye" aria-hidden="true"></i></button>
                 <button type="button" data-action="delete" data-col="contatos" data-id="${id}" class="nv-contact-delete" title="Excluir ${escape(name)}" aria-label="Excluir ${escape(name)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
             </article>`;
         }).join('');

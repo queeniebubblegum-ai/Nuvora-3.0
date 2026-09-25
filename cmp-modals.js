@@ -207,6 +207,38 @@ export const Modals = {
         </div>
     </div>
 
+    <div id="modal-contato-perfil" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+        <div class="bg-surface w-full max-w-md rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="flex justify-between items-center p-5 border-b border-border shrink-0">
+                <div class="min-w-0">
+                    <h3 id="contato-perfil-nome" class="text-lg font-bold font-primary text-text-primary truncate">Contato</h3>
+                    <p class="text-xs text-text-secondary mt-0.5"><span id="contato-perfil-tipo">Pessoa Física</span> · <span id="contato-perfil-documento" class="font-mono">—</span></p>
+                </div>
+                <button data-action="closeModal" class="text-text-secondary hover:text-text-primary shrink-0 ml-2" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-bg rounded-[10px] p-3"><p class="text-text-secondary mb-1"><i class="fa-solid fa-phone mr-1"></i>Telefone</p><p id="contato-perfil-telefone" class="font-medium text-text-primary">—</p></div>
+                    <div class="bg-bg rounded-[10px] p-3"><p class="text-text-secondary mb-1"><i class="fa-solid fa-envelope mr-1"></i>E-mail</p><p id="contato-perfil-email" class="font-medium text-text-primary break-all">—</p></div>
+                </div>
+                <div class="bg-bg rounded-[10px] p-3 text-xs"><p class="text-text-secondary mb-1"><i class="fa-solid fa-location-dot mr-1"></i>Endereço</p><p id="contato-perfil-endereco" class="font-medium text-text-primary">—</p></div>
+                <div class="grid grid-cols-3 gap-2">
+                    <div class="bg-danger/10 rounded-[10px] p-3 text-center"><p class="text-[9px] uppercase font-bold text-text-secondary mb-1">Total pago</p><p id="contato-perfil-pago" class="text-sm font-bold font-mono text-danger">R$ 0,00</p></div>
+                    <div class="bg-success/10 rounded-[10px] p-3 text-center"><p class="text-[9px] uppercase font-bold text-text-secondary mb-1">Recebido</p><p id="contato-perfil-recebido" class="text-sm font-bold font-mono text-success">R$ 0,00</p></div>
+                    <div class="bg-brand-soft rounded-[10px] p-3 text-center"><p class="text-[9px] uppercase font-bold text-text-secondary mb-1">Movimentos</p><p id="contato-perfil-qtd" class="text-sm font-bold font-mono text-brand-medium">0</p></div>
+                </div>
+                <div>
+                    <p class="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-2">Histórico de pagamentos (recentes)</p>
+                    <div id="contato-perfil-historico" class="space-y-1"></div>
+                </div>
+            </div>
+            <div class="p-4 border-t border-border shrink-0 flex gap-2">
+                <button data-action="closeModal" class="flex-1 py-2.5 rounded-[10px] border border-border text-text-primary text-sm font-bold hover:bg-bg transition-colors">Fechar</button>
+                <button id="contato-perfil-exportar" class="flex-1 py-2.5 rounded-[10px] bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors"><i class="fa-solid fa-file-csv mr-1"></i>Exportar CSV</button>
+            </div>
+        </div>
+    </div>
+
     <div id="modal-categoria" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
