@@ -1,0 +1,86 @@
+<!-- ============================================================
+     Barra de filtros unificada v4 (Fase 2) — para a página de Lançamentos
+     e também reutilizável no Dashboard.
+     Emite CustomEvent 'filtros:change' com {tab, busca, periodo, ordenacao}
+     e 'filtros:export'. Conecta a transaction-filters.js existente.
+     ============================================================ -->
+<div class="space-y-3 mb-5">
+  <!-- Linha 1: tabs de tipo + ações -->
+  <div class="flex items-center gap-2 flex-wrap">
+    <div class="inline-flex p-1 bg-surface-2 rounded-[var(--radius-2)]" role="tablist" id="tx-tabs">
+      <button class="tx-tab px-3.5 py-1.5 rounded-[var(--radius-1)] text-sm font-semibold bg-surface shadow-soft text-text active" data-filter="Todas" aria-pressed="true">Todas</button>
+      <button class="tx-tab px-3.5 py-1.5 rounded-[var(--radius-1)] text-sm font-medium text-muted hover:text-text" data-filter="Despesa" aria-pressed="false">Despesas</button>
+      <button class="tx-tab px-3.5 py-1.5 rounded-[var(--radius-1)] text-sm font-medium text-muted hover:text-text" data-filter="Receita" aria-pressed="false">Receitas</button>
+      <button class="tx-tab px-3.5 py-1.5 rounded-[var(--radius-1)] text-sm font-medium text-muted hover:text-text" data-filter="Pendente" aria-pressed="false">Pendentes</button>
+    </div>
+    <div class="flex-1"></div>
+    <button class="btn-ghost !py-1.5 text-sm" data-action="filters" aria-label="Mais filtros">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      Filtros
+    </button>
+    <button class="btn-ghost !py-1.5 text-sm" data-action="sort" aria-label="Ordenar">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16M7 20l-3-3M7 4l3 3M17 20V4M17 4l3 3M17 20l-3-3"/></svg>
+      Ordenar
+    </button>
+  </div>
+
+  <!-- Linha 2: busca + período + exportar -->
+  <div class="flex items-center gap-2 flex-wrap">
+    <div class="relative flex-1 min-w-[200px]">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted pointer-events-none"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="tx-search" type="search" class="input !pl-10" placeholder="Buscar transação, conta ou categoria" aria-label="Buscar transações">
+    </div>
+    <select id="tx-period" class="input !w-auto" aria-label="Período">
+      <option value="mes-atual">Este mês</option>
+      <option value="mes-anterior">Mês passado</option>
+      <option value="ultimos-30">Últimos 30 dias</option>
+      <option value="ano-atual">Este ano</option>
+      <option value="personalizado">Personalizado…</option>
+    </select>
+    <button class="btn-outline !py-2 text-sm" data-action="export">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      Exportar
+    </button>
+  </div>
+
+  <!-- Chips de filtro ativo (aparecem quando houver filtros aplicados) -->
+  <div id="tx-active-filters" class="flex items-center gap-2 flex-wrap hidden">
+    <!-- populado por JS: <span class="chip chip-active">Categoria: Alimentação ✕</span> -->
+    <button class="text-xs text-muted underline hover:text-text" data-action="clear-filters">Limpar filtros</button>
+  </div>
+</div>
+
+<script>
+/* Controller leve da barra de filtros — emite eventos, não toca no DOM da lista */
+(function () {
+  const state = { tab: 'Todas', busca: '', periodo: 'mes-atual', ordenacao: 'data-desc', filtros: {} };
+  const emit = () => document.dispatchEvent(new CustomEvent('filtros:change', { detail: { ...state } }));
+
+  document.querySelectorAll('.tx-tab').forEach(b => b.addEventListener('click', () => {
+    state.tab = b.dataset.filter;
+    document.querySelectorAll('.tx-tab').forEach(x => {
+      const on = x === b;
+      x.classList.toggle('active', on); x.classList.toggle('bg-surface', on);
+      x.classList.toggle('shadow-soft', on); x.classList.toggle('text-text', on);
+      x.classList.toggle('font-semibold', on); x.classList.toggle('text-muted', !on);
+      x.setAttribute('aria-pressed', String(on));
+    });
+    // integra com transaction-filters.js existente (se exposto)
+    if (window.TransactionFilters) TransactionFilters.setTipo(state.tab);
+    emit();
+  }));
+
+  const search = document.getElementById('tx-search');
+  let t;
+  search?.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { state.busca = search.value; emit(); }, 180); });
+  document.getElementById('tx-period')?.addEventListener('change', (e) => { state.periodo = e.target.value; emit(); });
+
+  document.querySelector('[data-action="sort"]')?.addEventListener('click', () => {
+    const ordens = ['data-desc', 'data-asc', 'valor-desc', 'valor-asc'];
+    state.ordenacao = ordens[(ordens.indexOf(state.ordenacao) + 1) % ordens.length];
+    emit();
+  });
+  document.querySelector('[data-action="export"]')?.addEventListener('click', () =>
+    document.dispatchEvent(new CustomEvent('filtros:export', { detail: { ...state } })));
+})();
+</script>
