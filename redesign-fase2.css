@@ -1,0 +1,230 @@
+/* ============================================================
+   NUVORA / AVENERA — REDESIGN FASE 2
+   Override visual para as telas existentes (Dashboard, Transações,
+   Agenda, Planejamento, Relatórios, Contas, Configurações).
+   É aditivo: carregar DEPOIS do styles.css.
+   Se algo ficar estranho, é só remover o <link> deste arquivo.
+   ============================================================ */
+
+/* ---------- Transições suaves em tudo ---------- */
+body .nv-dashboard-card,
+body .nv-analysis-metric,
+body .nv-report-metric,
+body .nv-tx-summary-card,
+body .nv-accounts-summary-card,
+body .nv-standard-summary-card,
+body .nv-accounts-card,
+body .nv-settings-card,
+body .nv-planning-signal-card,
+body .nv-spendable-card {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+/* ---------- Cartões KPI: elevação no hover + sombra mais macia ---------- */
+body .nv-dashboard-card:hover,
+body .nv-analysis-metric:hover,
+body .nv-report-metric:hover,
+body .nv-tx-summary-card:hover,
+body .nv-accounts-summary-card:hover,
+body .nv-standard-summary-card:hover,
+body .nv-accounts-card:hover,
+body .nv-settings-card:hover,
+body .nv-planning-signal-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(35,32,28,.10) !important;
+}
+
+/* ---------- Cabeçalhos de página: destaque sutil ---------- */
+body .nv-dashboard-header,
+body .nv-tx-page-header,
+body .nv-planning-header,
+body .nv-accounts-header,
+body .nv-category-page-header,
+body .nv-contacts-header,
+body .nv-page-header,
+body .nv-standard-page-header,
+body .nv-reports-navigation.nv-reports-context-card {
+  border-radius: var(--nv-ui-page-radius, 16px) !important;
+  box-shadow: 0 2px 10px rgba(35,32,28,.05) !important;
+}
+
+/* Título com a fonte de display (Fraunces) já mapeada em font-primary */
+body .nv-dashboard-header h1,
+body .nv-dashboard-header h2,
+body .nv-tx-page-header h1,
+body .nv-planning-header h1,
+body .nv-accounts-header h1,
+body .nv-contacts-header h1,
+body .nv-page-header h1,
+body .nv-standard-page-header h1,
+body .nv-standard-page-header h2,
+body .nv-category-page-header h2 {
+  letter-spacing: -.03em !important;
+}
+
+/* ---------- Botão primário: roxo com brilho no hover ---------- */
+body .nv-accounts-primary-action,
+body .nv-category-primary-action,
+body .nv-contacts-primary-action,
+body .nv-dashboard-primary-action,
+body .nv-planning-primary-action,
+body .nv-settings-primary-action,
+body .nv-tx-primary-action {
+  background: linear-gradient(135deg, var(--c-action-purple), var(--c-brand-medium)) !important;
+  border-color: transparent !important;
+  box-shadow: 0 4px 14px rgba(91,58,162,.30) !important;
+  transition: transform .15s ease, box-shadow .15s ease, filter .15s ease !important;
+}
+body .nv-accounts-primary-action:hover,
+body .nv-category-primary-action:hover,
+body .nv-contacts-primary-action:hover,
+body .nv-dashboard-primary-action:hover,
+body .nv-planning-primary-action:hover,
+body .nv-settings-primary-action:hover,
+body .nv-tx-primary-action:hover {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 18px rgba(91,58,162,.40) !important;
+  filter: brightness(1.06) !important;
+}
+
+/* ---------- Linhas de tabela/lista: hover suave ---------- */
+body .nv-tx-row:hover,
+body .nv-contact-row:hover,
+body .nv-category-subrow:hover,
+body .nv-planning-goal-row:hover,
+body .nv-planning-due-row:hover,
+body .nv-standard-data-row:hover {
+  background: color-mix(in srgb, var(--c-brand-soft) 45%, var(--c-surface)) !important;
+}
+
+/* ---------- Chips / badges: cantos mais fechados ---------- */
+body .nv-category-status,
+body .nv-category-type,
+body .nv-contact-type,
+body .nv-planning-count,
+body .nv-tx-reference {
+  border-radius: 999px !important;
+  padding: 3px 10px !important;
+  font-weight: 600 !important;
+}
+
+/* ---------- Barras de ferramentas (filtros) ---------- */
+body .nv-category-toolbar,
+body .nv-dashboard-filter,
+body .nv-report-toolbar,
+body .nv-tx-filters {
+  border-radius: 14px !important;
+  padding: 10px 12px !important;
+}
+body .nv-category-filter,
+body .nv-category-filters,
+body .nv-dashboard-filter__option,
+body .nv-reports-tab,
+body .nv-reports-tabs,
+body .nv-tx-filter-tabs,
+body .nv-tx-tab {
+  border-radius: 10px !important;
+  transition: all .15s ease !important;
+}
+body .nv-tx-tab:hover,
+body .nv-reports-tab:hover,
+body .nv-dashboard-filter__option:hover {
+  background: var(--c-brand-soft) !important;
+  color: var(--c-action-purple) !important;
+}
+
+/* ---------- Card de saldo disponível (hero) ---------- */
+body .nv-spendable-card {
+  background: linear-gradient(135deg, var(--c-brand-deep), var(--c-action-purple)) !important;
+  color: #fff !important;
+  border-color: transparent !important;
+  box-shadow: 0 12px 32px rgba(76,60,112,.35) !important;
+}
+body .nv-spendable-card * { color: rgba(255,255,255,.92) !important; }
+body .nv-spendable-card .num,
+body .nv-spendable-card .font-mono,
+body .nv-spendable-card strong { color: #fff !important; }
+
+/* ---------- Inputs e selects ---------- */
+body .nv-category-search input,
+body .nv-report-select,
+body .nv-settings-field input,
+body .nv-settings-field select,
+body .nv-settings-field textarea,
+body .nv-tx-input {
+  border-radius: var(--nv-ui-control-radius, 9px) !important;
+  transition: border-color .15s ease, box-shadow .15s ease !important;
+}
+body .nv-category-search input:focus,
+body .nv-report-select:focus,
+body .nv-settings-field input:focus,
+body .nv-settings-field select:focus,
+body .nv-settings-field textarea:focus,
+body .nv-tx-input:focus {
+  border-color: var(--c-brand-medium) !important;
+  box-shadow: 0 0 0 3px rgba(129,112,181,.18) !important;
+  outline: none !important;
+}
+
+/* ---------- Estados vazios ---------- */
+body .nv-accounts-empty,
+body .nv-category-empty,
+body .nv-contacts-empty,
+body .nv-planning-empty,
+body .nv-report-empty,
+body .nv-settings-empty,
+body .nv-standard-empty-state,
+body .nv-tx-empty {
+  border-radius: var(--nv-ui-card-radius, 13px) !important;
+}
+
+/* ---------- Painéis ---------- */
+body .nv-accounts-card,
+body .nv-accounts-overview,
+body .nv-accounts-section,
+body .nv-analysis-summary,
+body .nv-category-section,
+body .nv-contacts-list,
+body .nv-planning-details-card,
+body .nv-planning-overview,
+body .nv-planning-panel,
+body .nv-report-panel,
+body .nv-settings-panel,
+body .nv-spendable-card,
+body .nv-standard-page-panel,
+body .nv-tx-panel {
+  border-radius: var(--nv-ui-panel-radius, 14px) !important;
+}
+
+/* ---------- Números: fonte tabular em valores ---------- */
+body .font-mono,
+body .num {
+  font-variant-numeric: tabular-nums !important;
+  letter-spacing: -.01em !important;
+}
+
+/* ---------- Scrollbar mais fina ---------- */
+body ::-webkit-scrollbar { width: 8px; height: 8px; }
+body ::-webkit-scrollbar-thumb { background: rgba(128,128,128,.25); border-radius: 999px; }
+body ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- FAB (botão + flutuante): destaque ---------- */
+body #btn-flutuante-main {
+  background: linear-gradient(135deg, var(--c-action-purple), var(--c-brand-medium)) !important;
+  box-shadow: 0 8px 24px rgba(91,58,162,.40) !important;
+  transition: transform .15s ease, box-shadow .15s ease !important;
+}
+body #btn-flutuante-main:hover {
+  transform: scale(1.06) !important;
+  box-shadow: 0 10px 28px rgba(91,58,162,.50) !important;
+}
+
+/* ---------- Ajuste de espaçamento no conteúdo ---------- */
+body #main-content {
+  max-width: 1400px !important;
+}
+
+/* ---------- Dark mode: manter contrastes ---------- */
+.dark body .nv-spendable-card {
+  background: linear-gradient(135deg, #1a1625, var(--c-action-purple)) !important;
+}
