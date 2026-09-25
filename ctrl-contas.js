@@ -124,9 +124,13 @@ export const ContasController = {
     submitContato: (e) => {
         e.preventDefault();
         const nome = document.getElementById('contato-nome').value;
-        const documento = document.getElementById('contato-documento').value;
-        
-        Database.add('contatos', { id: Date.now(), nome, documento });
+        const documento = document.getElementById('contato-documento')?.value || '';
+        const tipo = document.getElementById('contato-tipo')?.value || 'pf';
+        const telefone = document.getElementById('contato-telefone')?.value || '';
+        const email = document.getElementById('contato-email')?.value || '';
+        const endereco = document.getElementById('contato-endereco')?.value || '';
+
+        Database.add('contatos', { id: Date.now(), nome, documento, tipo, telefone, email, endereco });
         Utils.showToast('Contato salvo com sucesso!', 'success');
         App.updateContatoSelect();
         App.closeModal();

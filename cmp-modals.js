@@ -174,12 +174,31 @@ export const Modals = {
             </div>
             <form data-submit="contato" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <div>
+                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Tipo</label>
+                    <select id="contato-tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
+                        <option value="pf">Pessoa Física (CPF)</option>
+                        <option value="pj">Pessoa Jurídica (CNPJ)</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome / Razão Social</label>
                     <input id="contato-nome" placeholder="Ex: João da Silva" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
                 </div>
                 <div>
                     <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">CPF ou CNPJ</label>
                     <input id="contato-documento" placeholder="Apenas números" class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Telefone / WhatsApp</label>
+                    <input id="contato-telefone" placeholder="(00) 00000-0000" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">E-mail</label>
+                    <input id="contato-email" type="email" placeholder="nome@email.com" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
+                </div>
+                <div>
+                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Endereço (opcional)</label>
+                    <textarea id="contato-endereco" rows="2" placeholder="Rua, número, cidade" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm resize-none"></textarea>
                 </div>
                 <div class="shrink-0 mt-3">
                     <button type="submit" class="w-full py-2.5 bg-brand-medium hover:bg-brand-dark text-white text-sm font-bold rounded-[10px] shadow-soft transition-all">Salvar Registro</button>

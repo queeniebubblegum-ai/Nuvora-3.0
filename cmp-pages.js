@@ -217,10 +217,17 @@ export const PageComponents = {
         const listHtml = source.map(contact => {
             const name = String(contact?.nome || 'Contato sem nome').trim() || 'Contato sem nome';
             const id = escape(contact?.id);
+            const tipoLabel = contact?.tipo === 'pj' ? 'PJ' : 'PF';
+            const tipoIcon = contact?.tipo === 'pj' ? 'fa-building' : 'fa-user';
+            const metaParts = [];
+            if (contact?.documento) metaParts.push(escape(String(contact.documento)));
+            if (contact?.telefone) metaParts.push('<i class="fa-solid fa-phone" aria-hidden="true"></i> ' + escape(String(contact.telefone)));
+            if (contact?.email) metaParts.push('<i class="fa-solid fa-envelope" aria-hidden="true"></i> ' + escape(String(contact.email)));
+            const metaHtml = metaParts.length ? metaParts.join(' · ') : 'Sem detalhes adicionais';
             return `<article data-key="${id}" class="nv-contact-row">
                 <span class="nv-contact-avatar" aria-hidden="true">${escape(initials(name))}</span>
-                <div class="nv-contact-copy"><h3>${escape(name)}</h3><p>${escape(documentLabel(contact?.documento))}</p></div>
-                <span class="nv-contact-type"><i class="fa-regular fa-address-card" aria-hidden="true"></i>Contato</span>
+                <div class="nv-contact-copy"><h3>${escape(name)}</h3><p>${metaHtml}</p></div>
+                <span class="nv-contact-type"><i class="fa-solid ${tipoIcon}" aria-hidden="true"></i>${tipoLabel}</span>
                 <button type="button" data-action="delete" data-col="contatos" data-id="${id}" class="nv-contact-delete" title="Excluir ${escape(name)}" aria-label="Excluir ${escape(name)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
             </article>`;
         }).join('');
