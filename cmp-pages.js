@@ -8,6 +8,7 @@ import { calculatePeriodTotals, isExpense, isIncome, isInvoicePayment, isTransfe
 import { addMoney } from './money-math.js';
 import { cardInvoiceDueDate } from './invoice-provisioning.js';
 import { isInvoiceSchedulePending } from './invoice-payment.js';
+import { renderTransactionTypeMenu } from './transaction-type-menu.js';
 
 export const accountPortfolioSummary = ({
     banks = [],
@@ -294,7 +295,7 @@ export const PageComponents = {
                 const rowSearch = `${item.nome} ${item.grupo} ${item.subgrupo} ${item.tipoLabel} ${item.statusLabel} ${hierarchy}`;
                 return `<div class="nv-category-subrow ${item.archived ? 'is-archived' : ''}" data-category-row data-category-id="${escape(item.id)}" data-search="${escape(rowSearch.toLocaleLowerCase('pt-BR'))}" data-category-status="${item.archived ? 'archived' : 'active'}"><span class="nv-category-row-icon" style="background:${escape(item.color)}" title="${escape(item.nome)}"><i class="fa-solid ${escape(item.icon)}" aria-hidden="true"></i></span><span class="nv-category-subrow__name"><strong>${escape(rowLabel)}</strong><small>${escape(hierarchy)}</small></span><span class="nv-category-type nv-category-type--${item.tipo === 'receita' ? 'income' : 'expense'}">${escape(item.tipoLabel)}</span><span class="nv-category-status ${item.archived ? 'is-archived' : item.fixa ? 'is-fixed' : 'is-custom'}">${escape(item.statusLabel)}</span>${actionMenu(item)}</div>`;
             }).join('');
-            return `<details class="nv-category-card" data-category-type="${base.tipo}" data-category-count="${entries.length}" data-group-count="1" data-search="${escape(searchText.toLocaleLowerCase('pt-BR'))}" open><summary class="nv-category-card__summary"><span class="nv-category-card__icon" style="background:${escape(base.color)}"><i class="fa-solid ${escape(base.icon)}" aria-hidden="true"></i></span><span class="nv-category-card__main"><strong>${escape(group)}</strong><span>Grupo · ${entries.length} ${entries.length === 1 ? 'categoria' : 'categorias'}</span></span><span class="nv-category-card__type">${escape(base.tipoLabel)}</span><span class="nv-category-card__count">${entries.length} ${entries.length === 1 ? 'registro' : 'registros'}</span><i class="fa-solid fa-chevron-down nv-category-card__chevron" aria-hidden="true"></i></summary><div class="nv-category-subrows">${rows}</div></details>`;
+            return `<details class="nv-category-card" data-category-type="${base.tipo}" data-category-count="${entries.length}" data-group-count="1" data-search="${escape(searchText.toLocaleLowerCase('pt-BR'))}"><summary class="nv-category-card__summary"><span class="nv-category-card__icon" style="background:${escape(base.color)}"><i class="fa-solid ${escape(base.icon)}" aria-hidden="true"></i></span><span class="nv-category-card__main"><strong>${escape(group)}</strong><span>Grupo · ${entries.length} ${entries.length === 1 ? 'categoria' : 'categorias'}</span></span><span class="nv-category-card__type">${escape(base.tipoLabel)}</span><span class="nv-category-card__count">${entries.length} ${entries.length === 1 ? 'registro' : 'registros'}</span><i class="fa-solid fa-chevron-down nv-category-card__chevron" aria-hidden="true"></i></summary><div class="nv-category-subrows">${rows}</div></details>`;
         }).join('');
         const section = (type, title, icon, items, emptyText) => `<section class="nv-category-section" data-category-section="${type}" aria-labelledby="nv-category-${type}-title"><div class="nv-category-section__heading"><div><p class="nv-category-eyebrow">Organização</p><h3 id="nv-category-${type}-title"><i class="fa-solid ${icon}" aria-hidden="true"></i>${title}</h3></div><span class="nv-category-section__count" data-section-count>${items.length} ${items.length === 1 ? 'categorias' : 'categorias'} · ${groupBy(items).length} ${groupBy(items).length === 1 ? 'grupo' : 'grupos'}</span></div><div class="nv-category-list">${groupCards(items) || `<div class="nv-category-empty"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>${emptyText}</span></div>`}</div></section>`;
         const card = (value, label, icon, extra = '') => `<div class="nv-category-summary-card ${extra}"><span class="nv-category-summary-card__icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></span><span><strong>${value}</strong><small>${label}</small></span></div>`;
@@ -314,13 +315,18 @@ export const PageComponents = {
             const value = f?.[key];
             return count + (value !== null && value !== undefined && String(value).trim() !== '' ? 1 : 0);
         }, 0);
+        const advancedFilterKeys = ['categoria', 'bancoId', 'dataInicio', 'dataFim'];
+        const activeAdvancedFilterCount = advancedFilterKeys.reduce((count, key) => {
+            const value = f?.[key];
+            return count + (value !== null && value !== undefined && String(value).trim() !== '' ? 1 : 0);
+        }, 0);
         const tabs = [
             ['', 'Todas', 'fa-layer-group'],
             ['receita', 'Receitas', 'fa-arrow-trend-up'],
             ['despesa', 'Despesas', 'fa-arrow-trend-down'],
             ['transferencia', 'Transferências', 'fa-right-left']
         ];
-        const tabHtml = tabs.map(([value, label, icon]) => `<button type="button" role="tab" data-action="setTransactionTypeFilter" data-payload="${value}" class="nv-tx-tab ${currentType === value ? 'is-active' : ''}" aria-selected="${currentType === value ? 'true' : 'false'}" aria-pressed="${currentType === value ? 'true' : 'false'}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`).join('');
+        const tabHtml = tabs.map(([value, label, icon]) => `<button type="button" data-action="setTransactionTypeFilter" data-payload="${value}" class="nv-tx-tab ${currentType === value ? 'is-active' : ''}" aria-pressed="${currentType === value ? 'true' : 'false'}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`).join('');
 
         let contas = '<option value="">Todas as contas</option>';
         if (bancos?.length) contas += '<optgroup label="Contas bancárias">' + bancos.map(b => `<option value="banco_${Utils.escapeHTML(String(b.id))}" ${f.bancoId === 'banco_'+b.id ? 'selected' : ''}>${Utils.escapeHTML(b.instituicao && b.instituicao !== 'Outro' ? b.instituicao + ' (' + b.nome + ')' : b.nome)}</option>`).join('') + '</optgroup>';
@@ -336,17 +342,16 @@ export const PageComponents = {
             : '';
 
         return `<div class="nv-tx-filters">
-            <div class="nv-tx-filter-tabs" role="tablist" aria-label="Filtrar por tipo">${tabHtml}</div>
+            <div class="nv-tx-filter-tabs" role="group" aria-label="Filtrar por tipo">${tabHtml}</div>
             <div class="nv-tx-filter-grid">
                 <div class="nv-tx-filter-search"><label for="transactions-search" class="nv-tx-label">Buscar movimentação</label><div class="nv-tx-search-wrap"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><input id="transactions-search" type="search" autocomplete="off" placeholder="Descrição ou identificador" value="${Utils.escapeHTML(f.desc || '')}" data-input="setFilterDesc" class="nv-tx-input"></div></div>
                 <div><label for="transactions-month" class="nv-tx-label">Período</label><select id="transactions-month" data-change="setFilter" data-filter-key="mes" class="nv-tx-input"><option value="">Todos os meses</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>
-                <div><label for="transactions-type" class="nv-tx-label">Tipo</label><select id="transactions-type" data-change="setFilter" data-filter-key="tipo" class="nv-tx-input"><option value="">Todos os tipos</option><option value="receita" ${f.tipo==='receita'?'selected':''}>Receitas</option><option value="despesa" ${f.tipo==='despesa'?'selected':''}>Despesas</option><option value="transferencia" ${f.tipo==='transferencia'?'selected':''}>Transferências</option></select></div>
             </div>
-            <details class="nv-tx-more-filters" ${activeFilterCount > 0 ? 'open' : ''}><summary>Mais filtros <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid">
+            ${clearFiltersHtml ? `<div class="nv-tx-filter-utilities" aria-live="polite">${clearFiltersHtml}</div>` : ''}
+            <details class="nv-tx-more-filters" ${activeAdvancedFilterCount > 0 ? 'open' : ''}><summary>Mais filtros${activeAdvancedFilterCount ? ` <span class="nv-tx-more-count">${activeAdvancedFilterCount} ativos</span>` : ''}<i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid">
                 <div><label for="transactions-category" class="nv-tx-label">Categoria</label><select id="transactions-category" data-change="setFilter" data-filter-key="categoria" class="nv-tx-input"><option value="">Todas as categorias</option>${cats}</select></div>
                 <div><label for="transactions-account" class="nv-tx-label">Conta ou cartão</label><select id="transactions-account" data-change="setFilter" data-filter-key="bancoId" class="nv-tx-input">${contas}</select></div>
                 <div class="nv-tx-date-range"><div><label for="transactions-start" class="nv-tx-label">De</label><input id="transactions-start" type="date" data-change="setFilter" data-filter-key="dataInicio" value="${Utils.escapeHTML(f.dataInicio || '')}" class="nv-tx-input"></div><div><label for="transactions-end" class="nv-tx-label">Até</label><input id="transactions-end" type="date" data-change="setFilter" data-filter-key="dataFim" value="${Utils.escapeHTML(f.dataFim || '')}" class="nv-tx-input"></div></div>
-                ${clearFiltersHtml}
             </div></details>
         </div>`;
     },
@@ -372,7 +377,13 @@ export const PageComponents = {
         const allVisibleSelected = list.length > 0 && list.every(t => selected.includes(String(t.id)));
 
         if (!list.length) {
-            return `<div class="nv-tx-empty"><div class="nv-tx-empty-icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div><h4>Nenhuma transação encontrada</h4><p>Os filtros aplicados não retornaram resultados ou você ainda não registrou movimentações.</p><button type="button" data-action="openModal" data-modal="modal-transacao" data-type="despesa" class="nv-tx-empty-action">Nova transação</button></div>`;
+            const filters = state?.filters && typeof state.filters === 'object' ? state.filters : {};
+            const hasActiveFilters = Object.values(filters).some(value => value !== null && value !== undefined && String(value).trim() !== '') || state?.uncategorizedOnly === true;
+            const emptyTitle = hasActiveFilters ? 'Nenhuma movimentação encontrada' : 'Sua lista está pronta para começar';
+            const emptyCopy = hasActiveFilters
+                ? 'Ajuste os filtros ou limpe a busca para ver outros resultados.'
+                : 'Registre uma receita, despesa ou transferência; você escolhe o tipo ao continuar.';
+            return `<div class="nv-tx-empty" role="status" aria-live="polite"><div class="nv-tx-empty-icon"><i class="fa-solid fa-receipt" aria-hidden="true"></i></div><h4>${emptyTitle}</h4><p>${emptyCopy}</p>${renderTransactionTypeMenu({ id: 'transactions-empty-type-menu', variant: 'empty' })}</div>`;
         }
 
         return `<div class="nv-tx-list-head"><label class="nv-tx-select-all"><input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} aria-label="Selecionar todas as movimentações visíveis"><span>Selecionar página</span></label>${selected.length > 0 ? `<button type="button" data-action="deleteSelectedTx" class="nv-tx-bulk-delete"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Apagar selecionadas (${selected.length})</button>` : ''}</div><div class="nv-tx-list">${list.map((t, index) => {
@@ -686,94 +697,83 @@ export const PageComponents = {
         };
 
         const listHtml = contasFiltradas.length === 0 ? `
-            <div class="p-8 text-center text-text-secondary border-t border-border">
-                <i class="fa-solid fa-receipt text-4xl mb-3 opacity-30 block"></i>
+            <div class="nv-agenda-empty-state">
+                <i class="fa-solid fa-receipt" aria-hidden="true"></i>
                 <p>Nenhuma conta para este mês</p>
             </div>
         ` : contasFiltradas.map(conta => {
             const catObj = getCategoryInfo(conta.categoria);
+            const rawCategoryColor = String(catObj.cor || '');
+            const categoryColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(rawCategoryColor) ? rawCategoryColor : '#7665B4';
             const dataVenc = new Date(conta.dataVencimento + 'T12:00:00');
             const isOverdue = conta.status === 'pendente' && dataVenc < hoje && dataVenc.getDate() !== hoje.getDate();
             
-            let badgeClass = 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400';
+            let badgeClass = 'is-pending';
             let badgeText = 'Pendente';
             
             if (conta.status === 'pago') {
-                badgeClass = 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400';
+                badgeClass = 'is-paid';
                 badgeText = 'Paga';
             } else if (isOverdue) {
-                badgeClass = 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400';
+                badgeClass = 'is-overdue';
                 badgeText = 'Vencida';
             }
 
             return `
-            <div data-key="${conta.id}" class="p-4 flex flex-wrap items-center gap-4 hover:bg-bg transition-colors border-t border-border first:border-0 group">
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center border border-border" style="background-color: ${catObj.cor}20">
-                    <i class="fa-solid ${catObj.icone}" style="color: ${catObj.cor}"></i>
+            <article data-key="${conta.id}" class="nv-agenda-row nv-standard-data-row" role="listitem">
+                <span class="nv-agenda-category-icon" style="--agenda-category-color:${categoryColor}">
+                    <i class="fa-solid ${Utils.escapeHTML(String(catObj.icone || 'fa-receipt'))}" aria-hidden="true"></i>
+                </span>
+                <div class="nv-agenda-row-copy">
+                    <p class="nv-agenda-row-title">${Utils.escapeHTML(conta.desc)}</p>
+                    <p class="nv-agenda-row-date">Vence a ${dataVenc.toLocaleDateString('pt-BR')}</p>
                 </div>
-                <div class="flex-1 min-w-0">
-                    <p class="font-medium text-text-primary truncate font-primary">${Utils.escapeHTML(conta.desc)}</p>
-                    <p class="text-sm text-text-secondary">Vence a ${dataVenc.toLocaleDateString('pt-BR')}</p>
+                <div class="nv-agenda-row-financial">
+                    <p class="nv-agenda-row-amount">${Utils.formatMoney(conta.valor)}</p>
+                    <span class="nv-agenda-status ${badgeClass}">${badgeText}</span>
                 </div>
-                <div class="text-right">
-                    <p class="font-bold text-text-primary font-mono">${Utils.formatMoney(conta.valor)}</p>
-                    <span class="inline-block mt-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md ${badgeClass}">
-                        ${badgeText}
-                    </span>
-                </div>
-                <div class="flex items-center justify-end gap-2 w-full md:w-auto">
+                <div class="nv-agenda-row-actions">
                     ${conta.status === 'pendente' ? (conta.categoria === 'Fatura Cartão'
-                        ? `<button type="button" data-action="openInvoicePayment" data-id="${Utils.escapeHTML(String(conta.id))}" aria-label="Registrar pagamento de ${Utils.escapeHTML(conta.desc || 'fatura de cartão')}" class="px-3 py-2 rounded-lg text-xs font-bold text-white bg-brand-medium hover:bg-brand-dark transition-colors whitespace-nowrap">Registrar pagamento</button>`
-                        : `<button type="button" data-action="markAgendaPaid" data-col="agendamentos" data-id="${Utils.escapeHTML(String(conta.id))}" class="px-3 py-2 rounded-lg text-xs font-bold text-success border border-success/30 hover:bg-success/10 transition-colors whitespace-nowrap">Dar baixa</button>`
+                        ? `<button type="button" data-action="openInvoicePayment" data-id="${Utils.escapeHTML(String(conta.id))}" aria-label="Registrar pagamento de ${Utils.escapeHTML(conta.desc || 'fatura de cartão')}" class="nv-agenda-action nv-agenda-action--primary">Registrar pagamento</button>`
+                        : `<button type="button" data-action="markAgendaPaid" data-col="agendamentos" data-id="${Utils.escapeHTML(String(conta.id))}" class="nv-agenda-action nv-agenda-action--success">Dar baixa</button>`
                     ) : ''}
                     ${conta.categoria !== 'Fatura Cartão' ? `
-                    <button type="button" data-action="delete" data-col="agendamentos" data-id="${Utils.escapeHTML(String(conta.id))}" aria-label="Excluir ${Utils.escapeHTML(conta.desc || 'conta')}" class="w-8 h-8 rounded-lg flex items-center justify-center text-danger border border-transparent hover:border-border hover:bg-danger/10 transition-colors" title="Excluir">
-                        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                    <button type="button" data-action="delete" data-col="agendamentos" data-id="${Utils.escapeHTML(String(conta.id))}" aria-label="Excluir ${Utils.escapeHTML(conta.desc || 'conta')}" class="nv-agenda-action nv-agenda-action--delete" title="Excluir">
+                        <i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Excluir</span>
                     </button>
                     ` : ''}
                 </div>
-            </div>`;
+            </article>`;
         }).join('');
 
         return `
-        <div class="flex items-center justify-center gap-8 mb-8">
-            <button data-action="changeMonth" data-type="budget" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg flex items-center justify-center text-text-secondary transition-colors border border-transparent hover:border-border"><i class="fa-solid fa-chevron-left text-sm"></i></button>
-            <span class="text-lg font-bold text-text-primary w-48 text-center capitalize font-primary">${mesAtualNome} de ${state.budgetYear}</span>
-            <button data-action="changeMonth" data-type="budget" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg flex items-center justify-center text-text-secondary transition-colors border border-transparent hover:border-border"><i class="fa-solid fa-chevron-right text-sm"></i></button>
-        </div>
+        <section class="nv-agenda-content" aria-label="Agenda de contas">
+            <nav class="nv-agenda-period" aria-label="Navegação do mês">
+                <button type="button" data-action="changeMonth" data-type="budget" data-dir="-1" class="nv-agenda-month-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button>
+                <span class="nv-agenda-month-label" aria-live="polite">${mesAtualNome} de ${state.budgetYear}</span>
+                <button type="button" data-action="changeMonth" data-type="budget" data-dir="1" class="nv-agenda-month-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button>
+            </nav>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div class="bg-amber-50 dark:bg-amber-900/10 rounded-[16px] p-5 border border-amber-100 dark:border-amber-900/30">
-                <div class="flex items-center gap-2 text-amber-600 dark:text-amber-500 mb-2">
-                    <i class="fa-regular fa-clock"></i>
-                    <span class="text-sm font-bold uppercase tracking-wider">Pendentes</span>
-                </div>
-                <p class="text-2xl font-bold text-amber-700 dark:text-amber-400 font-mono">${Utils.formatMoney(totalPendente)}</p>
+            <div class="nv-agenda-summary-grid" role="list" aria-label="Resumo das contas do mês">
+                <article class="nv-agenda-summary-card is-pending" role="listitem">
+                    <div class="nv-agenda-summary-heading"><i class="fa-regular fa-clock" aria-hidden="true"></i><span>Pendentes</span></div>
+                    <p class="nv-agenda-summary-value">${Utils.formatMoney(totalPendente)}</p>
+                </article>
+                <article class="nv-agenda-summary-card is-paid" role="listitem">
+                    <div class="nv-agenda-summary-heading"><i class="fa-solid fa-check" aria-hidden="true"></i><span>Pagas</span></div>
+                    <p class="nv-agenda-summary-value">${Utils.formatMoney(totalPago)}</p>
+                </article>
+                <article class="nv-agenda-summary-card is-overdue" role="listitem">
+                    <div class="nv-agenda-summary-heading"><i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i><span>Vencidas</span></div>
+                    <p class="nv-agenda-summary-value">${Utils.formatMoney(totalVencido)}</p>
+                </article>
             </div>
-            <div class="bg-emerald-50 dark:bg-emerald-900/10 rounded-[16px] p-5 border border-emerald-100 dark:border-emerald-900/30">
-                <div class="flex items-center gap-2 text-emerald-600 dark:text-emerald-500 mb-2">
-                    <i class="fa-solid fa-check"></i>
-                    <span class="text-sm font-bold uppercase tracking-wider">Pagas</span>
-                </div>
-                <p class="text-2xl font-bold text-emerald-700 dark:text-emerald-400 font-mono">${Utils.formatMoney(totalPago)}</p>
-            </div>
-            <div class="bg-rose-50 dark:bg-rose-900/10 rounded-[16px] p-5 border border-rose-100 dark:border-rose-900/30">
-                <div class="flex items-center gap-2 text-rose-600 dark:text-rose-500 mb-2">
-                    <i class="fa-solid fa-circle-exclamation"></i>
-                    <span class="text-sm font-bold uppercase tracking-wider">Vencidas</span>
-                </div>
-                <p class="text-2xl font-bold text-rose-700 dark:text-rose-400 font-mono">${Utils.formatMoney(totalVencido)}</p>
-            </div>
-        </div>
 
-        <div class="bg-surface rounded-[16px] border border-border shadow-soft overflow-hidden">
-            <div class="p-5 border-b border-border">
-                <h3 class="font-bold text-text-primary font-primary">Contas do Mês</h3>
-            </div>
-            <div class="divide-y divide-border">
-                ${listHtml}
-            </div>
-        </div>
+            <section class="nv-agenda-list-card" aria-labelledby="nv-agenda-list-title">
+                <header class="nv-agenda-list-header"><div><p>Movimentações agendadas</p><h2 id="nv-agenda-list-title">Contas do Mês</h2></div></header>
+                <div class="nv-agenda-list" role="list">${listHtml}</div>
+            </section>
+        </section>
         `;
     },
 
@@ -852,7 +852,7 @@ export const PageComponents = {
         }).join('');
 
         const emptyState = `
-            <div class="text-center py-16 px-6 bg-surface rounded-[16px] border border-border shadow-soft flex flex-col items-center justify-center">
+            <div class="nv-standard-empty-state text-center py-16 px-6 bg-surface rounded-[16px] border border-border shadow-soft flex flex-col items-center justify-center">
                 <div class="w-20 h-20 bg-bg text-brand-soft border border-border rounded-full flex items-center justify-center text-3xl mb-4 shadow-inner">
                     <i class="fa-solid fa-chart-pie"></i>
                 </div>
@@ -864,7 +864,7 @@ export const PageComponents = {
 
         return `
         <div class="flex items-center justify-center gap-8 mb-10">${readOnly ? '' : '<button data-action="changeMonth" data-type="budget" data-dir="-1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left"></i></button>'}<span class="text-lg font-bold text-text-primary min-w-[180px] text-center capitalize font-primary">${mesAtualNome} de ${anoSelecionado}</span>${readOnly ? '' : '<button data-action="changeMonth" data-type="budget" data-dir="1" class="w-8 h-8 rounded-full hover:bg-bg border border-border flex items-center justify-center text-text-secondary transition-colors" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right"></i></button>'}</div>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Orçamento Total</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalOrcado)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Total Gasto</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalGastoMes)}</h3></div><div class="bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Disponível</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(disponivelGeral)}</h3></div></div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10"><div class="nv-standard-summary-card bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Orçamento Total</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalOrcado)}</h3></div><div class="nv-standard-summary-card bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Total Gasto</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(totalGastoMes)}</h3></div><div class="nv-standard-summary-card bg-surface p-6 rounded-[16px] border border-border shadow-soft hover:-translate-y-1 transition-transform"><p class="text-xs font-bold text-text-secondary uppercase mb-2">Disponível</p><h3 class="text-2xl font-bold text-text-primary font-mono">${Utils.formatMoney(disponivelGeral)}</h3></div></div>
         <div>${orcamentosDoMes.length > 0 ? listHTML : emptyState}</div>`;
     }, 
 

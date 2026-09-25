@@ -55,7 +55,7 @@ describe('invoice modal lifecycle contract', () => {
 
   it('does not serve a stale local shell before the network version', () => {
     const sw = source('service-worker.js');
-    expect(sw).toContain("avenera-app-shell-v11");
+    expect(sw).toContain("avenera-app-shell-v14");
     expect(sw).toContain("'./anora-preferences.js'");
     expect(sw).toContain("'./ofx-balance.js'");
     expect(sw).toContain("'./financial-ledger.js'");

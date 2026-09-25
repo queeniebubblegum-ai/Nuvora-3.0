@@ -17,6 +17,11 @@ export const Renderer = {
                     el.setAttribute('aria-current', 'page');
                 }
             });
+            // Keep only the current destination's group expanded. Native details/summary
+            // provides keyboard-operable arrows while the active page remains discoverable.
+            document.querySelectorAll('.nv-sidebar__group').forEach(group => {
+                group.open = [...group.querySelectorAll('.nav-item')].some(item => item.id === `nav-${currentPage}`);
+            });
 
             // Delegar a renderização para a estratégia correta baseada no nome da página
             if (PageRenderers[currentPage]) {

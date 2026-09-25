@@ -9,6 +9,7 @@ import { calculatePeriodTotals, isTransfer } from './financial-ledger.js';
 import { projectionSourcesFromDatabase, getLastUpdatedIndicator, financialValueClass, calculateSpendableAmount } from './financial-refinements.js';
 import { cashflowProjectionFromDatabase } from './cashflow-projection.js';
 import { PRIORITY_KEYS, resolvePriority } from './priority.js';
+import { renderTransactionTypeMenu } from './transaction-type-menu.js';
 
 export const settingsGroups = [
     { id: 'profile', title: 'Perfil', description: 'Dados e preferências pessoais.', icon: 'fa-user', items: ['Nome', 'Moeda', 'Preferências pessoais'] },
@@ -31,6 +32,14 @@ export const renderPageHeader = ({ eyebrow = '', title = '', subtitle = '', acti
         .map(([name, value]) => ` ${name}="${escape(value)}"`)
         .join('');
     const actionHtml = (Array.isArray(actions) ? actions : []).map(action => {
+        if (action?.type === 'transaction-type-selector') {
+            return renderTransactionTypeMenu({
+                id: action.menuId,
+                variant: 'transactions',
+                label: action.label,
+                ariaLabel: action.ariaLabel
+            });
+        }
         const variant = action?.variant === 'primary' ? 'primary' : 'secondary';
         const label = escape(action?.label);
         const icon = escape(action?.icon);
@@ -251,15 +260,9 @@ export const PageRenderers = {
             : quickAction.action === 'openModal'
                 ? `data-action="openModal" data-modal="${Utils.escapeHTML(quickAction.modal)}"${quickAction.type ? ` data-type="${Utils.escapeHTML(quickAction.type)}"` : ''}`
                 : '';
-        const quickActionHtml = quickAction.action === 'openTypeSelector' ? `
-            <details class="nv-dashboard-new-menu">
-                <summary class="nv-dashboard-primary-action" aria-haspopup="menu" aria-controls="dashboard-new-menu"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Novo lançamento</span><span class="nv-shortcut-hint" aria-hidden="true">Alt + N</span><span class="sr-only">Atalho de teclado: Alt + N</span><i class="fa-solid fa-chevron-down nv-dashboard-new-menu__chevron" aria-hidden="true"></i></summary>
-                <div id="dashboard-new-menu" class="nv-dashboard-new-menu__popover" role="menu" aria-label="Escolher tipo de lançamento">
-                    <button type="button" role="menuitem" data-action="openModal" data-modal="modal-transacao" data-type="receita"><i class="fa-solid fa-arrow-trend-up" aria-hidden="true"></i><span><strong>Receita</strong><small>Registrar uma entrada</small></span></button>
-                    <button type="button" role="menuitem" data-action="openModal" data-modal="modal-transacao" data-type="despesa"><i class="fa-solid fa-arrow-trend-down" aria-hidden="true"></i><span><strong>Despesa</strong><small>Registrar uma saída</small></span></button>
-                    <button type="button" role="menuitem" data-action="openModal" data-modal="modal-transferencia"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i><span><strong>Transferência</strong><small>Mover entre contas</small></span></button>
-                </div>
-            </details>` : `<button type="button" ${quickActionAttributes} aria-label="${Utils.escapeHTML(quickAction.ariaLabel)}" class="nv-dashboard-primary-action"><i class="fa-solid ${Utils.escapeHTML(quickAction.icon)}" aria-hidden="true"></i><span>${Utils.escapeHTML(quickAction.label)}</span></button>`;
+        const quickActionHtml = quickAction.action === 'openTypeSelector'
+            ? renderTransactionTypeMenu({ id: 'dashboard-new-menu', variant: 'dashboard' })
+            : `<button type="button" ${quickActionAttributes} aria-label="${Utils.escapeHTML(quickAction.ariaLabel)}" class="nv-dashboard-primary-action"><i class="fa-solid ${Utils.escapeHTML(quickAction.icon)}" aria-hidden="true"></i><span>${Utils.escapeHTML(quickAction.label)}</span></button>`;
         // One desktop CTA owns the contextual decision. The existing mobile
         // speed dial remains the single type-selector menu when no decision is
         // urgent, avoiding two competing primary actions in the header.
@@ -423,7 +426,7 @@ export const PageRenderers = {
                     { action: 'exportTransactionsCSV', label: 'Exportar', icon: 'fa-file-export', variant: 'secondary' },
                     { action: 'iniciarImportacaoOFX', label: 'Importar OFX', icon: 'fa-file-import', variant: 'secondary', attributes: { 'data-banco-id': bancoPadraoId } },
                     { action: 'iniciarImportacaoCSV', label: 'Importar CSV', icon: 'fa-file-csv', variant: 'secondary', attributes: { 'data-banco-id': bancoPadraoId } },
-                    { action: 'openModal', label: 'Nova transação', icon: 'fa-plus', variant: 'primary', attributes: { 'data-modal': 'modal-transacao', 'data-type': 'despesa' } }
+                    { type: 'transaction-type-selector', menuId: 'transactions-new-type-menu', label: 'Nova transação', ariaLabel: 'Nova transação: escolher tipo' }
                 ]
             })}
             ${Components.transactionSummary(filtered)}
@@ -432,19 +435,19 @@ export const PageRenderers = {
     },
 
     Agendamentos: (appState) => {
-        const actionsHtml = `<button data-action="openModal" data-modal="modal-agendamento" class="bg-brand-deep hover:bg-brand-dark text-white px-5 py-2.5 rounded-[12px] text-sm font-bold transition-all shadow-deep-glow flex items-center gap-2 hover:-translate-y-0.5"><i class="fa-solid fa-plus"></i> Nova Conta</button>`;
+        const actionsHtml = `<button type="button" data-action="openModal" data-modal="modal-agendamento" class="nv-agenda-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Nova Conta</span></button>`;
         
         UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Contas a Pagar e Receber</h2>
-                    <p class="text-text-secondary text-sm">Gerencie suas obrigações e previsões financeiras.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
+            <div class="nv-agenda-page">
+                <header class="nv-agenda-page-header nv-standard-page-header nv-standard-page-header--agenda">
+                    <div class="nv-agenda-page-heading">
+                        <h1>Contas a Pagar e Receber</h1>
+                        <p>Gerencie suas obrigações e previsões financeiras.</p>
+                    </div>
+                    <div class="nv-agenda-page-actions">${actionsHtml}</div>
+                </header>
+                ${Components.agendamentosPage(db, appState)}
             </div>
-            ${Components.agendamentosPage(db, appState)}
         `);
     },
 
@@ -557,7 +560,7 @@ export const PageRenderers = {
         const actionsHtml = `<button data-action="openModal" data-modal="modal-meta" class="bg-brand-medium text-white px-6 py-2.5 rounded-[12px] font-bold text-sm shadow-brand-glow hover:-translate-y-0.5 transition-all hover:bg-brand-dark"><i class="fa-solid fa-plus mr-2"></i> Criar Meta</button>`;
         
         UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div class="nv-standard-page-header nv-standard-page-header--goals flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 class="text-2xl font-bold text-text-primary mb-1">Metas e Reservas</h2>
                     <p class="text-text-secondary text-sm">Planeje seus objetivos financeiros.</p>
@@ -566,7 +569,7 @@ export const PageRenderers = {
                     ${actionsHtml}
                 </div>
             </div>
-            <details class="bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-bullseye text-brand-medium mr-2"></i>Metas e reservas</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.goalsPage(db.metas, db.transacoes, { reservas: db.reservas, bancos: db.bancos })}</div></details>
+            <details class="nv-standard-page-panel bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-bullseye text-brand-medium mr-2"></i>Metas e reservas</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.goalsPage(db.metas, db.transacoes, { reservas: db.reservas, bancos: db.bancos })}</div></details>
         `);
     },
 
@@ -577,7 +580,7 @@ export const PageRenderers = {
         `;
         
         UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div class="nv-standard-page-header nv-standard-page-header--budget flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 class="text-2xl font-bold text-text-primary mb-1">Orçamento Mensal</h2>
                     <p class="text-text-secondary text-sm">Estabeleça limites e controle seus gastos.</p>
@@ -586,7 +589,7 @@ export const PageRenderers = {
                     ${actionsHtml}
                 </div>
             </div>
-            <details class="bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-wallet text-brand-medium mr-2"></i>Orçamento mensal</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.budgetView(db.orcamentos, db.transacoes, appState)}</div></details>
+            <details class="nv-standard-page-panel bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-wallet text-brand-medium mr-2"></i>Orçamento mensal</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.budgetView(db.orcamentos, db.transacoes, appState)}</div></details>
         `);
     },
 
@@ -676,7 +679,7 @@ export const PageRenderers = {
 
     Configuracoes: (appState) => {
         UIRenderer.updateDOM('main-content', `
-            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <div class="nv-standard-page-header nv-standard-page-header--settings flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 class="text-2xl font-bold text-text-primary mb-1">Configurações</h2>
                     <p class="text-text-secondary text-sm">Gerencie seu perfil e as configurações do sistema.</p>

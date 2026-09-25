@@ -10,15 +10,19 @@ const normalizeText = text => String(text).replace(/\u00a0/g, ' ');
 describe('dashboard hierarchy and financial semantics', () => {
     it('uses a real desktop type selector and keeps secondary header contracts', () => {
         const pages = source('rnd-pages.js');
+        const selector = source('transaction-type-menu.js');
         const css = source('input.css');
         expect(pages).toContain('Novo lançamento');
-        expect(pages).toContain('class="nv-dashboard-new-menu"');
-        expect(pages).toContain('data-action="openModal" data-modal="modal-transacao" data-type="receita"');
-        expect(pages).toContain('data-action="openModal" data-modal="modal-transacao" data-type="despesa"');
-        expect(pages).toContain('data-action="openModal" data-modal="modal-transferencia"');
-        expect((pages.match(/role=\"menuitem\" data-action=\"openModal\" data-modal=\"modal-transacao\"/g) || []).length).toBe(2);
-        expect(pages).toContain('aria-label=\"Escolher tipo de lançamento\"');
+        expect(pages).toContain("renderTransactionTypeMenu({ id: 'dashboard-new-menu', variant: 'dashboard' })");
         expect(pages).toContain("action === 'openTypeSelector'");
+        expect(selector).toContain("wrapper: 'nv-dashboard-new-menu'");
+        expect(selector).toContain("trigger: 'nv-dashboard-primary-action'");
+        expect(selector).toContain('role="group" aria-label="Escolher tipo de lançamento"');
+        expect(selector).toContain('data-action="openModal" data-modal="modal-transacao" data-type="receita"');
+        expect(selector).toContain('data-action="openModal" data-modal="modal-transacao" data-type="despesa"');
+        expect(selector).toContain('data-action="openModal" data-modal="modal-transferencia"');
+        expect((selector.match(/data-action="openModal"/g) || []).length).toBe(3);
+        expect(selector).not.toContain('aria-haspopup="menu"');
         expect(css).toContain('@media (min-width: 768px)');
         expect(css).toContain('#btn-flutuante-main');
         expect(css).toContain('#speed-dial-menu');

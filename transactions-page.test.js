@@ -57,13 +57,18 @@ describe('transactions Phase 1 redesign contracts', () => {
         const click = read('evt-click.js');
         const css = read('input.css');
         const runtimeCss = read('styles.css');
+        const typeMenu = read('transaction-type-menu.js');
 
         expect(pages).toContain('renderPageHeader({');
         expect(pages).toContain("action: 'exportTransactionsCSV'");
         expect(pages).toContain("action: 'iniciarImportacaoOFX'");
         expect(pages).toContain("action: 'iniciarImportacaoCSV'");
         expect(pages).toContain("action: 'openModal'");
-        expect(pages).toContain("'data-modal': 'modal-transacao'");
+        expect(pages).toContain("type: 'transaction-type-selector'");
+        expect(typeMenu).toContain('data-modal="modal-transacao"');
+        expect(typeMenu).toContain('data-type="receita"');
+        expect(typeMenu).toContain('data-type="despesa"');
+        expect(typeMenu).toContain('data-modal="modal-transferencia"');
         expect(click).toContain("'iniciarImportacaoOFX': () => App.iniciarImportacaoOFX");
         expect(click).toContain("'iniciarImportacaoCSV': () => App.iniciarImportacaoCSV");
         expect(component).toContain('data-action="setTransactionTypeFilter"');
@@ -90,7 +95,11 @@ describe('transactions Phase 1 redesign contracts', () => {
 
         expect(html).toContain('data-input="setFilterDesc"');
         expect(html).toContain('data-filter-key="mes"');
-        expect(html).toContain('data-filter-key="tipo"');
+        expect(html).toContain('data-action="setTransactionTypeFilter"');
+        expect(html).toContain('data-payload="receita"');
+        expect(html).toContain('data-payload="despesa"');
+        expect(html).toContain('data-payload="transferencia"');
+        expect(html).not.toContain('data-filter-key="tipo"');
         expect(html).toContain('data-filter-key="categoria"');
         expect(html).toContain('data-filter-key="bancoId"');
         expect(html).toContain('data-filter-key="dataInicio"');

@@ -13,8 +13,8 @@ describe('navegação direta para agenda, metas e orçamento', () => {
             expect(html).toContain(`nav-${route}`);
         }
         expect(html).toContain('Agenda de contas');
-        expect(html).toContain('> Metas');
-        expect(html).toContain('> Orçamento');
+        expect(html).toContain('<span>Metas</span>');
+        expect(html).toContain('<span>Orçamento</span>');
         expect(html).toContain('aria-label="Navegação principal"');
         expect(html).toContain('id="sidebar"');
         expect(html).toContain('overflow-y-auto');
@@ -39,5 +39,18 @@ describe('navegação direta para agenda, metas e orçamento', () => {
         expect(html).toContain('lg:static');
         expect(html).toContain('lg:hidden');
         expect(html).toContain('toggleSidebar()');
+    });
+
+    it('groups sidebar destinations behind native arrows and expands the active route', () => {
+        const html = read('index.html');
+        const renderer = read('renderer.js');
+        const css = read('input.css');
+        for (const group of ['finance', 'organization', 'system']) {
+            expect(html).toContain(`data-nav-group="${group}"`);
+        }
+        expect(html).toContain('nv-sidebar__group-chevron');
+        expect(renderer).toContain("group.open = [...group.querySelectorAll('.nav-item')].some");
+        expect(css).toContain('.nv-sidebar__group-toggle:focus-visible');
+        expect(css).toContain('.nv-sidebar__group[open] .nv-sidebar__group-chevron');
     });
 });

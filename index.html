@@ -21,7 +21,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=20260924-ui-compact-3">
 
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -125,59 +125,43 @@
 
     <div class="flex-1 flex overflow-hidden relative">
         <aside id="sidebar" class="nv-sidebar w-64 bg-brand-deep flex flex-col fixed inset-y-0 left-0 top-[72px] lg:static lg:top-0 transform -translate-x-full lg:translate-x-0 transition-transform duration-300 border-r border-white/10" style="z-index: 45;">
-            <nav class="nv-sidebar__nav flex-1 px-4 space-y-1 overflow-y-auto py-6 scrollbar-hide" aria-label="Navegação principal">
-
-                <div class="nv-sidebar__section pb-1">
-                    <p class="nv-sidebar__section-label px-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Visão geral</p>
+            <nav class="nv-sidebar__nav" aria-label="Navegação principal">
+                <div class="nv-sidebar__section nv-sidebar__overview">
+                    <p class="nv-sidebar__section-label">Visão geral</p>
+                    <button data-action="navigate" data-payload="Dashboard" id="nav-Dashboard" class="nv-sidebar__item nav-item w-full text-left flex items-center gap-3 text-white/80 hover:text-white transition-colors">
+                        <i class="fa-solid fa-border-all w-5 text-center" aria-hidden="true"></i><span>Visão geral</span>
+                    </button>
                 </div>
-                <button data-action="navigate" data-payload="Dashboard" id="nav-Dashboard" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-border-all w-5 text-center" aria-hidden="true"></i> Visão geral
-                </button>
 
-                <div class="nv-sidebar__section pt-5 pb-1">
-                    <p class="nv-sidebar__section-label px-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Finanças</p>
-                </div>
-                <button data-action="navigate" data-payload="Transacoes" id="nav-Transacoes" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-arrow-right-arrow-left w-5 text-center" aria-hidden="true"></i> Lançamentos
-                </button>
-                <button data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-wallet w-5 text-center" aria-hidden="true"></i> Contas e cartões
-                </button>
-                <button data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-calendar-check w-5 text-center" aria-hidden="true"></i> Planejamento
-                </button>
-                <button data-action="navigate" data-payload="Agendamentos" id="nav-Agendamentos" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-calendar-days w-5 text-center" aria-hidden="true"></i> Agenda de contas
-                </button>
-                <button data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-bullseye w-5 text-center" aria-hidden="true"></i> Metas
-                </button>
-                <button data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-chart-pie w-5 text-center" aria-hidden="true"></i> Orçamento
-                </button>
-                <button data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-chart-line w-5 text-center" aria-hidden="true"></i> Relatórios
-                </button>
+                <details class="nv-sidebar__group" data-nav-group="finance">
+                    <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-wallet" aria-hidden="true"></i>Finanças</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
+                    <div class="nv-sidebar__group-items">
+                        <button data-action="navigate" data-payload="Transacoes" id="nav-Transacoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-arrow-right-arrow-left w-5 text-center" aria-hidden="true"></i><span>Lançamentos</span></button>
+                        <button data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-wallet w-5 text-center" aria-hidden="true"></i><span>Contas e cartões</span></button>
+                        <button data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-check w-5 text-center" aria-hidden="true"></i><span>Planejamento</span></button>
+                        <button data-action="navigate" data-payload="Agendamentos" id="nav-Agendamentos" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-days w-5 text-center" aria-hidden="true"></i><span>Agenda de contas</span></button>
+                        <button data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-bullseye w-5 text-center" aria-hidden="true"></i><span>Metas</span></button>
+                        <button data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-pie w-5 text-center" aria-hidden="true"></i><span>Orçamento</span></button>
+                        <button data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-line w-5 text-center" aria-hidden="true"></i><span>Relatórios</span></button>
+                    </div>
+                </details>
 
-                <div class="nv-sidebar__section pt-5 pb-1">
-                    <p class="nv-sidebar__section-label px-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Organização</p>
-                </div>
-                <button data-action="navigate" data-payload="Categorias" id="nav-Categorias" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-tags w-5 text-center" aria-hidden="true"></i> Categorias
-                </button>
-                <button data-action="navigate" data-payload="Contatos" id="nav-Contatos" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-address-book w-5 text-center" aria-hidden="true"></i> Pessoas
-                </button>
-
+                <details class="nv-sidebar__group" data-nav-group="organization">
+                    <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-layer-group" aria-hidden="true"></i>Organização</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
+                    <div class="nv-sidebar__group-items">
+                        <button data-action="navigate" data-payload="Categorias" id="nav-Categorias" class="nv-sidebar__item nav-item"><i class="fa-solid fa-tags w-5 text-center" aria-hidden="true"></i><span>Categorias</span></button>
+                        <button data-action="navigate" data-payload="Contatos" id="nav-Contatos" class="nv-sidebar__item nav-item"><i class="fa-solid fa-address-book w-5 text-center" aria-hidden="true"></i><span>Pessoas</span></button>
+                    </div>
+                </details>
             </nav>
 
-            <div class="nv-sidebar__footer nv-sidebar__footer--navigation p-6 border-t border-white/10 space-y-2 shrink-0">
-                <div class="nv-sidebar__section pb-1">
-                    <p class="nv-sidebar__section-label px-4 text-[10px] font-bold uppercase tracking-widest text-white/50">Sistema</p>
-                </div>
-                <button data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes" class="nv-sidebar__item nav-item w-full text-left px-4 py-2.5 flex items-center gap-3 text-white/80 hover:text-white rounded-[12px] hover:bg-white/10 transition-colors text-sm font-medium">
-                    <i class="fa-solid fa-gear w-5 text-center" aria-hidden="true"></i> Configurações
-                </button>
+            <div class="nv-sidebar__footer nv-sidebar__footer--navigation">
+                <details class="nv-sidebar__group" data-nav-group="system">
+                    <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-gear" aria-hidden="true"></i>Sistema</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
+                    <div class="nv-sidebar__group-items">
+                        <button data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-gear w-5 text-center" aria-hidden="true"></i><span>Configurações</span></button>
+                    </div>
+                </details>
             </div>
         </aside>
 

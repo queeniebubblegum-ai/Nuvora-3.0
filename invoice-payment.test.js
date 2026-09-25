@@ -111,6 +111,6 @@ describe('registro local de pagamento de fatura', () => {
         expect(clicks).toContain("'confirmInvoicePayment': () => App.confirmInvoicePayment()");
         expect(clicks).toContain("'cancelInvoicePayment': () => App.cancelInvoicePayment()");
         expect(sw).toContain("'./invoice-payment.js'");
-        expect(sw).toContain('avenera-app-shell-v11');
+        expect(sw).toContain('avenera-app-shell-v14');
     });
 });

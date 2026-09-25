@@ -1141,6 +1141,13 @@ export const App = {
                 });
                 const visible = typeMatches && visibleRows > 0;
                 card.hidden = !visible;
+                if (normalizedQuery && visible && !card.open) {
+                    card.open = true;
+                    card.dataset.searchAutoOpened = 'true';
+                } else if ((!normalizedQuery || !visible) && card.dataset.searchAutoOpened === 'true') {
+                    card.open = false;
+                    delete card.dataset.searchAutoOpened;
+                }
                 if (visible) visibleCards += 1;
             });
             visibleGroupCount += visibleCards;
