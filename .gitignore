@@ -25,6 +25,4 @@ vitest/results.json
 *.tsbuildinfo
 .DS_Store
 
-# Build artifacts (não devem ser commitados)
-input.css
-*.json
+# input.css é a fonte do styles.css e deve ser versionado.

@@ -1,0 +1,9 @@
+AJUSTE COMPLEMENTAR AVENERA — v19
+
+Aplicar SOMENTE depois do hotfix de restauração v17 e do complemento CSS/testes v18. Extraia na raiz do projeto, substituindo os arquivos correspondentes.
+
+Corrige o último contrato apontado pelo npm test: adiciona a classe `num` à marcação dos valores e dos resumos de Transações, sem alterar cálculos, dados ou regras financeiras. Atualiza o cache do service worker para avenera-app-shell-v19; a URL do CSS permanece styles.css?v=20260925-anora-restoration-2 porque o CSS não mudou nesta etapa.
+
+Depois, rode `npm.cmd test`. Não precisa rodar build por causa desta alteração (o CSS não mudou). Confira visualmente os valores tabulares em Lançamentos antes de fazer commit.
+
+Este pacote não faz commit nem push.

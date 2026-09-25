@@ -1,21 +1,20 @@
-# Avenera — adaptação da página completa da Anora
+# Avenera — pacote incremental v20
 
-Este pacote integra uma página dedicada da Anora ao app real, usando a arquitetura existente do Avenera. A interface mostra insights calculados pelos dados locais, conversa pelo mecanismo atual `AnoraNLP` e oferece os modos de atuação já suportados (`suave`, `equilibrado` e `rigoroso`). Não adiciona serviço de IA online nem valores financeiros de demonstração.
+Este pacote aplica-se **sobre o estado local v19 já aplicado** e parte da linha `main` pública no commit `c3c75aa6a8a85a52a24e1ca04f6cc88ca6145f86`, além das correções locais anteriores. Ele é isolado para reprodutibilidade do build e pré-cache offline; não altera regras financeiras.
 
-## O que foi integrado
+## O que muda
 
-- Página `Anora` no roteador, renderizador, menu lateral e menu do cabeçalho.
-- Sugestões de perguntas conectadas ao formulário e ao controller de chat já existentes.
-- Preferência de estilo salva pelas preferências locais da Anora e refletida no perfil de mentoria.
-- Alvos de chat isolados por formulário, mantendo compatibilidade com o modal legado.
-- Escape de conteúdo dinâmico e tratamento seguro de lançamentos antigos sem descrição ou categoria durante a busca de despesas.
-- Estilos responsivos, estados de foco/redução de movimento, CSS compilado e cache offline atualizado para `avenera-app-shell-v16`.
-- Testes de integração/segurança e checklist de validação visual local.
+- Inclui `input.css`, fonte do Tailwind para gerar `styles.css`, e remove as regras globais que ignoravam essa fonte e novos arquivos JSON.
+- Atualiza o cache do service worker para `avenera-app-shell-v20`, acrescenta os módulos locais alcançáveis a partir do app e tenta pré-cachear recursos em lotes, sem abortar toda a instalação por uma falha isolada.
+- Atualiza os testes do contrato do cache e adiciona verificações para build, `.gitignore`, grafo de módulos e instalação tolerante a recurso indisponível.
+- Mantém o `.gitignore` sincronizado com `gitignore.txt`.
 
-## Aplicar e validar
+## Aplicação e validação
 
-1. Faça backup do seu checkout e compare/substitua os arquivos do pacote mantendo os caminhos relativos.
-2. No Windows, na pasta do projeto, execute `npm.cmd run build` e `npm.cmd test`.
-3. Siga `ANORA_PAGE_PHASE5_MANUAL.md` para conferir navegação, conversa, persistência, temas e responsividade no navegador local. A aparência real em desktop/mobile e nos temas claro/escuro ainda depende dessa conferência no app da usuária.
+1. Faça uma cópia dos arquivos locais atuais.
+2. Extraia os arquivos do pacote para a raiz do repositório, preservando os caminhos; não substitua outros arquivos fora do pacote.
+3. Instale as dependências (`npm.cmd install`; em uma cópia limpa com `package-lock.json`, também é possível usar `npm.cmd ci`).
+4. Rode `npm.cmd run build` e `npm.cmd test`.
+5. Confira a navegação online/offline e valide visualmente o app local.
 
-Na preparação deste pacote, `npm run build` concluiu e Vitest passou: 51 arquivos e 247 testes. A validação visual no navegador não foi executada. Nenhum commit ou push foi realizado.
+O pacote não faz commit nem push.

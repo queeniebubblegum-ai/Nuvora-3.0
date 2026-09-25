@@ -64,6 +64,6 @@ describe('formato e recuperação de backups', () => {
         expect(check).toContain("action: { action: 'exportBackup'");
         expect(check).not.toContain('App.exportBackup(true)');
         expect(worker).toContain("'./backup-format.js'");
-        expect(worker).toContain('avenera-app-shell-v16');
+        expect(worker).toContain('avenera-app-shell-v20');
     });
 });

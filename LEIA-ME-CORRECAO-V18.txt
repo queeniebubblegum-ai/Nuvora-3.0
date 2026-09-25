@@ -1,0 +1,25 @@
+CORREÇÃO COMPLEMENTAR AVENERA — v18
+
+APLICAR SOMENTE SOBRE O PROJETO QUE JÁ RECEBEU O hotfix de restauração v17.
+Extraia o ZIP diretamente na pasta-raiz do projeto e permita substituir os arquivos.
+Este pacote é incremental: ele não contém os renderizadores/rotas restaurados, que já
+vieram no v17 e permanecem preservados; não remova esses arquivos.
+
+O que corrige:
+- sincroniza o cache offline v18 e a URL versionada do styles.css no index e service worker;
+- sincroniza theme-color do documento e do manifest (roxo #4C3C70; fundo #F7F6F2);
+- inclui input.css e styles.css coerentes, com a regra escura #A58AE4 e os contratos CSS
+  de Relatórios e da tipografia/números tabulares de Transações;
+- atualiza as expectativas dos testes afetados para v18 e mantém o teste de restauração.
+
+IMPORTANTE: input.css está incluído mesmo sendo ignorado pelo Git neste projeto. Preserve-o
+na pasta local: o comando de build depende dele e os testes de contrato leem esse arquivo.
+
+No PowerShell, a partir da pasta do projeto:
+  npm.cmd run build
+  npm.cmd test
+
+Confira que index.html e service-worker.js apontem para
+styles.css?v=20260925-anora-restoration-2 e que o cache seja avenera-app-shell-v18.
+Este pacote não faz commit nem push. Faça inspeção visual no navegador depois dos testes;
+ela ainda não foi feita nesta validação.

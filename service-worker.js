@@ -1,13 +1,15 @@
 // Increment when local application assets change so installed clients fetch
 // the latest modules, including the shared cent-precision money helpers.
-const APP_CACHE_NAME = 'avenera-app-shell-v16';
+const APP_CACHE_NAME = 'avenera-app-shell-v20';
 const CDN_CACHE_NAME = 'avenera-cdn-cache-v1';
 
 // Ficheiros locais essenciais da sua aplicação (Mapeamento Completo e Atualizado)
 const LOCAL_ASSETS = [
     './',
     './index.html',
-    './styles.css?v=20260925-anora-phase5-1',
+    './styles.css?v=20260925-anora-restoration-2',
+    './redesign-fase2.css?v=20260925',
+    './modal-shortcuts.js',
     './manifest.json',
     './privacidade/index.html',
     './termos/index.html',
@@ -41,6 +43,19 @@ const LOCAL_ASSETS = [
     './invoice-payment.js',
     './reconciliation.js',
     './money-math.js',
+
+    // Módulos compartilhados importados pelas páginas e componentes
+    './analytics.js',
+    './cashflow-projection.js',
+    './categorias-padrao.js',
+    './classification.js',
+    './financial-refinements.js',
+    './financial-transfers.js',
+    './import-errors.js',
+    './report-data.js',
+    './transaction-filters.js',
+    './transaction-type-menu.js',
+    './view-context.js',
     
     // Controladores
     './controllers.js',
@@ -106,12 +121,30 @@ const CDN_ORIGINS = [
     'https://cdn.jsdelivr.net'
 ];
 
+const CACHE_BATCH_SIZE = 12;
+
+// Um recurso opcional com erro não deve impedir o cache dos demais módulos.
+const cacheAssetsInBatches = async (cache, assets) => {
+    for (let offset = 0; offset < assets.length; offset += CACHE_BATCH_SIZE) {
+        const batch = assets.slice(offset, offset + CACHE_BATCH_SIZE);
+        try {
+            await cache.addAll(batch);
+        } catch (_batchError) {
+            const results = await Promise.allSettled(batch.map(asset => cache.add(asset)));
+            const failedAssets = batch.filter((_, index) => results[index].status === 'rejected');
+            if (failedAssets.length) {
+                console.warn('[Service Worker] Recursos não pré-cacheados; serão buscados pela rede quando possível:', failedAssets);
+            }
+        }
+    }
+};
+
 // INSTALAÇÃO: Guarda os ficheiros locais imediatamente
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(APP_CACHE_NAME).then((cache) => {
+        caches.open(APP_CACHE_NAME).then(async (cache) => {
             console.log('[Service Worker] Pré-cacheamento dos recursos vitais (App Shell).');
-            return cache.addAll(LOCAL_ASSETS);
+            await cacheAssetsInBatches(cache, LOCAL_ASSETS);
         })
     );
     self.skipWaiting();

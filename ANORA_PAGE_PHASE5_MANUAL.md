@@ -9,6 +9,11 @@
 - [ ] Alterar Suave/Equilibrado/Foco Extremo, sair e voltar; confirmar persistência no `anora-preferences` e no perfil da mentoria.
 - [ ] Confirmar que a conversa não confunde os alvos do modal legado com os elementos da página.
 
+## Recursos existentes que precisam permanecer
+- [ ] Acessar **Conciliação** e **Importar extrato** pelo grupo Finanças; conferir também a abertura por rota direta (`#conciliacao` e `#importacao`).
+- [ ] Confirmar que `redesign-fase2.css` continua carregado e que o botão/atalhos de modais continuam disponíveis.
+- [ ] Abrir um contato e conferir telefone, e-mail, endereço e o painel de perfil/histórico.
+
 ## Visual, acessibilidade e responsividade
 - [ ] Conferir tema claro e escuro, contraste, foco visível, rótulos e mensagens de carregamento.
 - [ ] Conferir em 375px, 400px e desktop; no celular, conferir os insights/mode acima da conversa sem rolagem horizontal.

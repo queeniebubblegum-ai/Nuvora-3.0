@@ -20,9 +20,9 @@ describe('Anora full-page integration', () => {
         expect(index).toContain('data-action="navigate" data-payload="Anora"');
         expect(index).not.toContain('data-action="openModal" data-modal="modal-chat-anora"');
         expect(worker).toContain("'./rnd-anora.js'");
-        expect(index).toContain('styles.css?v=20260925-anora-phase5-1');
-        expect(worker).toContain('./styles.css?v=20260925-anora-phase5-1');
-        expect(worker).toContain("avenera-app-shell-v16");
+        expect(index).toContain('styles.css?v=20260925-anora-restoration-2');
+        expect(worker).toContain('./styles.css?v=20260925-anora-restoration-2');
+        expect(worker).toContain("avenera-app-shell-v20");
         expect(css).toContain('.nv-anora-page');
         expect(css).toContain('.nv-anora-chat');
         expect(css).toContain('prefers-reduced-motion:reduce');
