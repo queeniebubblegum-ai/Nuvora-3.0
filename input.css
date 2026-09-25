@@ -2,12 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Public+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap');
+
+/* Redesign v4: tabular figures for every element using the font-mono utility
+   (money values, badges, metrics) and tighter tracking on display headings,
+   matching the "avenera-mockup-completo-v4" prototype. Placed after the
+   @tailwind directives so it wins the cascade over the generated utilities. */
+.font-mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1; letter-spacing: -0.025em; }
+.font-primary, .font-mentor { letter-spacing: -0.025em; }
 
 :root {
   /* Token contract: product typography, spacing, shape, surfaces, elevation and states. */
-  --font-ui: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-ui: 'Public Sans', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'Sora', 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-size-xs: 10px;
   --font-size-sm: 12px;
   --font-size-md: 14px;
@@ -35,17 +42,17 @@
   --radius-control: 10px;
   --radius-pill: 999px;
   --radius-panel-compact: 13px;
-  --c-bg: #F7F6F2;
-  --c-surface: #FFFEFB;
-  --c-surface-soft: #EEF1EC;
-  --c-border: #DCE2DB;
-  --c-text-primary: #202624;
-  --c-text-secondary: #65716B;
+  --c-bg: #F4F5F9;
+  --c-surface: #FFFFFF;
+  --c-surface-soft: #F0F1F6;
+  --c-border: #E1E3EB;
+  --c-text-primary: #242333;
+  --c-text-secondary: #737386;
   --c-brand-deep: #4C3C70;
   --c-brand-dark: #62518C;
   --c-brand-medium: #8170B5;
   --c-action-purple: #5B3AA2;
-  --c-brand-soft: #DCD8EE;
+  --c-brand-soft: #EEEAF7;
   --c-success: #4E8065;
   --c-success-soft: #E7F1EA;
   --c-danger: #C45D5D;
@@ -86,17 +93,17 @@
 
 .dark {
   color-scheme: dark;
-  --c-bg: #171B19;
-  --c-surface: #202522;
-  --c-surface-soft: #29302C;
-  --c-border: #39433E;
-  --c-text-primary: #F1F3EE;
-  --c-text-secondary: #AEB9B1;
+  --c-bg: #17191F;
+  --c-surface: #20232B;
+  --c-surface-soft: #282B35;
+  --c-border: #383B47;
+  --c-text-primary: #F2F1F7;
+  --c-text-secondary: #B0AFBD;
   --c-brand-deep: #D1C6ED;
   --c-brand-dark: #BBADE0;
-  --c-brand-medium: #9A78E8;
-  --c-action-purple: #805BD1;
-  --c-brand-soft: #5B477F;
+  --c-brand-medium: #AA96D7;
+  --c-action-purple: #A58AE4;
+  --c-brand-soft: #342E42;
   --c-success: #8EBA9D;
   --c-success-soft: #354B3D;
   --c-danger: #E69A96;

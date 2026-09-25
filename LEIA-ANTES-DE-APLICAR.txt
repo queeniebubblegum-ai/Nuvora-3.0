@@ -1,0 +1,28 @@
+AVENERA — FASE 1: TELA DE TRANSAÇÕES (VERSÃO COM CACHE INVALIDADO)
+
+Arquivos do pacote: index.html, service-worker.js, rnd-pages.js, cmp-pages.js, input.css, styles.css e transactions-page.test.js.
+
+Aplicação:
+1. Faça uma cópia de segurança dos arquivos locais antes de substituir.
+2. Copie cada arquivo para a raiz do repositório Avenera, mantendo seu nome.
+3. Não copie node_modules, cache ou arquivos temporários.
+4. No PowerShell, execute:
+   npm.cmd run build
+   npm.cmd test
+5. Abra a tela Transações em desktop e mobile, nos temas claro e escuro; valide as ações, filtros, paginação e legibilidade antes de qualquer commit.
+
+O que mudou nesta fase:
+- Tipografia Fraunces para o título, Public Sans para a tela e Sora/tabular-nums para valores.
+- Cabeçalho sem painel/gradiente dominante, métricas mais compactas, superfícies sem sombra, filtros e lista densos, respeitando a paleta semântica e os fluxos já existentes.
+- “Nova transação” aparece primeiro como CTA principal; exportação/importações permanecem ações secundárias, com rótulos visíveis no mobile.
+- As fontes novas só se aplicam à tela Transações; as demais telas permanecem inalteradas nesta fase.
+- Os componentes e dados financeiros não foram reescritos: busca, filtros, conciliação, edição/exclusão, seleção em lote, paginação e importação/exportação mantêm seus ganchos atuais.
+
+Validação executada neste pacote:
+- npm run build: aprovado.
+- Vitest: 49 arquivos / 242 testes aprovados usando pool de fork único no ambiente de validação.
+- A inspeção visual real em navegador não foi executada. Confirme localmente o resultado em 375px, 400px e desktop, em claro e escuro.
+
+Correção desta revisão: o index.html e o service-worker.js agora usam a nova URL do CSS e o cache v15. Ao detectar a atualização, o service worker substitui o cache v14 e pré-carrega a folha de estilos nova. Use este pacote no lugar dos anteriores.
+
+Importante: o pacote foi preparado a partir do snapshot público do GitHub. Como não tenho acesso às alterações locais do seu computador, compare/guarde seus arquivos atuais antes de substituí-los. Nenhum commit ou push foi feito.

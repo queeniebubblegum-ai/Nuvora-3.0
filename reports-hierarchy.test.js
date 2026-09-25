@@ -96,7 +96,7 @@ describe('hierarquia estática da página de Relatórios', () => {
         expect(cssContains(sourceCss, 'background: var(--c-action-purple)')).toBe(true);
         expect(cssContains(sourceCss, 'color: #fff !important')).toBe(true);
         expect(cssContains(sourceCss, '--c-action-purple: #5B3AA2')).toBe(true);
-        expect(cssContains(sourceCss, '--c-action-purple: #805BD1')).toBe(true);
+        expect(cssContains(sourceCss, '--c-action-purple: #A58AE4')).toBe(true);
         // The generated file is minified/optimized by Tailwind; keep its contract to a smoke check.
         expect(generatedStyles.length).toBeGreaterThan(0);
         expect(cssContains(generatedStyles, '--c-action-purple')).toBe(true);
