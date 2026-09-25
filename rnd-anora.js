@@ -1,158 +1,75 @@
-// ============================================================
-// NUVORA · PÁGINA ANORA — TELA CHEIA COM INSIGHTS
-// Fase 5 | 25/09/2026
-// ============================================================
+import { db, Database } from './db.js';
+import { Utils } from './utils.js';
+import { UIRenderer } from './rnd-ui.js';
+import { MentorEngine } from './mentorEngine.js';
+import { loadAnoraPreferences } from './anora-preferences.js';
 
-function RenderPage_Anora() {
-  const state = window.App?.state || {};
-  const insights = window.Anora?.recentInsights || [
-    { texto: "Delivery subiu 34% em 2 semanas", tempo: "há 2 h", tipo: "alerta" },
-    { texto: "Fatura fecha em 4 dias — 2 lançamentos pendentes", tempo: "ontem", tipo: "aviso" },
-    { texto: "Assinatura repetida detectada", tempo: "2 dias atrás", tipo: "info" },
-    { texto: "Carteira 52% renda fixa — sugestão rebalancear", tempo: "3 dias atrás", tipo: "dica" }
-  ];
-  const rigor = window.Anora?.rigor || "balanced";
+const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
+const styleLabel = style => ({ suave: 'Suave', equilibrado: 'Equilibrado', rigoroso: 'Foco Extremo' }[style] || 'Equilibrado');
+const styleIcon = style => ({ suave: '🌿', equilibrado: '⚖️', rigoroso: '🎯' }[style] || '⚖️');
 
-  return `
-<div class="nv-page-container" style="display:flex;gap:1rem;height:calc(100vh - 120px);min-height:560px;">
+const insightType = (text, index) => {
+    if (index === 0 && /alerta|faltam|prioridade|urgente|risco/i.test(text)) return 'alerta';
+    if (/ação|corte|reduz|compromisso|dívida|cartão/i.test(text)) return 'aviso';
+    if (/excelente|ótimo|muito bem|controlado/i.test(text)) return 'dica';
+    return 'info';
+};
 
-  <!-- PAINEL LATERAL: INSIGHTS -->
-  <div style="width:260px;display:flex;flex-direction:column;gap:1rem;flex-shrink:0;">
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem;">
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1rem;">
-        <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#5846C2,#8B7BE8);display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">
-          <i class="ri-sparkling-line"></i>
+const renderInsight = insight => `<article class="nv-anora-insight is-${insight.type}">
+    <p>${escape(insight.text)}</p>
+    <small>${escape(insight.label)}</small>
+</article>`;
+
+const renderWelcome = ({ result, data }) => {
+    const message = result.isOnboarding
+        ? (result.recommendation || 'Vamos começar a organizar sua vida financeira, passo a passo.')
+        : (result.recommendation || 'Escolha uma sugestão para começarmos.');
+    const context = data.totalTransacoes > 0
+        ? `Análise local baseada em ${data.totalTransacoes} ${data.totalTransacoes === 1 ? 'lançamento' : 'lançamentos'} registrados.`
+        : 'Registre lançamentos para que a análise use os seus dados reais.';
+    return `<div class="nv-anora-message nv-anora-message--assistant">
+        <span class="nv-anora-avatar"><i class="ri-sparkling-line" aria-hidden="true"></i></span>
+        <div class="nv-anora-bubble"><p>${escape(message)}</p><small>${escape(context)}</small></div>
+    </div>`;
+};
+
+export const renderAnoraPage = () => {
+    const data = MentorEngine.extrairDadosParaAnora(db, Database);
+    const result = MentorEngine.calculateMentorScore(data);
+    const preferences = loadAnoraPreferences();
+    const insights = (result.insights || []).slice(0, 4).map((text, index) => ({
+        text,
+        type: insightType(text, index),
+        label: result.isOnboarding ? 'Próximo passo' : 'Insight do momento'
+    }));
+    const insightList = insights.length ? insights.map(renderInsight).join('') : '<p class="nv-anora-empty-copy">Ainda não há dados suficientes para gerar insights. Registre alguns lançamentos para começar.</p>';
+    const questions = ['Qual é meu saldo?', 'Quanto gastei com Uber este mês?', 'Quanto gastei este mês?', 'Como estão minhas metas?'];
+    const dateLabel = new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date());
+    const currentStyle = preferences.style;
+
+    UIRenderer.updateDOM('main-content', `<div class="nv-anora-page" data-anora-page>
+        <header class="nv-anora-header">
+            <div><p class="nv-anora-eyebrow">Mentoria financeira</p><h1>Anora</h1><p>Insights e conversa local, baseados nos dados que você registrou no Avenera.</p></div>
+            <span class="nv-anora-freshness"><i class="ri-time-line" aria-hidden="true"></i> Dados consultados em ${escape(dateLabel)}</span>
+        </header>
+        <div class="nv-anora-layout">
+            <aside class="nv-anora-sidebar" aria-label="Resumo da Anora">
+                <section class="nv-anora-card nv-anora-profile-card">
+                    <div class="nv-anora-profile"><span class="nv-anora-avatar nv-anora-avatar--large"><i class="ri-sparkling-line" aria-hidden="true"></i></span><div><strong>Anora</strong><small>Assistente local</small></div></div>
+                    <p class="nv-anora-section-label">Insights do momento</p>
+                    <div class="nv-anora-insights">${insightList}</div>
+                </section>
+                <section class="nv-anora-card">
+                    <p class="nv-anora-section-label">Modo de atuação</p>
+                    <div class="nv-anora-style-list" role="group" aria-label="Modo de atuação da Anora">${['suave', 'equilibrado', 'rigoroso'].map(style => `<button type="button" data-action="setAnoraStyle" data-payload="${style}" aria-pressed="${currentStyle === style}" class="nv-anora-style ${currentStyle === style ? 'is-active' : ''}"><span aria-hidden="true">${styleIcon(style)}</span>${styleLabel(style)}</button>`).join('')}</div>
+                </section>
+            </aside>
+            <section class="nv-anora-chat" data-anora-chat aria-label="Conversa com a Anora">
+                <header class="nv-anora-chat-header"><div><h2>Como posso ajudar hoje?</h2><p>Faça uma pergunta sobre seus registros ou escolha uma sugestão.</p></div><span class="nv-anora-score">${escape(result.isOnboarding ? result.classification : `Saúde financeira: ${result.score}`)}</span></header>
+                <div id="anora-page-chat-messages" data-anora-messages class="nv-anora-messages" aria-live="polite">${renderWelcome({ result, data })}</div>
+                <div class="nv-anora-suggestions" aria-label="Sugestões de perguntas">${questions.map(question => `<button type="button" data-action="askAnoraQuestion" data-payload="${escape(question)}">${escape(question)}</button>`).join('')}</div>
+                <form data-submit="chatAnora" class="nv-anora-composer"><label class="sr-only" for="anora-page-chat-input">Pergunte à Anora</label><input type="text" id="anora-page-chat-input" data-anora-input required autocomplete="off" placeholder="Pergunte à Anora…"><button type="submit" aria-label="Enviar pergunta"><i class="ri-send-plane-fill" aria-hidden="true"></i></button></form>
+            </section>
         </div>
-        <div>
-          <p style="font-weight:600;font-size:.9375rem;">Anora</p>
-          <p style="font-size:.75rem;color:var(--accent2);display:flex;align-items:center;gap:.25rem;">
-            <span style="width:6px;height:6px;border-radius:50%;background:var(--accent2);"></span> online
-          </p>
-        </div>
-      </div>
-
-      <p style="font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.5rem;">Insights recentes</p>
-      <div style="display:flex;flex-direction:column;gap:.5rem;">
-        ${insights.map(i => `
-          <div style="padding:.625rem;border-radius:10px;background:${
-            i.tipo==='alerta' ? 'rgba(217,144,43,.12)' :
-            i.tipo==='aviso' ? 'rgba(88,70,194,.10)' :
-            i.tipo==='dica' ? 'rgba(14,159,110,.10)' : 'var(--bg)'
-          };border-left:3px solid ${
-            i.tipo==='alerta' ? 'var(--warning)' :
-            i.tipo==='aviso' ? 'var(--accent)' :
-            i.tipo==='dica' ? 'var(--accent2)' : 'var(--border)'
-          };">
-            <p style="font-size:.75rem;line-height:1.4;">${i.texto}</p>
-            <p style="font-size:.625rem;color:var(--muted);margin-top:.25rem;">${i.tempo}</p>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-
-    <!-- SELETOR DE RIGOR -->
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:1rem;">
-      <p style="font-size:.6875rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:.75rem;">Modo de atuação</p>
-      <div style="display:flex;flex-direction:column;gap:.5rem;">
-        ${['suave','balanced','rigoroso'].map(m => `
-          <button onclick="window.Anora?.setRigor('${m}');RenderPage('anora')" style="padding:.625rem;border-radius:10px;border:none;text-align:left;display:flex;align-items:center;gap:.5rem;background:${rigor===m?'var(--accent)':'var(--bg)'} ;color:${rigor===m?'#fff':'var(--text)'} ;font-size:.8125rem;cursor:pointer;transition:all .18s ease;">
-            ${m==='suave'?'🌿':m==='balanced'?'⚖️':'🎯'}
-            ${m==='suave'?'Suave':m==='balanced'?'Equilibrado':'Foco Extremo'}
-          </button>
-        `).join('')}
-      </div>
-    </div>
-  </div>
-
-  <!-- ÁREA PRINCIPAL: CHAT -->
-  <div style="flex:1;display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:16px;overflow:hidden;">
-    <div style="padding:1rem 1.5rem;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
-      <h3 style="font-weight:600;font-size:1rem;">Como posso ajudar hoje?</h3>
-      <span style="font-size:.7rem;color:var(--muted);">dados até 25/09</span>
-    </div>
-
-    <div id="anora-chat-mensagens" style="flex:1;overflow-y:auto;padding:1.5rem;background:var(--bg);display:flex;flex-direction:column;gap:1rem;">
-      <!-- MENSAGENS SERÃO INSERIDAS AQUI DINAMICAMENTE -->
-      <div style="display:flex;gap:.75rem;animation:anoraMsg .35s ease;">
-        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#5846C2,#8B7BE8);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">
-          <i class="ri-sparkling-line"></i>
-        </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;border-top-left-radius:4px;padding:1rem;max-width:80%;">
-          <p style="font-size:.875rem;line-height:1.5;">Olá! 👋 Eu sou a Anora, sua mentora financeira. Vi que sua fatura fecha em <strong>4 dias</strong> e você tem <strong>2 lançamentos pendentes</strong>. Quer que eu verifique agora, ou prefere conversar sobre outro tema?</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- SUGESTÕES RÁPIDAS -->
-    <div style="padding:.75rem 1.5rem;border-top:1px solid var(--border);display:flex;gap:.5rem;flex-wrap:wrap;">
-      ${['Quando fecha minha fatura?','Sugira um corte de gastos','Como está minha reserva de emergência?','Revise meus investimentos'].map(q => `
-        <button onclick="AnoraEnviarPergunta('${q}')" style="padding:.5rem .875rem;border-radius:999px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.75rem;cursor:pointer;transition:all .15s ease;" onmouseover="this.style.background='var(--accent-soft)'" onmouseout="this.style.background='var(--card)'">
-          ${q}
-        </button>
-      `).join('')}
-    </div>
-
-    <!-- CAMPO DE DIGITAÇÃO -->
-    <div style="padding:1rem 1.5rem;border-top:1px solid var(--border);display:flex;gap:.75rem;align-items:center;">
-      <input type="text" id="anora-input" placeholder="Pergunte à Anora…" style="flex:1;padding:.75rem 1rem;border-radius:12px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:.875rem;outline:none;" onkeydown="if(event.key==='Enter')AnoraEnviarMensagem()">
-      <button onclick="AnoraEnviarMensagem()" style="width:40px;height:40px;border-radius:12px;background:var(--accent);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;">
-        <i class="ri-send-plane-fill"></i>
-      </button>
-    </div>
-  </div>
-</div>
-
-<style>
-@keyframes anoraMsg {
-  from { opacity:0; transform:translateY(8px); }
-  to { opacity:1; transform:translateY(0); }
-}
-</style>
-`;
-}
-
-window.RenderPage_Anora = RenderPage_Anora;
-
-// Funções de comunicação com a lógica existente
-function AnoraEnviarPergunta(texto) {
-  const input = document.getElementById('anora-input');
-  if(input) input.value = texto;
-  AnoraEnviarMensagem();
-}
-
-function AnoraEnviarMensagem() {
-  const input = document.getElementById('anora-input');
-  const texto = input?.value.trim();
-  if(!texto) return;
-
-  const container = document.getElementById('anora-chat-mensagens');
-  if(!container) return;
-
-  // Mensagem do usuário
-  container.innerHTML += `
-    <div style="display:flex;justify-content:flex-end;animation:anoraMsg .35s ease;">
-      <div style="background:var(--accent);color:#fff;border-radius:18px;border-top-right-radius:4px;padding:1rem;max-width:80%;">
-        <p style="font-size:.875rem;line-height:1.5;">${texto}</p>
-      </div>
-    </div>
-  `;
-  input.value = '';
-
-  // Resposta da Anora (usa lógica existente se disponível)
-  setTimeout(() => {
-    const resposta = window.Anora?.responder?.(texto) || "Entendi! Estou analisando seus dados… Em uma versão futura, terei respostas mais detalhadas integradas com sua carteira.";
-    container.innerHTML += `
-      <div style="display:flex;gap:.75rem;animation:anoraMsg .35s ease;">
-        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#5846C2,#8B7BE8);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;">
-          <i class="ri-sparkling-line"></i>
-        </div>
-        <div style="background:var(--card);border:1px solid var(--border);border-radius:18px;border-top-left-radius:4px;padding:1rem;max-width:80%;">
-          <p style="font-size:.875rem;line-height:1.5;">${resposta}</p>
-        </div>
-      </div>
-    `;
-    container.scrollTop = container.scrollHeight;
-  }, 600);
-
-  container.scrollTop = container.scrollHeight;
-}
+    </div>`);
+};

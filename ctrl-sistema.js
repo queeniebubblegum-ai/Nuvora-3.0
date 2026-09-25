@@ -40,18 +40,18 @@ export const SistemaController = {
 
     submitChatAnora: (e) => {
         e.preventDefault();
-        const inputEl = document.getElementById('chat-anora-input');
-        const msg = inputEl.value.trim();
-        if(!msg) return;
-
-        const container = document.getElementById('chat-anora-messages');
+        const form = e.target?.matches?.('form[data-submit="chatAnora"]') ? e.target : null;
+        const chatRoot = form?.closest('[data-anora-chat]') || form?.closest('#modal-chat-anora');
+        const inputEl = form?.querySelector('[data-anora-input], input[type="text"]');
+        const container = chatRoot?.querySelector('[data-anora-messages]');
+        const msg = inputEl?.value.trim();
+        if (!msg || !container || !inputEl) return;
+        const avatarUrl = Utils.escapeHTML(String(db.usuario?.fotoUrl || 'assets/perfil.svg'));
         
         container.innerHTML += `
-        <div class="flex gap-3 max-w-[85%] ml-auto justify-end">
-            <div class="bg-brand-medium text-white p-3.5 rounded-[16px] rounded-tr-none shadow-sm text-sm leading-relaxed">
-                ${Utils.escapeHTML(msg)}
-            </div>
-            <img src="${db.usuario?.fotoUrl || 'assets/perfil.svg'}" class="w-8 h-8 rounded-full shadow-sm shrink-0 object-cover">
+        <div class="nv-anora-message nv-anora-message--user">
+            <div class="nv-anora-bubble">${Utils.escapeHTML(msg)}</div>
+            <img src="${avatarUrl}" alt="Sua mensagem" class="nv-anora-user-avatar">
         </div>`;
         
         inputEl.value = '';
@@ -59,18 +59,14 @@ export const SistemaController = {
 
         const idTyping = 'typing-' + Date.now();
         container.innerHTML += `
-        <div id="${idTyping}" class="flex gap-3 max-w-[85%] mt-4">
-            <img src="assets/anora.svg" class="w-8 h-8 rounded-full shadow-sm shrink-0 object-cover border border-white/10">
-            <div class="bg-surface border border-border p-3.5 rounded-[16px] rounded-tl-none shadow-sm flex items-center gap-1.5 h-[44px]">
-                <div class="w-1.5 h-1.5 bg-brand-medium rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-                <div class="w-1.5 h-1.5 bg-brand-medium rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-                <div class="w-1.5 h-1.5 bg-brand-medium rounded-full animate-bounce" style="animation-delay: 300ms"></div>
-            </div>
+        <div id="${idTyping}" class="nv-anora-message nv-anora-message--assistant nv-anora-typing" role="status" aria-label="A Anora está preparando uma resposta">
+            <span class="nv-anora-avatar"><i class="ri-sparkling-line" aria-hidden="true"></i></span>
+            <div class="nv-anora-bubble"><span></span><span></span><span></span></div>
         </div>`;
         container.scrollTop = container.scrollHeight;
 
         setTimeout(() => {
-            const typingEl = document.getElementById(idTyping);
+            const typingEl = container.querySelector(`#${idTyping}`);
             if (typingEl) typingEl.remove();
 
             const respostaAnora = AnoraNLP.processarMensagem(msg);
@@ -79,11 +75,9 @@ export const SistemaController = {
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="text-text-primary font-bold font-mono tracking-tight">$1</strong>');
 
             container.innerHTML += `
-            <div class="flex gap-3 max-w-[85%] mt-4">
-                <img src="assets/anora.svg" class="w-8 h-8 rounded-full shadow-sm shrink-0 object-cover border border-white/10">
-                <div class="bg-surface border border-border p-3.5 rounded-[16px] rounded-tl-none shadow-sm text-sm text-text-primary leading-relaxed">
-                    ${respostaFormatada}
-                </div>
+            <div class="nv-anora-message nv-anora-message--assistant">
+                <span class="nv-anora-avatar"><i class="ri-sparkling-line" aria-hidden="true"></i></span>
+                <div class="nv-anora-bubble">${respostaFormatada}</div>
             </div>`;
             container.scrollTop = container.scrollHeight;
             

@@ -1,5 +1,5 @@
 export const Router = {
-    validPages: ['Dashboard', 'Transacoes', 'Relatorios', 'Planejamento', 'Agendamentos', 'Contas', 'Contatos', 'Metas', 'Orcamento', 'Categorias', 'Configuracoes'],
+    validPages: ['Dashboard', 'Transacoes', 'Relatorios', 'Planejamento', 'Agendamentos', 'Contas', 'Contatos', 'Metas', 'Orcamento', 'Categorias', 'Anora', 'Configuracoes'],
     
     init: (onNavigateCallback) => {
         const hash = window.location.hash.replace('#', '');

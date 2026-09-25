@@ -1,26 +1,21 @@
-# Avenera — compactação do menu e das telas (v3)
+# Avenera — adaptação da página completa da Anora
 
-## O que muda
+Este pacote integra uma página dedicada da Anora ao app real, usando a arquitetura existente do Avenera. A interface mostra insights calculados pelos dados locais, conversa pelo mecanismo atual `AnoraNLP` e oferece os modos de atuação já suportados (`suave`, `equilibrado` e `rigoroso`). Não adiciona serviço de IA online nem valores financeiros de demonstração.
 
-- O menu lateral mantém todos os destinos, agora agrupados em Finanças, Organização e Sistema com setas nativas de expandir/recolher. O grupo da tela atual abre automaticamente; os outros fecham ao navegar.
-- Categorias abre com todos os grupos recolhidos. Ao pesquisar, os grupos correspondentes se abrem para mostrar os resultados; ao limpar a busca, só esses grupos retornam ao estado recolhido.
-- Reduz espaços gerais, paddings, altura de linhas, cabeçalhos e cards de Dashboard, Lançamentos, Contas/cartões, Categorias, Pessoas, Configurações, Metas/Orçamento e Agenda. Mantém conteúdo e ações disponíveis.
-- Planejamento e Relatórios continuam como referências visuais; seus componentes internos não foram redesenhados. O espaçamento externo comum foi reduzido moderadamente.
-- Atualiza a URL do CSS e o cache offline para `avenera-app-shell-v14`.
+## O que foi integrado
 
-## Arquivos incluídos
+- Página `Anora` no roteador, renderizador, menu lateral e menu do cabeçalho.
+- Sugestões de perguntas conectadas ao formulário e ao controller de chat já existentes.
+- Preferência de estilo salva pelas preferências locais da Anora e refletida no perfil de mentoria.
+- Alvos de chat isolados por formulário, mantendo compatibilidade com o modal legado.
+- Escape de conteúdo dinâmico e tratamento seguro de lançamentos antigos sem descrição ou categoria durante a busca de despesas.
+- Estilos responsivos, estados de foco/redução de movimento, CSS compilado e cache offline atualizado para `avenera-app-shell-v16`.
+- Testes de integração/segurança e checklist de validação visual local.
 
-`index.html`, `renderer.js`, `app.js`, `cmp-pages.js`, `input.css`, `styles.css`, `service-worker.js`, `system-visual-consistency.test.js`, `navigation-discoverability.test.js`, `transactions-page.test.js`, `invoice-payment.test.js`, `invoice-modal.test.js` e `backup-format.test.js`.
+## Aplicar e validar
 
-## Aplicação
+1. Faça backup do seu checkout e compare/substitua os arquivos do pacote mantendo os caminhos relativos.
+2. No Windows, na pasta do projeto, execute `npm.cmd run build` e `npm.cmd test`.
+3. Siga `ANORA_PAGE_PHASE5_MANUAL.md` para conferir navegação, conversa, persistência, temas e responsividade no navegador local. A aparência real em desktop/mobile e nos temas claro/escuro ainda depende dessa conferência no app da usuária.
 
-1. Faça uma cópia de segurança e compare os arquivos com sua versão local antes de substituí-los. O pacote parte do commit `91758ba55e2fe33b86bd560864ed65f1b9702665` e inclui as alterações visuais v2 previamente entregues.
-2. Substitua os arquivos incluídos na raiz do repositório.
-3. Execute `npm.cmd run build` e `npm.cmd test`.
-4. Feche e reabra o app/aba para o service worker v14 ativar; confira menu, Categorias (inclusive busca) e páginas no desktop e celular.
-
-Este pacote não faz commit nem push.
-
-## Validação desta preparação
-
-A suíte, o build e a inspeção no navegador não foram executados neste ambiente sem Node/npm. Foram conferidos estaticamente os destinos do menu, o recolhimento inicial das categorias, a abertura de resultados ao pesquisar, a preservação dos ganchos de navegação/ações, a sintaxe estrutural do HTML, o balanceamento de delimitadores CSS e a sincronização da camada v3 entre `input.css` e `styles.css`. A validação visual final ainda precisa ser feita no navegador local.
+Na preparação deste pacote, `npm run build` concluiu e Vitest passou: 51 arquivos e 247 testes. A validação visual no navegador não foi executada. Nenhum commit ou push foi realizado.

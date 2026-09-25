@@ -10,19 +10,19 @@
     <meta property="og:type" content="website">
 
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#F7F6F2">
+    <meta name="theme-color" content="#4C3C70">
     <link rel="icon" href="assets/icon-192.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="assets/icon-192.svg">
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Public+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4/fonts/remixicon.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
-    <link rel="stylesheet" href="styles.css?v=20260924-ui-compact-3">
-    <link rel="stylesheet" href="redesign-fase2.css?v=20260925">
+    <link rel="stylesheet" href="styles.css?v=20260925-anora-phase5-1">
 
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -33,15 +33,6 @@
         /* Keep the page container out of a transform stacking context so fixed-layer CTAs remain hit-testable. */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
-
-        /* Redesign Fase 1: sidebar clara no modo claro (mantem escura no dark mode) */
-        :root:not(.dark) .nv-sidebar { background: var(--c-surface) !important; border-right-color: var(--c-border) !important; }
-        :root:not(.dark) .nv-sidebar__item, :root:not(.dark) .nv-sidebar__group-toggle { color: var(--c-text-secondary) !important; }
-        :root:not(.dark) .nv-sidebar__item:hover, :root:not(.dark) .nv-sidebar__group-toggle:hover { color: var(--c-text-primary) !important; background: var(--c-brand-soft) !important; }
-        :root:not(.dark) .nv-sidebar__item.active, :root:not(.dark) .nav-item.active { color: var(--c-brand-medium) !important; background: var(--c-brand-soft) !important; }
-        :root:not(.dark) .nv-sidebar__section-label { color: var(--c-text-secondary) !important; opacity: .8; }
-        :root:not(.dark) .nv-sidebar__group-chevron { color: var(--c-text-secondary) !important; }
-        :root:not(.dark) .nv-sidebar__footer { border-top-color: var(--c-border) !important; }
     </style>
 </head>
 <body class="bg-bg font-primary text-text-primary h-screen overflow-hidden flex flex-col transition-colors duration-300">
@@ -95,14 +86,14 @@
                     <div class="p-4 border-b border-border bg-brand-deep text-white">
                         <p class="text-[11px] font-bold font-primary uppercase tracking-wider mb-2 text-brand-soft">Perfil da Mentoria</p>
                         <select id="anora-rigor-select" data-change="updateAnoraPreference" data-preference="style" onclick="event.stopPropagation()" class="w-full bg-white/10 border border-white/20 rounded-[8px] text-xs p-2 outline-none focus:border-brand-medium text-white cursor-pointer font-medium">
-                            <option class="text-text-primary" value="suave">Modo Suave</option>
-                            <option class="text-text-primary" value="equilibrado" selected>Modo Equilibrado</option>
-                            <option class="text-text-primary" value="rigoroso">Foco Extremo (Rigoroso)</option>
+                            <option class="text-text-primary" value="suave">🍃 Modo Suave</option>
+                            <option class="text-text-primary" value="equilibrado" selected>⚖️ Modo Equilibrado</option>
+                            <option class="text-text-primary" value="rigoroso">🎯 Foco Extremo (Rigoroso)</option>
                         </select>
                     </div>
                     <div class="p-2 flex flex-col gap-1">
-                        <button data-action="openModal" data-modal="modal-chat-anora" class="flex items-center gap-3 text-left px-3 py-2.5 text-sm text-text-primary hover:bg-bg rounded-[8px] transition-colors font-medium">
-                            <i class="fa-solid fa-wand-magic-sparkles w-4 text-brand-medium text-center"></i> Fazer uma Pergunta
+                        <button data-action="navigate" data-payload="Anora" class="flex items-center gap-3 text-left px-3 py-2.5 text-sm text-text-primary hover:bg-bg rounded-[8px] transition-colors font-medium">
+                            <i class="fa-solid fa-wand-magic-sparkles w-4 text-brand-medium text-center"></i> Conversar com a Anora
                         </button>
                         <button data-action="openModal" data-modal="modal-historico-anora" class="flex items-center gap-3 text-left px-3 py-2.5 text-sm text-text-primary hover:bg-bg rounded-[8px] transition-colors font-medium">
                             <i class="fa-solid fa-clock-rotate-left w-4 text-text-secondary text-center"></i> Histórico de Insights
@@ -153,8 +144,6 @@
                         <button data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-bullseye w-5 text-center" aria-hidden="true"></i><span>Metas</span></button>
                         <button data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-pie w-5 text-center" aria-hidden="true"></i><span>Orçamento</span></button>
                         <button data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-line w-5 text-center" aria-hidden="true"></i><span>Relatórios</span></button>
-                        <button data-action="navigate" data-payload="Conciliacao" id="nav-Conciliacao" class="nv-sidebar__item nav-item"><i class="fa-solid fa-scale-balanced w-5 text-center" aria-hidden="true"></i><span>Conciliação</span></button>
-                        <button data-action="navigate" data-payload="Importacao" id="nav-Importacao" class="nv-sidebar__item nav-item"><i class="fa-solid fa-file-arrow-down w-5 text-center" aria-hidden="true"></i><span>Importar extrato</span></button>
                     </div>
                 </details>
 
@@ -171,6 +160,7 @@
                 <details class="nv-sidebar__group" data-nav-group="system">
                     <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-gear" aria-hidden="true"></i>Sistema</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items">
+                        <button data-action="navigate" data-payload="Anora" id="nav-Anora" class="nv-sidebar__item nav-item"><i class="ri-sparkling-line w-5 text-center" aria-hidden="true"></i><span>Anora</span></button>
                         <button data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-gear w-5 text-center" aria-hidden="true"></i><span>Configurações</span></button>
                     </div>
                 </details>
@@ -324,7 +314,5 @@
         window.App = App;
         window.Notifications = Notifications;
     </script>
-<script src="./modal-shortcuts.js"></script>
-<script src="./rnd-anora.js"></script>
 </body>
 </html>

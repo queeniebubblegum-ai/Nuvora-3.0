@@ -10,6 +10,7 @@ import { projectionSourcesFromDatabase, getLastUpdatedIndicator, financialValueC
 import { cashflowProjectionFromDatabase } from './cashflow-projection.js';
 import { PRIORITY_KEYS, resolvePriority } from './priority.js';
 import { renderTransactionTypeMenu } from './transaction-type-menu.js';
+import { renderAnoraPage } from './rnd-anora.js';
 
 export const settingsGroups = [
     { id: 'profile', title: 'Perfil', description: 'Dados e preferências pessoais.', icon: 'fa-user', items: ['Nome', 'Moeda', 'Preferências pessoais'] },
@@ -25,6 +26,7 @@ export const renderPageHeader = ({ eyebrow = '', title = '', subtitle = '', acti
     const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
     const safeClassName = escape(className);
     const safePrefix = escape(stylePrefix);
+    const titleClass = safePrefix === 'nv-tx' ? ' class="font-display"' : '';
     const prefixed = suffix => safePrefix ? ` ${safePrefix}-${suffix}` : '';
     const allowedAttribute = name => /^(?:data-[a-z0-9-]+|aria-[a-z0-9-]+|title|id)$/.test(String(name).toLowerCase());
     const attributes = attrs => Object.entries(attrs || {})
@@ -53,7 +55,7 @@ export const renderPageHeader = ({ eyebrow = '', title = '', subtitle = '', acti
         return `<button type="button"${attributes(actionAttributes)} class="nv-page-header__action is-${variant}${prefixed(`${variant}-action`)}"><i class="fa-solid ${icon}" aria-hidden="true"></i><span>${label}</span></button>`;
     }).join('');
 
-    return `<header class="nv-page-header${safeClassName ? ` ${safeClassName}` : ''}"><div class="nv-page-header__copy"><p class="nv-page-header__eyebrow${prefixed('eyebrow')}">${escape(eyebrow)}</p><h1>${escape(title)}</h1><p class="nv-page-header__subtitle${prefixed('page-subtitle')}">${escape(subtitle)}</p></div><div class="nv-page-header__actions${prefixed('page-actions')}">${actionHtml}</div></header>`;
+    return `<header class="nv-page-header${safeClassName ? ` ${safeClassName}` : ''}"><div class="nv-page-header__copy"><p class="nv-page-header__eyebrow${prefixed('eyebrow')}">${escape(eyebrow)}</p><h1${titleClass}>${escape(title)}</h1><p class="nv-page-header__subtitle${prefixed('page-subtitle')}">${escape(subtitle)}</p></div><div class="nv-page-header__actions${prefixed('page-actions')}">${actionHtml}</div></header>`;
 };
 
 export const getDashboardQuickAction = (atual = {}, context = {}) => {
@@ -86,62 +88,7 @@ export const getDashboardQuickAction = (atual = {}, context = {}) => {
 };
 
 export const PageRenderers = {
-    Conciliacao: (appState) => {
-        const cartoes = db.cartoes || [];
-        const hoje = new Date();
-        const mes = hoje.getMonth(), ano = hoje.getFullYear();
-        const conciliadas = (db.conciliacoesFaturas || []);
-        let conciliadasCount = 0;
-        const cardsHtml = cartoes.map(card => {
-            const chave = `${card.id}_${ano}_${mes}`;
-            const rec = conciliadas.find(r => String(r.chave) === String(chave));
-            const valorFatura = (db.transacoes || []).filter(t => t.isCartao && String(t.bancoId) === String(card.id) && !t.transferenciaInterna && new Date((t.data || '') + 'T12:00:00').getMonth() === mes && new Date((t.data || '') + 'T12:00:00').getFullYear() === ano).reduce((s, t) => s + (Number(t.valor) || 0), 0);
-            const conciliado = !!(rec && rec.valorFaturaReal != null);
-            if (conciliado) conciliadasCount++;
-            return `<div class="nv-accounts-card p-4 flex items-center justify-between gap-3">
-                <div class="min-w-0"><p class="font-bold text-text-primary">${Utils.escapeHTML(card.nome || 'Cartão')}</p><p class="text-xs text-text-secondary">Fatura ${mes + 1}/${ano} · ${Utils.formatMoney(valorFatura)} em lançamentos</p></div>
-                <span class="text-xs font-bold ${conciliado ? 'text-success' : 'text-warning'}">${conciliado ? 'Conciliada' : 'Em aberto'}</span>
-                <button type="button" onclick="App.viewState.activeCardId='${Utils.escapeHTML(String(card.id))}';App.viewState.invoiceMonth=${mes};App.viewState.invoiceYear=${ano};App.renderInvoiceModal();App.openModal('modal-fatura-detalhes');" class="px-3 py-2 rounded-[10px] bg-brand-medium text-white text-xs font-bold hover:bg-brand-dark transition-colors shrink-0">Conferir</button>
-            </div>`;
-        }).join('');
-        document.getElementById('main-content').innerHTML = `
-            ${renderPageHeader({ eyebrow: 'Faturas', title: 'Conciliação', subtitle: 'Confira o extrato contra os lançamentos e ajuste juros, multas e estornos.', actions: [{ label: 'Contas e cartões', icon: 'fa-wallet', action: 'navigate', payload: 'Contas' }] })}
-            <div class="grid grid-cols-3 gap-3">
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-text-primary">${cartoes.length}</p><p class="text-xs text-text-secondary">Cartões</p></div>
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-success">${conciliadasCount}</p><p class="text-xs text-text-secondary">Conciliados</p></div>
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-warning">${cartoes.length - conciliadasCount}</p><p class="text-xs text-text-secondary">Em aberto</p></div>
-            </div>
-            <div class="space-y-3">${cardsHtml || '<p class="text-sm text-text-secondary text-center py-8 bg-bg rounded-[16px] border border-dashed border-border">Nenhum cartão cadastrado ainda.</p>'}</div>
-            <p class="text-xs text-text-secondary text-center"><i class="fa-solid fa-circle-info mr-1"></i> A conciliação detalhada (lançamentos, ajustes, provisões) abre no painel da fatura ao clicar em Conferir.</p>
-        `;
-    },
-    Importacao: (appState) => {
-        document.getElementById('main-content').innerHTML = `
-            ${renderPageHeader({ eyebrow: 'Extratos', title: 'Importar lançamentos', subtitle: 'Traga seus lançamentos de OFX ou CSV — a Anora categoriza automaticamente.' })}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="nv-accounts-card p-6 text-center">
-                    <div class="w-14 h-14 mx-auto mb-3 rounded-[14px] bg-brand-soft text-brand-medium flex items-center justify-center text-2xl"><i class="fa-solid fa-file-import"></i></div>
-                    <h3 class="font-bold text-text-primary mb-1">Arquivo OFX</h3>
-                    <p class="text-xs text-text-secondary mb-4">Formato padrão dos bancos brasileiros. Traz data, descrição e valor.</p>
-                    <button type="button" onclick="document.getElementById('input-ofx-file').click()" class="w-full py-2.5 rounded-[10px] bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors">Escolher arquivo OFX</button>
-                </div>
-                <div class="nv-accounts-card p-6 text-center">
-                    <div class="w-14 h-14 mx-auto mb-3 rounded-[14px] bg-success/15 text-success flex items-center justify-center text-2xl"><i class="fa-solid fa-file-csv"></i></div>
-                    <h3 class="font-bold text-text-primary mb-1">Planilha CSV</h3>
-                    <p class="text-xs text-text-secondary mb-4">Excel ou Google Sheets exportado em CSV. Você confere os lançamentos.</p>
-                    <button type="button" onclick="document.getElementById('input-csv-file').click()" class="w-full py-2.5 rounded-[10px] bg-success text-white text-sm font-bold hover:opacity-90 transition-opacity">Escolher arquivo CSV</button>
-                </div>
-            </div>
-            <div class="nv-settings-panel p-5">
-                <p class="text-sm font-bold text-text-primary mb-2"><i class="fa-solid fa-list-check mr-2 text-brand-medium"></i>Como funciona</p>
-                <ol class="text-xs text-text-secondary space-y-1.5 list-decimal list-inside">
-                    <li>Escolha o arquivo (OFX ou CSV) — ele é lido só no seu dispositivo, nada vai para a nuvem.</li>
-                    <li>Revise os lançamentos detectados na prévia (o app já mostra o que vai entrar).</li>
-                    <li>Confirme — os lançamentos entram com categoria sugerida pela Anora e você ajusta o que quiser.</li>
-                </ol>
-            </div>
-        `;
-    },
+    Anora: () => renderAnoraPage(),
     Dashboard: (appState) => {
         const hora = new Date().getHours();
         let saudacao = 'Boa noite';
@@ -479,10 +426,10 @@ export const PageRenderers = {
                 className: 'nv-tx-page-header',
                 stylePrefix: 'nv-tx',
                 actions: [
+                    { type: 'transaction-type-selector', menuId: 'transactions-new-type-menu', label: 'Nova transação', ariaLabel: 'Nova transação: escolher tipo' },
                     { action: 'exportTransactionsCSV', label: 'Exportar', icon: 'fa-file-export', variant: 'secondary' },
                     { action: 'iniciarImportacaoOFX', label: 'Importar OFX', icon: 'fa-file-import', variant: 'secondary', attributes: { 'data-banco-id': bancoPadraoId } },
-                    { action: 'iniciarImportacaoCSV', label: 'Importar CSV', icon: 'fa-file-csv', variant: 'secondary', attributes: { 'data-banco-id': bancoPadraoId } },
-                    { type: 'transaction-type-selector', menuId: 'transactions-new-type-menu', label: 'Nova transação', ariaLabel: 'Nova transação: escolher tipo' }
+                    { action: 'iniciarImportacaoCSV', label: 'Importar CSV', icon: 'fa-file-csv', variant: 'secondary', attributes: { 'data-banco-id': bancoPadraoId } }
                 ]
             })}
             ${Components.transactionSummary(filtered)}

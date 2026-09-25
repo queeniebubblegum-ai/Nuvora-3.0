@@ -1,30 +1,30 @@
 export const Modals = {
     getHTML: () => `
-    <div id="modal-chat-anora" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+    <div id="modal-chat-anora" data-anora-chat class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="p-4 border-b border-border flex justify-between items-center bg-brand-deep rounded-t-[16px] text-white shrink-0">
                 <div class="flex items-center gap-3">
                     <img src="assets/anora.svg" class="w-10 h-10 rounded-full border-2 border-white/20 object-cover">
                     <div>
                         <h3 class="font-bold font-primary leading-tight">Anora</h3>
-                        <p class="text-[10px] text-brand-soft flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success inline-block"></span> Online</p>
+                        <p class="text-[10px] text-brand-soft flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-success inline-block"></span> Assistente local</p>
                     </div>
                 </div>
                 <button data-action="closeModal" class="text-white/60 hover:text-white w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors"><i class="fa-solid fa-xmark"></i></button>
             </div>
             
-            <div class="flex-1 min-h-0 overflow-y-auto p-5 bg-bg space-y-4" id="chat-anora-messages">
+            <div class="flex-1 min-h-0 overflow-y-auto p-5 bg-bg space-y-4" id="chat-anora-messages" data-anora-messages>
                 <div class="flex gap-3 max-w-[85%]">
                     <img src="assets/anora.svg" class="w-8 h-8 rounded-full shadow-sm shrink-0 object-cover border border-white/10">
                     <div class="bg-surface border border-border p-3.5 rounded-[16px] rounded-tl-none shadow-sm text-sm text-text-primary leading-relaxed">
-                        Olá! Estou analisando seus dados em tempo real. O que você gostaria de saber sobre suas finanças hoje?
+                        Olá! Sou a Anora, assistente local conectada aos dados que você registrou no Avenera. O que você gostaria de consultar?
                     </div>
                 </div>
             </div>
             
             <div class="p-3 bg-surface border-t border-border rounded-b-[16px] shrink-0">
                 <form data-submit="chatAnora" class="flex gap-2">
-                    <input type="text" id="chat-anora-input" required placeholder="Ex: Quanto gastei com Uber?" class="flex-1 p-3 bg-bg border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary transition-colors">
+                    <input type="text" id="chat-anora-input" data-anora-input required placeholder="Ex: Quanto gastei com Uber?" class="flex-1 p-3 bg-bg border border-border rounded-[12px] text-sm focus:outline-none focus:border-brand-medium text-text-primary transition-colors">
                     <button type="submit" class="bg-brand-medium text-white w-12 h-12 rounded-[12px] shadow-soft flex items-center justify-center hover:bg-brand-dark transition-transform hover:-translate-y-0.5"><i class="fa-solid fa-paper-plane"></i></button>
                 </form>
             </div>
@@ -174,13 +174,6 @@ export const Modals = {
             </div>
             <form data-submit="contato" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <div>
-                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Tipo</label>
-                    <select id="contato-tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
-                        <option value="pf">Pessoa Física (CPF)</option>
-                        <option value="pj">Pessoa Jurídica (CNPJ)</option>
-                    </select>
-                </div>
-                <div>
                     <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome / Razão Social</label>
                     <input id="contato-nome" placeholder="Ex: João da Silva" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
                 </div>
@@ -188,54 +181,10 @@ export const Modals = {
                     <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">CPF ou CNPJ</label>
                     <input id="contato-documento" placeholder="Apenas números" class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
                 </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Telefone / WhatsApp</label>
-                    <input id="contato-telefone" placeholder="(00) 00000-0000" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">E-mail</label>
-                    <input id="contato-email" type="email" placeholder="nome@email.com" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
-                </div>
-                <div>
-                    <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Endereço (opcional)</label>
-                    <textarea id="contato-endereco" rows="2" placeholder="Rua, número, cidade" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm resize-none"></textarea>
-                </div>
                 <div class="shrink-0 mt-3">
                     <button type="submit" class="w-full py-2.5 bg-brand-medium hover:bg-brand-dark text-white text-sm font-bold rounded-[10px] shadow-soft transition-all">Salvar Registro</button>
                 </div>
             </form>
-        </div>
-    </div>
-
-    <div id="modal-contato-perfil" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
-        <div class="bg-surface w-full max-w-md rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
-            <div class="flex justify-between items-center p-5 border-b border-border shrink-0">
-                <div class="min-w-0">
-                    <h3 id="contato-perfil-nome" class="text-lg font-bold font-primary text-text-primary truncate">Contato</h3>
-                    <p class="text-xs text-text-secondary mt-0.5"><span id="contato-perfil-tipo">Pessoa Física</span> · <span id="contato-perfil-documento" class="font-mono">—</span></p>
-                </div>
-                <button data-action="closeModal" class="text-text-secondary hover:text-text-primary shrink-0 ml-2" aria-label="Fechar"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
-                <div class="grid grid-cols-2 gap-3 text-xs">
-                    <div class="bg-bg rounded-[10px] p-3"><p class="text-text-secondary mb-1"><i class="fa-solid fa-phone mr-1"></i>Telefone</p><p id="contato-perfil-telefone" class="font-medium text-text-primary">—</p></div>
-                    <div class="bg-bg rounded-[10px] p-3"><p class="text-text-secondary mb-1"><i class="fa-solid fa-envelope mr-1"></i>E-mail</p><p id="contato-perfil-email" class="font-medium text-text-primary break-all">—</p></div>
-                </div>
-                <div class="bg-bg rounded-[10px] p-3 text-xs"><p class="text-text-secondary mb-1"><i class="fa-solid fa-location-dot mr-1"></i>Endereço</p><p id="contato-perfil-endereco" class="font-medium text-text-primary">—</p></div>
-                <div class="grid grid-cols-3 gap-2">
-                    <div class="bg-danger/10 rounded-[10px] p-3 text-center"><p class="text-[9px] uppercase font-bold text-text-secondary mb-1">Total pago</p><p id="contato-perfil-pago" class="text-sm font-bold font-mono text-danger">R$ 0,00</p></div>
-                    <div class="bg-success/10 rounded-[10px] p-3 text-center"><p class="text-[9px] uppercase font-bold text-text-secondary mb-1">Recebido</p><p id="contato-perfil-recebido" class="text-sm font-bold font-mono text-success">R$ 0,00</p></div>
-                    <div class="bg-brand-soft rounded-[10px] p-3 text-center"><p class="text-[9px] uppercase font-bold text-text-secondary mb-1">Movimentos</p><p id="contato-perfil-qtd" class="text-sm font-bold font-mono text-brand-medium">0</p></div>
-                </div>
-                <div>
-                    <p class="text-[10px] font-bold uppercase tracking-wider text-text-secondary mb-2">Histórico de pagamentos (recentes)</p>
-                    <div id="contato-perfil-historico" class="space-y-1"></div>
-                </div>
-            </div>
-            <div class="p-4 border-t border-border shrink-0 flex gap-2">
-                <button data-action="closeModal" class="flex-1 py-2.5 rounded-[10px] border border-border text-text-primary text-sm font-bold hover:bg-bg transition-colors">Fechar</button>
-                <button id="contato-perfil-exportar" class="flex-1 py-2.5 rounded-[10px] bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors"><i class="fa-solid fa-file-csv mr-1"></i>Exportar CSV</button>
-            </div>
         </div>
     </div>
 

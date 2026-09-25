@@ -114,8 +114,8 @@ export const AnoraNLP = {
             if (termo.length >= 2) {
                 const gastosTermo = transacoesMes.filter(t => {
                     if (!isExpense(t)) return false;
-                    const descLimpa = t.desc.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-                    const catLimpa = t.categoria.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    const descLimpa = String(t?.desc ?? '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+                    const catLimpa = String(t?.categoria ?? '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
                     return descLimpa.includes(termo) || catLimpa.includes(termo);
                 });
                 

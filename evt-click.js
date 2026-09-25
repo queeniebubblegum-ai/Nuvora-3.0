@@ -17,7 +17,8 @@ export const ClickEvents = {
 
             const anoraMenu = document.getElementById('anora-menu');
             const anoraWrapper = target?.closest?.('.anora-wrapper');
-            if (anoraMenu && !anoraMenu.classList.contains('hidden') && !anoraWrapper) {
+            const selectingAnoraPage = target?.closest?.('[data-action="navigate"][data-payload="Anora"]');
+            if (anoraMenu && !anoraMenu.classList.contains('hidden') && (!anoraWrapper || selectingAnoraPage)) {
                 anoraMenu.classList.add('hidden');
             }
 
@@ -34,6 +35,19 @@ export const ClickEvents = {
 
             const actionsMap = {
                 'navigate': () => App.navigate(btn.getAttribute('data-payload')),
+                'askAnoraQuestion': () => {
+                    const chat = btn.closest('[data-anora-chat]');
+                    const input = chat?.querySelector('[data-anora-input]');
+                    const form = input?.closest('form[data-submit="chatAnora"]');
+                    if (!input || !form) return;
+                    input.value = btn.getAttribute('data-payload') || '';
+                    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+                    else form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+                },
+                'setAnoraStyle': () => {
+                    const updated = App.updateAnoraPreference('style', btn.getAttribute('data-payload'));
+                    if (updated && App.currentPage === 'Anora') App.scheduleRender();
+                },
                 'openSettingsGroup': () => App.openSettingsGroup(btn.getAttribute('data-group')),
                 'toggleTheme': () => App.toggleTheme(),
                 'chooseProfilePhoto': () => App.chooseProfilePhoto(),

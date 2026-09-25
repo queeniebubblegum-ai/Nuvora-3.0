@@ -85,6 +85,27 @@ describe('transactions Phase 1 redesign contracts', () => {
         expect(runtimeCss).toContain('.nv-page-header');
     });
 
+
+    it('scopes the approved typography and tabular-number treatment to Transactions', () => {
+        const header = renderPageHeader({ title: 'Transações', stylePrefix: 'nv-tx' });
+        const component = read('cmp-pages.js');
+        const html = read('index.html');
+        const css = read('input.css');
+        const serviceWorker = read('service-worker.js');
+        expect(header).toContain('<h1 class=\"font-display\">Transações</h1>');
+        expect(component).toContain('class=\"money num\"');
+        expect(component).toContain('class=\"money num ${valColor}\"');
+        expect(html).toContain('family=Fraunces:ital,opsz,wght');
+        expect(html).toContain('family=Public+Sans');
+        expect(html).toContain('family=Sora');
+        expect(html).toContain('styles.css?v=20260925-anora-phase5-1');
+        expect(serviceWorker).toContain("avenera-app-shell-v16");
+        expect(serviceWorker).toContain('./styles.css?v=20260925-anora-phase5-1');
+        expect(css).toContain('.nv-transactions-page { font-family: \"Public Sans\"');
+        expect(css).toContain('.nv-transactions-page .font-display');
+        expect(css).toContain('font-variant-numeric: tabular-nums');
+    });
+
     it('keeps the complete filter UI available and makes additional filters collapsible', () => {
         const html = PageComponents.filtersSection(
             { desc: '', categoria: '', bancoId: '', mes: '', tipo: '', dataInicio: '', dataFim: '' },
