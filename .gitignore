@@ -24,4 +24,7 @@ vitest/results.json
 *.log
 *.tsbuildinfo
 .DS_Store
+
+# Build artifacts (não devem ser commitados)
+input.css
 *.json
