@@ -1,0 +1,30 @@
+# Dependencies and package-manager caches
+node_modules/
+.npm/
+.pnpm-store/
+
+# Build, bundler, test and coverage output
+.vite/
+dist/
+coverage/
+.cache/
+.parcel-cache/
+playwright-report/
+test-results/
+# Opt-in responsive visual output; screenshots and browser traces are never source artifacts.
+visual-artifacts/
+visual-snapshots/
+visual-output/
+*.visual.png
+visual/**/*.png
+vitest/results.json
+
+# Local tooling and generated logs
+.eslintcache
+*.log
+*.tsbuildinfo
+.DS_Store
+
+# Build artifacts (não devem ser commitados)
+input.css
+*.json
