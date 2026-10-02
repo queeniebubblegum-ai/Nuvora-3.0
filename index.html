@@ -67,6 +67,7 @@
             <input type="file" id="backup-input" class="hidden" accept=".json">
 
             <div class="nv-header__data-tools flex items-center gap-1" aria-label="Ferramentas de dados">
+                <button type="button" data-action="openTransactionSearch" title="Buscar transações" aria-label="Buscar transações" class="nv-header__action nv-header__data-action flex items-center justify-center rounded-[10px] text-sm font-medium w-9 h-9 transition-colors"><i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i></button>
                 <button type="button" data-action="exportBackup" title="Exportar dados" aria-label="Exportar dados" class="nv-header__action nv-header__data-action flex items-center justify-center rounded-[10px] text-sm font-medium w-9 h-9 transition-colors">
                     <i class="fa-solid fa-download" aria-hidden="true"></i>
                 </button>
@@ -148,22 +149,22 @@
                     <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-wallet" aria-hidden="true"></i>Finanças</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items">
                         <button data-action="navigate" data-payload="Transacoes" data-page-route="Transacoes" id="nav-Transacoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-arrow-right-arrow-left w-5 text-center" aria-hidden="true"></i><span>Lançamentos</span></button>
-                        <button data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-wallet w-5 text-center" aria-hidden="true"></i><span>Contas e cartões</span></button>
-                        <button data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-check w-5 text-center" aria-hidden="true"></i><span>Planejamento</span></button>
+                        <button data-action="navigate" data-payload="Contas" data-page-route="Contas" id="nav-Contas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-wallet w-5 text-center" aria-hidden="true"></i><span>Contas e cartões</span></button>
+                        <button data-action="navigate" data-payload="Planejamento" data-page-route="Planejamento" id="nav-Planejamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-check w-5 text-center" aria-hidden="true"></i><span>Planejamento</span></button>
                         <button data-action="navigate" data-payload="Agendamentos" data-page-route="Agendamentos" id="nav-Agendamentos" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-days w-5 text-center" aria-hidden="true"></i><span>Agenda de contas</span></button>
-                        <button data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-bullseye w-5 text-center" aria-hidden="true"></i><span>Metas</span></button>
-                        <button data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-pie w-5 text-center" aria-hidden="true"></i><span>Orçamento</span></button>
-                        <button data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-line w-5 text-center" aria-hidden="true"></i><span>Relatórios</span></button>
-                        <button data-action="navigate" data-payload="Conciliacao" id="nav-Conciliacao" class="nv-sidebar__item nav-item"><i class="fa-solid fa-scale-balanced w-5 text-center" aria-hidden="true"></i><span>Conciliação</span></button>
-                        <button data-action="navigate" data-payload="Importacao" id="nav-Importacao" class="nv-sidebar__item nav-item"><i class="fa-solid fa-file-arrow-down w-5 text-center" aria-hidden="true"></i><span>Importar extrato</span></button>
+                        <button data-action="navigate" data-payload="Metas" data-page-route="Metas" id="nav-Metas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-bullseye w-5 text-center" aria-hidden="true"></i><span>Metas</span></button>
+                        <button data-action="navigate" data-payload="Orcamento" data-page-route="Orcamento" id="nav-Orcamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-pie w-5 text-center" aria-hidden="true"></i><span>Orçamento</span></button>
+                        <button data-action="navigate" data-payload="Relatorios" data-page-route="Relatorios" id="nav-Relatorios" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-line w-5 text-center" aria-hidden="true"></i><span>Relatórios</span></button>
+                        <button data-action="navigate" data-payload="Conciliacao" data-page-route="Conciliacao" id="nav-Conciliacao" class="nv-sidebar__item nav-item"><i class="fa-solid fa-scale-balanced w-5 text-center" aria-hidden="true"></i><span>Conciliação</span></button>
+                        <button data-action="navigate" data-payload="Importacao" data-page-route="Importacao" id="nav-Importacao" class="nv-sidebar__item nav-item"><i class="fa-solid fa-file-arrow-down w-5 text-center" aria-hidden="true"></i><span>Importar extrato</span></button>
                     </div>
                 </details>
 
                 <details class="nv-sidebar__group" data-nav-group="organization">
                     <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-layer-group" aria-hidden="true"></i>Organização</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items">
-                        <button data-action="navigate" data-payload="Categorias" id="nav-Categorias" class="nv-sidebar__item nav-item"><i class="fa-solid fa-tags w-5 text-center" aria-hidden="true"></i><span>Categorias</span></button>
-                        <button data-action="navigate" data-payload="Contatos" id="nav-Contatos" class="nv-sidebar__item nav-item"><i class="fa-solid fa-address-book w-5 text-center" aria-hidden="true"></i><span>Pessoas</span></button>
+                        <button data-action="navigate" data-payload="Categorias" data-page-route="Categorias" id="nav-Categorias" class="nv-sidebar__item nav-item"><i class="fa-solid fa-tags w-5 text-center" aria-hidden="true"></i><span>Categorias</span></button>
+                        <button data-action="navigate" data-payload="Contatos" data-page-route="Contatos" id="nav-Contatos" class="nv-sidebar__item nav-item"><i class="fa-solid fa-address-book w-5 text-center" aria-hidden="true"></i><span>Pessoas</span></button>
                     </div>
                 </details>
             </nav>
@@ -172,8 +173,8 @@
                 <details class="nv-sidebar__group" data-nav-group="system">
                     <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-gear" aria-hidden="true"></i>Sistema</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items">
-                        <button data-action="navigate" data-payload="Anora" id="nav-Anora" class="nv-sidebar__item nav-item"><i class="fa-solid fa-sparkles w-5 text-center" aria-hidden="true"></i><span>Anora</span></button>
-                        <button data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-gear w-5 text-center" aria-hidden="true"></i><span>Configurações</span></button>
+                        <button data-action="navigate" data-payload="Anora" data-page-route="Anora" id="nav-Anora" class="nv-sidebar__item nav-item"><i class="fa-solid fa-sparkles w-5 text-center" aria-hidden="true"></i><span>Anora</span></button>
+                        <button data-action="navigate" data-payload="Configuracoes" data-page-route="Configuracoes" id="nav-Configuracoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-gear w-5 text-center" aria-hidden="true"></i><span>Configurações</span></button>
                     </div>
                 </details>
             </div>
