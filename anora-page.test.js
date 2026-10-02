@@ -22,7 +22,7 @@ describe('Anora full-page integration', () => {
         expect(worker).toContain("'./rnd-anora.js'");
         expect(index).toContain('styles.css?v=20260925-anora-restoration-2');
         expect(worker).toContain('./styles.css?v=20260925-anora-restoration-2');
-        expect(worker).toContain("avenera-app-shell-v20");
+        expect(worker).toContain("avenera-app-shell-v21");
         expect(css).toContain('.nv-anora-page');
         expect(css).toContain('.nv-anora-chat');
         expect(css).toContain('prefers-reduced-motion:reduce');

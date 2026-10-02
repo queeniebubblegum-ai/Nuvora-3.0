@@ -1,6 +1,6 @@
 // Increment when local application assets change so installed clients fetch
 // the latest modules, including the shared cent-precision money helpers.
-const APP_CACHE_NAME = 'avenera-app-shell-v20';
+const APP_CACHE_NAME = 'avenera-app-shell-v21';
 const CDN_CACHE_NAME = 'avenera-cdn-cache-v1';
 
 // Ficheiros locais essenciais da sua aplicação (Mapeamento Completo e Atualizado)
@@ -8,6 +8,7 @@ const LOCAL_ASSETS = [
     './',
     './index.html',
     './styles.css?v=20260925-anora-restoration-2',
+    './styles-v4.css?v=20260925-v4-shell-1',
     './redesign-fase2.css?v=20260925',
     './modal-shortcuts.js',
     './manifest.json',

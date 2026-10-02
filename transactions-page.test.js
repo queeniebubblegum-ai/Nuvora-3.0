@@ -99,7 +99,7 @@ describe('transactions Phase 1 redesign contracts', () => {
         expect(html).toContain('family=Public+Sans');
         expect(html).toContain('family=Sora');
         expect(html).toContain('styles.css?v=20260925-anora-restoration-2');
-        expect(serviceWorker).toContain("avenera-app-shell-v20");
+        expect(serviceWorker).toContain("avenera-app-shell-v21");
         expect(serviceWorker).toContain('./styles.css?v=20260925-anora-restoration-2');
         expect(css).toContain('.nv-transactions-page { font-family: \"Public Sans\"');
         expect(css).toContain('.nv-transactions-page .font-display');

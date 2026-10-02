@@ -1,12 +1,20 @@
 /** @type {import('tailwindcss').Config} */
-/* Nuvora / Avenera — Redesign v4 (Fase 1)
-   Substitui tailwind.config.js. As cores apontam para variáveis CSS definidas
-   em input.css (:root / .dark), então o modo escuro funciona por troca de tema. */
+/* Avenera — configuração isolada do protótipo Redesign v4 (Fase 1).
+   Não substitui a configuração do app ativo. As cores apontam para variáveis
+   definidas em input-v4.css (:root / .dark). */
 module.exports = {
   darkMode: 'class',
+  // Tailwind 3.4 selector scoping keeps V4 utilities out of rendered page DOM.
+  important: '.nv-v4-scope',
+  corePlugins: { preflight: false },
   content: [
     "./index.html",
-    "./*.js"
+    "./app-shell-v4.html",
+    "./filtros-bar-v4.html",
+    "./modal-transacao-v4.html",
+    "./dashboard-v4.js",
+    "./transacoes-v4.js",
+    "./modal-transacao-v4.js"
   ],
   theme: {
     extend: {

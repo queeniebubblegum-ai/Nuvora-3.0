@@ -34,7 +34,28 @@ export const ClickEvents = {
             };
 
             const actionsMap = {
-                'navigate': () => App.navigate(btn.getAttribute('data-payload')),
+                'navigate': () => {
+                    App.navigate(btn.getAttribute('data-payload'));
+                    const sidebar = document.getElementById('sidebar');
+                    const isMobile = typeof window.matchMedia === 'function'
+                        ? window.matchMedia('(max-width: 767px)').matches
+                        : window.innerWidth < 768;
+                    if (isMobile && sidebar && !sidebar.classList.contains('-translate-x-full')) {
+                        window.toggleSidebar?.();
+                    }
+                },
+                'openTransactionSearch': () => {
+                    App.navigate('Transacoes');
+                    // App.scheduleRender queues its renderer first; this following
+                    // animation frame focuses the real transactions filter input.
+                    requestAnimationFrame(() => {
+                        const search = document.getElementById('transactions-search');
+                        if (search) {
+                            search.focus({ preventScroll: true });
+                            search.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+                        }
+                    });
+                },
                 'askAnoraQuestion': () => {
                     const chat = btn.closest('[data-anora-chat]');
                     const input = chat?.querySelector('[data-anora-input]');

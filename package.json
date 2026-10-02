@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "tailwindcss -i ./input.css -o ./styles.css --watch",
     "build": "tailwindcss -i ./input.css -o ./styles.css --minify",
+    "dev:v4": "tailwindcss -c ./tailwind.config.v4.js -i ./input-v4.css -o ./styles-v4.css --watch",
+    "build:v4": "tailwindcss -c ./tailwind.config.v4.js -i ./input-v4.css -o ./styles-v4.css --minify",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:visual": "node scripts/run-visual-tests.mjs",

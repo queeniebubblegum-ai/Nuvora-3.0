@@ -3,15 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Avenera — shell v4</title>
+<title>Avenera — protótipo isolado do shell v4</title>
 <!-- Fontes do redesign v4 -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-<!-- styles.css gerado por: npm run build (a partir de input.css) -->
-<link rel="stylesheet" href="./styles.css">
+<!-- Prévia visual; no app ativo, index.html carrega o shell integrado e styles-v4.css. -->
+<link rel="stylesheet" href="./styles-v4.css">
 </head>
-<body class="min-h-screen">
+<body class="nv-v4-prototype">
+<div class="nv-v4-scope nv-v4-preview-layout min-h-screen">
 
 <!-- ============================================================
      SHELL v4 — sidebar (desktop) / drawer (mobile) + topbar + dock+FAB
@@ -198,5 +199,6 @@
   });
 })();
 </script>
+</div>
 </body>
 </html>

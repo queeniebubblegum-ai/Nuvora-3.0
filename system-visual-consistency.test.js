@@ -94,10 +94,11 @@ describe('shared visual language across Avenera pages', () => {
         const css = read('input.css');
 
         expect((html.match(/data-nav-group=/g) || []).length).toBe(3);
-        for (const route of ['Dashboard', 'Transacoes', 'Contas', 'Planejamento', 'Agendamentos', 'Metas', 'Orcamento', 'Relatorios', 'Categorias', 'Contatos', 'Configuracoes']) {
+        for (const route of ['Dashboard', 'Transacoes', 'Contas', 'Planejamento', 'Agendamentos', 'Metas', 'Orcamento', 'Relatorios', 'Categorias', 'Contatos', 'Configuracoes', 'Conciliacao', 'Importacao', 'Anora']) {
             expect(html).toContain(`id="nav-${route}"`);
         }
-        expect(renderer).toContain("group.open = [...group.querySelectorAll('.nav-item')].some");
+        expect(renderer).toContain("group.open = [...group.querySelectorAll('.nav-item')].some(item => routeForItem(item) === currentPage)");
+        expect(renderer).toContain("el.classList.toggle('active', isActive)");
         expect(css).toContain('.nv-sidebar__group-chevron');
         expect(css).toContain('.nv-sidebar__group[open] { background: var(--nv-sidebar-hover); border-color: var(--nv-sidebar-border); }');
         expect(css).toContain('color: var(--nv-sidebar-active-text);');
@@ -141,7 +142,9 @@ describe('shared visual language across Avenera pages', () => {
         expect(compactCss).toContain('--nv-compact-card-padding:12px');
         expect(compactCss).toContain('--nv-ui-page-radius:16px');
         expect(index).toContain('styles.css?v=20260925-anora-restoration-2');
-        expect(worker).toContain("avenera-app-shell-v20");
+        expect(index).toContain('styles-v4.css?v=20260925-v4-shell-1');
+        expect(worker).toContain("avenera-app-shell-v21");
         expect(worker).toContain('./styles.css?v=20260925-anora-restoration-2');
+        expect(worker).toContain('./styles-v4.css?v=20260925-v4-shell-1');
     });
 });

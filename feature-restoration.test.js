@@ -40,7 +40,7 @@ describe('pre-existing Avenera features survive the Anora integration', () => {
         expect(modal).toContain('data-anora-messages');
         expect(modal).toContain('data-anora-input');
         expect(worker).toContain("'./rnd-anora.js'");
-        expect(worker).toContain('avenera-app-shell-v20');
+        expect(worker).toContain('avenera-app-shell-v21');
         expect(worker).toContain('./styles.css?v=20260925-anora-restoration-2');
     });
 });
