@@ -24,6 +24,7 @@
 
     <link rel="stylesheet" href="styles.css?v=20260925-anora-restoration-2">
     <link rel="stylesheet" href="redesign-fase2.css?v=20260925">
+    <link rel="stylesheet" href="styles-v4.css?v=20260925-v4-shell-1">
 
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -51,7 +52,7 @@
     <input type="file" id="input-ofx-file" class="hidden" accept=".ofx" data-change="handleOFXUpload">
     <input type="file" id="input-csv-file" class="hidden" accept=".csv,text/csv" data-change="handleCSVUpload">
 
-    <header class="nv-header shrink-0 h-[72px] bg-surface border-b border-border px-3 sm:px-4 lg:px-[32px] flex justify-between items-center relative transition-colors duration-300" style="z-index: 50;">
+    <header class="nv-v4-topbar nv-header shrink-0 h-[72px] bg-surface border-b border-border px-3 sm:px-4 lg:px-[32px] flex justify-between items-center relative transition-colors duration-300" style="z-index: 50;">
         <div class="nv-header__brand flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             <button type="button" onclick="toggleSidebar()" aria-label="Abrir menu de navegação" class="lg:hidden p-2 -ml-2 text-text-primary rounded-[8px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-medium">
                 <i class="fa-solid fa-bars text-xl" aria-hidden="true"></i>
@@ -138,7 +139,7 @@
             <nav class="nv-sidebar__nav" aria-label="Navegação principal">
                 <div class="nv-sidebar__section nv-sidebar__overview">
                     <p class="nv-sidebar__section-label">Visão geral</p>
-                    <button data-action="navigate" data-payload="Dashboard" id="nav-Dashboard" class="nv-sidebar__item nav-item w-full text-left flex items-center gap-3 text-white/80 hover:text-white transition-colors">
+                    <button data-action="navigate" data-payload="Dashboard" data-page-route="Dashboard" id="nav-Dashboard" class="nv-sidebar__item nav-item w-full text-left flex items-center gap-3 text-white/80 hover:text-white transition-colors">
                         <i class="fa-solid fa-border-all w-5 text-center" aria-hidden="true"></i><span>Visão geral</span>
                     </button>
                 </div>
@@ -146,10 +147,10 @@
                 <details class="nv-sidebar__group" data-nav-group="finance">
                     <summary class="nv-sidebar__group-toggle"><span><i class="fa-solid fa-wallet" aria-hidden="true"></i>Finanças</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items">
-                        <button data-action="navigate" data-payload="Transacoes" id="nav-Transacoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-arrow-right-arrow-left w-5 text-center" aria-hidden="true"></i><span>Lançamentos</span></button>
+                        <button data-action="navigate" data-payload="Transacoes" data-page-route="Transacoes" id="nav-Transacoes" class="nv-sidebar__item nav-item"><i class="fa-solid fa-arrow-right-arrow-left w-5 text-center" aria-hidden="true"></i><span>Lançamentos</span></button>
                         <button data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-wallet w-5 text-center" aria-hidden="true"></i><span>Contas e cartões</span></button>
                         <button data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-check w-5 text-center" aria-hidden="true"></i><span>Planejamento</span></button>
-                        <button data-action="navigate" data-payload="Agendamentos" id="nav-Agendamentos" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-days w-5 text-center" aria-hidden="true"></i><span>Agenda de contas</span></button>
+                        <button data-action="navigate" data-payload="Agendamentos" data-page-route="Agendamentos" id="nav-Agendamentos" class="nv-sidebar__item nav-item"><i class="fa-solid fa-calendar-days w-5 text-center" aria-hidden="true"></i><span>Agenda de contas</span></button>
                         <button data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-sidebar__item nav-item"><i class="fa-solid fa-bullseye w-5 text-center" aria-hidden="true"></i><span>Metas</span></button>
                         <button data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-pie w-5 text-center" aria-hidden="true"></i><span>Orçamento</span></button>
                         <button data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-sidebar__item nav-item"><i class="fa-solid fa-chart-line w-5 text-center" aria-hidden="true"></i><span>Relatórios</span></button>
@@ -185,7 +186,7 @@
         </main>
     </div>
 
-    <div class="fixed bottom-8 right-8 flex flex-col items-end" style="z-index: 30;">
+    <div class="nv-v4-speed-dial flex flex-col items-end" style="position:fixed; bottom:2rem; right:2rem; z-index: 30;">
         
         <div id="speed-dial-menu" aria-hidden="true" class="flex flex-col items-end gap-3 opacity-0 translate-y-4 pointer-events-none transition-all duration-300 mb-3">
             <button type="button" id="speed-dial-contextual" tabindex="-1" hidden class="flex items-center gap-3 group/item focus:outline-none cursor-pointer" aria-label="Ação recomendada no Dashboard"><span id="speed-dial-contextual-label" class="bg-surface text-text-primary text-xs font-bold py-1.5 px-3 rounded-[8px] shadow-soft"></span><div class="w-11 h-11 bg-brand-medium text-white rounded-full shadow-soft flex items-center justify-center text-sm"><i id="speed-dial-contextual-icon" class="fa-solid fa-bolt" aria-hidden="true"></i></div></button>
