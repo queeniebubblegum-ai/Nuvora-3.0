@@ -13,7 +13,7 @@ describe('preparação para beta', () => {
             description: 'Organize sua vida financeira com clareza.',
             start_url: '/',
             display: 'standalone',
-            theme_color: '#4C3C70',
+            theme_color: '#F7F6F2',
             background_color: '#F7F6F2'
         });
     });
