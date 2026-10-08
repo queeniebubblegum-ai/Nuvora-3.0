@@ -341,18 +341,64 @@ const persist = (col) => {
     }
 };
 
-const persistAtomically = async cols => {
+const persistAtomically = async (cols, writer = entries => IDB.setMany(entries)) => {
     const uniqueCols = [...new Set([...(cols || []), 'metadados'])];
     const previousMetadata = db.metadados;
     db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
     try {
-        await IDB.setMany(uniqueCols.filter(col => db[col] !== undefined).map(col => [col, db[col]]));
+        await writer(uniqueCols.filter(col => db[col] !== undefined).map(col => [col, db[col]]));
     } catch (error) {
         db.metadados = previousMetadata;
         throw error;
     }
     clearCache();
     if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+};
+
+const TRANSACTION_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas'];
+const NO_TRANSACTION_MUTATION = Symbol('no-transaction-mutation');
+let transactionPersistenceWriter = entries => IDB.setMany(entries);
+let transactionMutationQueue = Promise.resolve();
+
+const cloneCollectionForRollback = value => Array.isArray(value)
+    ? value.map(item => item && typeof item === 'object' ? { ...item } : item)
+    : value && typeof value === 'object' ? { ...value } : value;
+
+const snapshotTransactionState = () => Object.fromEntries(
+    [...TRANSACTION_PERSIST_COLLECTIONS, 'metadados'].map(col => [col, cloneCollectionForRollback(db[col])])
+);
+
+const restoreTransactionState = snapshot => {
+    Object.entries(snapshot).forEach(([col, value]) => { db[col] = value; });
+    clearCache();
+};
+
+// Serialize ordinary ledger mutations and commit their affected collections in
+// one IndexedDB transaction. A rejected write restores the in-memory snapshot
+// and reaches the caller instead of being swallowed by persist().
+const enqueueTransactionMutation = run => {
+    const operation = transactionMutationQueue.then(run, run);
+    transactionMutationQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+};
+
+const commitTransactionMutation = (mutate, cols = TRANSACTION_PERSIST_COLLECTIONS) => enqueueTransactionMutation(async () => {
+    const snapshot = snapshotTransactionState();
+    try {
+        const result = mutate();
+        if (result === NO_TRANSACTION_MUTATION) return false;
+        await persistAtomically(cols, transactionPersistenceWriter);
+        return result;
+    } catch (error) {
+        restoreTransactionState(snapshot);
+        throw error;
+    }
+});
+
+// Test seam for deterministic quota/IndexedDB failure coverage. Passing no
+// function restores the real IndexedDB writer.
+export const __setTransactionPersistenceWriterForTests = writer => {
+    transactionPersistenceWriter = typeof writer === 'function' ? writer : entries => IDB.setMany(entries);
 };
 
 const transferStateSnapshot = () => ({
@@ -439,7 +485,7 @@ const isValidTransferPair = legs => {
 };
 
 export const TransferRepo = {
-    add: async ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null } = {}) => {
+    add: ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null } = {}) => enqueueTransactionMutation(async () => {
         const source = resolveTransferAccount(sourceAccountId);
         const destination = resolveTransferAccount(destinationAccountId);
         if ((!source.bank && !source.reserve) || (!destination.bank && !destination.reserve)) {
@@ -470,9 +516,9 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    },
+    }),
 
-    update: async (transactionId, newData = {}) => {
+    update: (transactionId, newData = {}) => enqueueTransactionMutation(async () => {
         if (!newData || typeof newData !== 'object' || Array.isArray(newData)) return false;
         const target = db.transacoes.find(item => String(item.id) === String(transactionId));
         if (!target?.transferenciaId) return false;
@@ -510,9 +556,9 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    },
+    }),
 
-    deleteByIds: async ids => {
+    deleteByIds: ids => enqueueTransactionMutation(async () => {
         const selected = new Set((ids || []).map(String));
         const selectedTransfers = db.transacoes.filter(item => selected.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
         if (selectedTransfers.some(item => !item.transferenciaId)) {
@@ -539,9 +585,9 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    },
+    }),
 
-    restoreMany: async items => {
+    restoreMany: items => enqueueTransactionMutation(async () => {
         const candidates = (items || []).filter(item => !db.transacoes.some(current => String(current.id) === String(item.id)));
         if (candidates.some(item => isUnpairedTransfer(item))) {
             throw new Error('Não é possível restaurar uma transferência sem identificador vinculado.');
@@ -567,7 +613,7 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    }
+    })
 };
 
 export const UserRepo = {
@@ -618,143 +664,165 @@ export const BankRepo = {
 
 export const TransactionsRepo = {
     getAll: () => db.transacoes,
-    
+
     getByMonth: (ano, mes) => {
         if (!Cache.transacoesPorMes) buildMonthlyCache();
         return Cache.transacoesPorMes[`${ano}-${mes}`] || [];
     },
-    
+
     getCardExpensesByMonth: (ano, mes) => {
         return TransactionsRepo.getByMonth(ano, mes).filter(t => t.isCartao).map(t => ({
             id: t.id, cartaoId: t.bancoId, desc: t.desc, valor: t.valor, categoria: t.categoria,
             parcelaAtual: t.parcelaAtual, totalParcelas: t.totalParcelas, data: t.data, codigoRef: t.codigoRef, parentId: t.grupoId
         }));
     },
-    
-    add: (item) => {
-        if (item?.transferenciaId || isUnpairedTransfer(item)) return false;
-        const t = { ...item };
-        if (!t.codigoRef) t.codigoRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-        db.transacoes.unshift(t);
-        applyBalanceDelta(t);
-        persist('transacoes');
-        return true;
+
+    // A batch shares one IndexedDB transaction for ledger rows and affected
+    // balances. absoluteBalance is used only by confirmed statement imports.
+    addMany: (items, options = {}) => {
+        const incoming = Array.isArray(items) ? items.map(item => item && typeof item === 'object' ? { ...item } : item) : [];
+        const hasAbsoluteBalance = options.absoluteBalance !== undefined && options.absoluteBalance !== null;
+        if (!incoming.length && !hasAbsoluteBalance) return Promise.resolve([]);
+        return commitTransactionMutation(() => {
+            if (incoming.some(item => !item || typeof item !== 'object' || item.transferenciaId || isUnpairedTransfer(item))) {
+                return NO_TRANSACTION_MUTATION;
+            }
+            if (hasAbsoluteBalance) {
+                const bank = db.bancos.find(account => String(account.id) === String(options.bankId));
+                const balance = Number(options.absoluteBalance);
+                if (!bank || !Number.isFinite(balance)) return NO_TRANSACTION_MUTATION;
+                bank.saldo = fromCents(toCents(balance));
+            }
+            const added = incoming.map(item => {
+                const transaction = { ...item };
+                if (!transaction.codigoRef) transaction.codigoRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+                db.transacoes.unshift(transaction);
+                applyBalanceDelta(transaction, false, false);
+                return transaction;
+            });
+            return added;
+        });
     },
-    
-    addRecurrent: (t, parcelas) => {
-        if (t?.transferenciaId || isTransfer(t)) return false;
-        const dataOriginal = new Date(t.data + 'T12:00:00');
-        const diaOriginal = dataOriginal.getDate();
-        const grupoId = Date.now();
+
+    add: item => TransactionsRepo.addMany([item]).then(added => Array.isArray(added) && added.length === 1),
+
+    addRecurrent: (transaction, installments) => {
+        if (transaction?.transferenciaId || isTransfer(transaction)) return Promise.resolve(false);
+        const originalDate = new Date(transaction.data + 'T12:00:00');
+        const originalDay = originalDate.getDate();
+        const groupId = Date.now();
         const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-        const quantidade = Math.max(1, Number.parseInt(parcelas, 10) || 1);
-        const valorParcela = fromCents(toCents(t.valor));
+        const quantity = Math.max(1, Number.parseInt(installments, 10) || 1);
+        const valuePerOccurrence = fromCents(toCents(transaction.valor));
+        const rows = [];
 
-        for (let i = 0; i < quantidade; i++) {
-            let dataParcela = new Date(dataOriginal);
-            dataParcela.setMonth(dataOriginal.getMonth() + i);
-            if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
-
-            const newT = {
-                ...t,
-                id: grupoId + i,
-                valor: valorParcela,
-                data: dataParcela.toISOString().split('T')[0],
+        for (let i = 0; i < quantity; i++) {
+            const occurrenceDate = new Date(originalDate);
+            occurrenceDate.setMonth(originalDate.getMonth() + i);
+            if (occurrenceDate.getDate() !== originalDay) occurrenceDate.setDate(0);
+            rows.push({
+                ...transaction,
+                id: groupId + i,
+                valor: valuePerOccurrence,
+                data: occurrenceDate.toISOString().split('T')[0],
                 parcelaAtual: i + 1,
-                totalParcelas: quantidade,
-                grupoId: grupoId,
+                totalParcelas: quantity,
+                grupoId: groupId,
                 codigoRef: `${baseRef}-${i + 1}`
-            };
-            db.transacoes.unshift(newT);
-            applyBalanceDelta(newT);
-        }
-        persist('transacoes');
-    },
-    
-    addCardExpense: (compra) => {
-        const quantidade = Math.max(1, Number.parseInt(compra.parcelas, 10) || 1);
-        const valoresParcelas = splitInstallments(compra.total, quantidade);
-        const dataOriginal = new Date(compra.data + 'T12:00:00');
-        const diaOriginal = dataOriginal.getDate();
-        const grupoId = Date.now();
-        const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-        
-        for (let i = 0; i < quantidade; i++) {
-            let dataParcela = new Date(dataOriginal);
-            dataParcela.setMonth(dataOriginal.getMonth() + i);
-            if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
-            
-            db.transacoes.unshift({
-                id: grupoId + i,
-                desc: compra.desc,
-                valor: valoresParcelas[i],
-                tipo: 'despesa',
-                categoria: compra.categoria,
-                bancoId: compra.cartaoId,
-                isCartao: true,
-                formaPagamento: 'Cartão de Crédito',
-                data: dataParcela.toISOString().split('T')[0],
-                parcelaAtual: i + 1,
-                totalParcelas: quantidade,
-                recorrente: quantidade > 1,
-                grupoId: compra.id || grupoId,
-                codigoRef: quantidade > 1 ? `${baseRef}-${i + 1}` : baseRef,
-                contatoId: compra.contatoId || null
             });
         }
-        persist('transacoes');
-    },
-    
-    update: (id, newData) => {
-        const index = db.transacoes.findIndex(t => String(t.id) === String(id));
-        if (index >= 0 && db.transacoes[index].transferenciaId) return TransferRepo.update(id, newData);
-        if (index >= 0 && isUnpairedTransfer(db.transacoes[index])) return false;
-        if (newData && (newData.transferenciaId || newData.transferenciaInterna === true || newData.tipo === 'transferencia' || newData.tipoTransferencia === 'interna')) return false;
-        if (index !== -1) {
-            const oldT = db.transacoes[index];
-            applyBalanceDelta(oldT, true); 
-            db.transacoes[index] = { ...oldT, ...newData };
-            applyBalanceDelta(db.transacoes[index]); 
-            persist('transacoes');
-            return true;
-        }
-        return false;
+        return TransactionsRepo.addMany(rows);
     },
 
-    // Category-only bulk updates are persisted once and never touch balances/totals.
-    updateCategories: (idsArray, categoria) => {
+    addCardExpense: purchase => {
+        const quantity = Math.max(1, Number.parseInt(purchase.parcelas, 10) || 1);
+        const installmentValues = splitInstallments(purchase.total, quantity);
+        const originalDate = new Date(purchase.data + 'T12:00:00');
+        const originalDay = originalDate.getDate();
+        const groupId = Date.now();
+        const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        const rows = [];
+
+        for (let i = 0; i < quantity; i++) {
+            const installmentDate = new Date(originalDate);
+            installmentDate.setMonth(originalDate.getMonth() + i);
+            if (installmentDate.getDate() !== originalDay) installmentDate.setDate(0);
+            rows.push({
+                id: groupId + i,
+                desc: purchase.desc,
+                valor: installmentValues[i],
+                tipo: 'despesa',
+                categoria: purchase.categoria,
+                bancoId: purchase.cartaoId,
+                isCartao: true,
+                formaPagamento: 'Cartão de Crédito',
+                data: installmentDate.toISOString().split('T')[0],
+                parcelaAtual: i + 1,
+                totalParcelas: quantity,
+                recorrente: quantity > 1,
+                grupoId: purchase.id || groupId,
+                codigoRef: quantity > 1 ? `${baseRef}-${i + 1}` : baseRef,
+                contatoId: purchase.contatoId || null
+            });
+        }
+        return TransactionsRepo.addMany(rows).then(added => Array.isArray(added) && added.length === quantity);
+    },
+
+    update: (id, newData) => {
+        const current = db.transacoes.find(item => String(item.id) === String(id));
+        if (current?.transferenciaId) return TransferRepo.update(id, newData);
+        if (current && isUnpairedTransfer(current)) return Promise.resolve(false);
+        if (newData && (newData.transferenciaId || newData.transferenciaInterna === true || newData.tipo === 'transferencia' || newData.tipoTransferencia === 'interna')) return Promise.resolve(false);
+        return commitTransactionMutation(() => {
+            const index = db.transacoes.findIndex(item => String(item.id) === String(id));
+            if (index < 0 || db.transacoes[index].transferenciaId || isUnpairedTransfer(db.transacoes[index])) return NO_TRANSACTION_MUTATION;
+            const oldTransaction = db.transacoes[index];
+            applyBalanceDelta(oldTransaction, true, false);
+            db.transacoes[index] = { ...oldTransaction, ...newData };
+            applyBalanceDelta(db.transacoes[index], false, false);
+            return true;
+        });
+    },
+
+    updateCategories: (idsArray, categoria) => commitTransactionMutation(() => {
         const ids = new Set((idsArray || []).map(id => String(id)));
-        if (!ids.size || !categoria) return 0;
+        if (!ids.size || !categoria) return NO_TRANSACTION_MUTATION;
         const selectedTransfers = db.transacoes.filter(item => ids.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
-        if (selectedTransfers.some(item => !item.transferenciaId)) return 0;
+        if (selectedTransfers.some(item => !item.transferenciaId)) return NO_TRANSACTION_MUTATION;
         const transferIds = new Set(selectedTransfers.map(item => String(item.transferenciaId)));
         const selectedPairs = [...transferIds].map(id => db.transacoes.filter(item => String(item.transferenciaId) === id));
-        if (selectedPairs.some(legs => !isValidTransferPair(legs))) return 0;
+        if (selectedPairs.some(legs => !isValidTransferPair(legs))) return NO_TRANSACTION_MUTATION;
         const idsToUpdate = new Set(ids);
         db.transacoes.filter(item => item.transferenciaId && transferIds.has(String(item.transferenciaId))).forEach(item => idsToUpdate.add(String(item.id)));
         let changed = 0;
-        db.transacoes = db.transacoes.map(t => {
-            if (!idsToUpdate.has(String(t.id))) return t;
+        db.transacoes = db.transacoes.map(item => {
+            if (!idsToUpdate.has(String(item.id))) return item;
             changed += 1;
-            return { ...t, categoria };
+            return { ...item, categoria };
         });
-        if (changed) persist('transacoes');
-        return changed;
-    },
-    
+        return changed ? changed : NO_TRANSACTION_MUTATION;
+    }, ['transacoes']),
+
     delete: id => TransactionsRepo.deleteMultiple([id]),
 
-    deleteMultiple: idsArray => {
-        if (!idsArray || idsArray.length === 0) return;
-        const strIds = new Set(idsArray.map(String));
+    deleteMultiple: (idsArray, options = {}) => {
+        if ((!idsArray || idsArray.length === 0) && !options.reverseBalanceAdjustment) return Promise.resolve([]);
+        const strIds = new Set((idsArray || []).map(String));
         const includesTransfer = db.transacoes.some(item => strIds.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
         if (includesTransfer) return TransferRepo.deleteByIds(idsArray);
-
-        const removed = db.transacoes.filter(item => strIds.has(String(item.id)));
-        db.transacoes = db.transacoes.filter(item => !strIds.has(String(item.id)));
-        removed.forEach(item => applyBalanceDelta(item, true));
-        persist('transacoes');
-        return removed;
+        return commitTransactionMutation(() => {
+            const removed = db.transacoes.filter(item => strIds.has(String(item.id)));
+            const adjustment = options.reverseBalanceAdjustment;
+            if (!removed.length && !adjustment) return NO_TRANSACTION_MUTATION;
+            if (adjustment) {
+                const bank = db.bancos.find(item => String(item.id) === String(adjustment.bankId));
+                if (!bank || !Number.isFinite(Number(adjustment.amount))) return NO_TRANSACTION_MUTATION;
+                bank.saldo = fromCents(toCents(bank.saldo) - toCents(adjustment.amount));
+            }
+            db.transacoes = db.transacoes.filter(item => !strIds.has(String(item.id)));
+            removed.forEach(item => applyBalanceDelta(item, true, false));
+            return removed;
+        });
     }
 };
 
@@ -787,7 +855,7 @@ export const ReconciliationRepo = {
         persist('conciliacoesFaturas'); return normalized;
     },
     /** Post an explicit invoice adjustment as one idempotent history transaction. */
-    createAdjustmentTransaction: (cardId, year, month, adjustmentId) => {
+    createAdjustmentTransaction: async (cardId, year, month, adjustmentId) => {
         const chave = invoiceReconciliationKey(cardId, year, month);
         const record = ReconciliationRepo.get(cardId, year, month);
         const ajustes = record?.ajustes || [];
@@ -815,7 +883,8 @@ export const ReconciliationRepo = {
         let txId = `tx-conciliacao-${encodeURIComponent(chave)}-${encodeURIComponent(String(adjustment.id))}`;
         if (db.transacoes.some(t => String(t.id) === txId)) txId = `${txId}-${Date.now()}`;
         const transaction = { id: String(txId), desc: adjustment.description || 'Ajuste de fatura', valor: adjustment.amount, tipo: isCredit ? 'receita' : 'despesa', categoria: isCredit ? 'Reembolso / estorno' : category, bancoId: card?.bancoId ?? null, isCartao: false, formaPagamento: 'Ajuste de fatura', data: date, parcelaAtual: 1, totalParcelas: 1, recorrente: false, invoiceReconciliationKey: chave, reconciliationAdjustmentId: String(adjustment.id), origem: 'conciliacao_fatura' };
-        TransactionsRepo.add(transaction);
+        const saved = await TransactionsRepo.add(transaction);
+        if (!saved) return { ok: false, reason: 'transaction-not-saved' };
         ajustes[index] = { ...ajustes[index], transactionId: String(transaction.id), postedAt: new Date().toISOString(), lancamentoCriado: true };
         const updated = { ...record, ajustes, atualizadoEm: new Date().toISOString() };
         const recordIndex = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
@@ -849,7 +918,7 @@ export const ReconciliationRepo = {
     }
 };
 
-const applyGoalAllocation = async ({ goalId, accountId = null, amount, date, description = null, type }) => {
+const applyGoalAllocation = ({ goalId, accountId = null, amount, date, description = null, type }) => enqueueTransactionMutation(async () => {
     const goal = db.metas.find(item => String(item.id) === String(goalId));
     if (!goal) throw new Error('Meta não encontrada.');
     const reserve = (db.reservas || []).find(item => String(item.id) === String(goal.reservaId));
@@ -899,7 +968,7 @@ const applyGoalAllocation = async ({ goalId, accountId = null, amount, date, des
         db.reservas = previous.reservas;
         throw error;
     }
-};
+});
 
 export const GoalRepo = {
     add: item => {
@@ -1274,6 +1343,7 @@ export const Database = {
         return false;
     },
     addRecorrente: TransactionsRepo.addRecurrent,
+    addTransactionsAtomically: TransactionsRepo.addMany,
     remove: (col, id) => {
         switch(col) {
             case 'transacoes': case 'comprasCartao': return TransactionsRepo.delete(id);
@@ -1290,8 +1360,8 @@ export const Database = {
             case 'investimentos': return InvestmentRepo.remove(id);
         }
     },
-    removeMultiple: (col, ids) => {
-        if (col === 'transacoes') return TransactionsRepo.deleteMultiple(ids);
+    removeMultiple: (col, ids, options) => {
+        if (col === 'transacoes') return TransactionsRepo.deleteMultiple(ids, options);
     },
     addTransfer: TransferRepo.add,
     restoreTransactions: TransferRepo.restoreMany,

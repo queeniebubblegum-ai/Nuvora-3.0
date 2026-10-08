@@ -65,11 +65,13 @@ export const SistemaController = {
         </div>`;
         container.scrollTop = container.scrollHeight;
 
-        setTimeout(() => {
+        setTimeout(async () => {
             const typingEl = container.querySelector(`#${idTyping}`);
             if (typingEl) typingEl.remove();
 
-            const respostaAnora = AnoraNLP.processarMensagem(msg);
+            let respostaAnora;
+            try { respostaAnora = await AnoraNLP.processarMensagem(msg); }
+            catch (_) { respostaAnora = 'Não consegui salvar esse lançamento agora. Tente novamente.'; }
 
             const respostaFormatada = Utils.escapeHTML(respostaAnora)
                 .replace(/\*\*(.*?)\*\*/g, '<strong class="text-text-primary font-bold font-mono tracking-tight">$1</strong>');
@@ -84,9 +86,11 @@ export const SistemaController = {
         }, 600 + Math.random() * 800); 
     },
 
-    delete: (col, id) => {
+    delete: async (col, id) => {
         if (confirm('Tem certeza que deseja apagar este registro?')) {
-            const removido = Database.remove(col, id);
+            let removido;
+            try { removido = await Database.remove(col, id); }
+            catch (error) { Utils.showToast(error?.message || 'Não foi possível apagar este registro; os dados foram mantidos.', 'error'); return false; }
             if (removido === false) {
                 Utils.showToast('Não é possível apagar: este registro ainda está sendo usado.', 'error');
                 return;

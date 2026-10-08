@@ -178,7 +178,8 @@ export const TransacoesController = {
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Salvando...");
 
-        setTimeout(() => {
+        setTimeout(async () => {
+            try {
             if (isCartao) {
                 const cartaoIdSelect = document.getElementById('input-cartao-trans').value;
                 const cartaoId = parseInt(cartaoIdSelect);
@@ -192,9 +193,10 @@ export const TransacoesController = {
                     valorTotal = valor * (taxa / (1 - Math.pow(1 + taxa, -parcelas))) * parcelas;
                 }
 
-                Database.addCardExpense({
+                const saved = await Database.addCardExpense({
                     desc, total: valorTotal, parcelas, cartaoId: cartaoId, categoria, data, contatoId
                 });
+                if (!saved) throw new Error('Não foi possível salvar a compra no cartão.');
                 showTransactionSavedToast(`Despesa lançada no cartão em ${parcelas}x!`);
             } else {
                 if (isRecorrente) {
@@ -214,7 +216,8 @@ export const TransacoesController = {
                         recorrente: true,
                         contatoId
                     };
-                    Database.add('transacoes', novaTransacao);
+                    const saved = await Database.addTransactionsAtomically([novaTransacao]);
+                    if (!Array.isArray(saved) || saved.length !== 1) throw new Error('Não foi possível salvar a transação recorrente.');
 
                     const dataOriginal = new Date(data + 'T12:00:00');
                     const diaOriginal = dataOriginal.getDate();
@@ -237,7 +240,7 @@ export const TransacoesController = {
                     }
                     showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} registada e agendada para os próximos ${parcelasRecorrentes - 1} meses!`);
                 } else {
-                    Database.add('transacoes', {
+                    const saved = await Database.add('transacoes', {
                         id: Date.now(),
                         desc, valor, tipo, categoria, bancoId,
                         isCartao: false,
@@ -247,6 +250,7 @@ export const TransacoesController = {
                         recorrente: false,
                         contatoId
                     });
+                    if (!saved) throw new Error('Não foi possível salvar a transação.');
                     showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
                 }
             }
@@ -254,7 +258,12 @@ export const TransacoesController = {
             markSaved(form);
             trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_created' });
             App.closeModal();
-            SubmitGuard.release(form);
+            } catch (error) {
+                Utils.showToast(error?.message || 'Não foi possível salvar a transação; os dados anteriores foram mantidos.', 'error');
+                SubmitFeedback.set(form, 'idle');
+            } finally {
+                SubmitGuard.release(form);
+            }
         }, 350);
     },
 
@@ -270,7 +279,8 @@ export const TransacoesController = {
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Registrando...");
 
-        setTimeout(() => {
+        setTimeout(async () => {
+            try {
             const parcelaSelect = document.getElementById('dc-parcelas');
             const parcelasCustom = document.getElementById('dc-parcelas-custom');
             const parcelas = parcelaSelect?.value === 'custom'
@@ -288,14 +298,20 @@ export const TransacoesController = {
                 valorTotal = pmt * parcelas;
             }
 
-            Database.addCardExpense({
+            const saved = await Database.addCardExpense({
                 desc, total: valorTotal, parcelas, cartaoId, categoria, data, contatoId: null
             });
+            if (!saved) throw new Error('Não foi possível salvar a compra no cartão.');
             showTransactionSavedToast(`Compra lançada em ${parcelas}x!`);
             markSaved(form);
             trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_created' });
             App.closeModal();
-            SubmitGuard.release(form);
+            } catch (error) {
+                Utils.showToast(error?.message || 'Não foi possível salvar a compra; os dados anteriores foram mantidos.', 'error');
+                SubmitFeedback.set(form, 'idle');
+            } finally {
+                SubmitGuard.release(form);
+            }
         }, 350);
     },
 

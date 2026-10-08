@@ -10,7 +10,7 @@ Esta fase ativa o shell visual v4 no `index.html` da aplicação real. O shell u
 - A área de renderização continua sendo exatamente `#main-content` e não recebe o escopo V4.
 - Permanecem os hooks de perfil, tema, notificações, Anora, backup, importação OFX/CSV, modais, overlay mobile e `#btn-flutuante-main`/speed dial originais.
 - A busca do cabeçalho é um botão funcional: abre Lançamentos e foca o filtro existente `#transactions-search` depois da renderização.
-- O service worker pré-cacheia a nova folha de estilos e usa a geração `avenera-app-shell-v21`.
+- O service worker pré-cacheia a nova folha de estilos e usa a geração `avenera-app-shell-v22`.
 - Nenhuma lógica financeira, repositório de dados, IndexedDB ou fluxo de transações é alterado.
 
 ## Aplicar e validar no Windows

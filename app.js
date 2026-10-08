@@ -494,7 +494,7 @@ export const App = {
 
     cancelInvoicePayment: () => App.closeModal(false, 'modal-pagar-fatura'),
 
-    markAgendamentoPaid: (id, bankId = null, paymentDate = null) => {
+    markAgendamentoPaid: async (id, bankId = null, paymentDate = null) => {
         const agendamento = db.agendamentos.find(item => String(item.id) === String(id));
         if (!agendamento) return false;
 
@@ -536,7 +536,12 @@ export const App = {
                 paymentDate: paymentDate || Utils.localISODate(),
             });
             const transactionIdCollision = transaction && db.transacoes.some(item => String(item.id) === String(transaction.id));
-            if (!transaction || transactionIdCollision || !Database.add('transacoes', transaction)) {
+            let transactionSaved = false;
+            if (transaction && !transactionIdCollision) {
+                try { transactionSaved = await Database.add('transacoes', transaction); }
+                catch (error) { Utils.showToast(error?.message || 'Não foi possível registrar o pagamento da fatura; os dados anteriores foram mantidos.', 'error'); return false; }
+            }
+            if (!transaction || transactionIdCollision || !transactionSaved) {
                 Utils.showToast(transactionIdCollision
                     ? 'Já existe um lançamento com este identificador; nenhum novo pagamento foi criado.'
                     : 'Não foi possível registrar o pagamento da fatura.', 'error');
@@ -558,7 +563,6 @@ export const App = {
         }
 
         if (agendamento.status !== 'pendente') return false;
-        Database.updateAgendamento(id, { status: 'pago' });
         const transaction = {
             id: Date.now(),
             desc: agendamento.desc,
@@ -570,14 +574,24 @@ export const App = {
             formaPagamento: 'Automático (Agendamento)',
             data: Utils.localISODate()
         };
-        Database.add('transacoes', transaction);
+        try {
+            const saved = await Database.add('transacoes', transaction);
+            if (!saved) throw new Error('Não foi possível registrar a transação.');
+        } catch (error) {
+            Utils.showToast(error?.message || 'Não foi possível registrar o pagamento; a previsão continua pendente.', 'error');
+            return false;
+        }
+        if (!Database.updateAgendamento(id, { status: 'pago' })) {
+            Utils.showToast('Pagamento registrado, mas a previsão não pôde ser atualizada.', 'warning');
+            return false;
+        }
         Utils.showToast('Conta marcada como paga!', 'success');
         App.scheduleRender();
         return true;
     },
 
-    markCloseAgendaPaid: (id) => {
-        const recorded = App.markAgendamentoPaid(String(id));
+    markCloseAgendaPaid: async (id) => {
+        const recorded = await App.markAgendamentoPaid(String(id));
         if (!recorded) return false;
         FechamentoManager.state.pendencias = FechamentoManager.state.pendencias.filter(item => String(item.id) !== String(id));
         FechamentoManager.renderStep();
@@ -1287,17 +1301,25 @@ export const App = {
         if (botao) botao.dataset.date = date;
         App.openModal('modal-agenda-dia');
     },
-    markAgendaPaid: (id, col) => {
+    markAgendaPaid: async (id, col) => {
         const item = (db[col] || []).find(i => String(i.id) === String(id));
         if (!item || item.status === 'pago' || item.status === 'recebida') return;
         if (!window.confirm('Confirmar que esta previsão foi realizada?')) return;
         if (col === 'receitasFuturas') {
+            try {
+                const saved = await Database.add('transacoes', { id: Date.now(), desc: item.desc, valor: item.valor, tipo: 'receita', categoria: item.categoria || 'Outros', bancoId: item.bancoId || (db.bancos[0]?.id ?? null), isCartao: false, formaPagamento: 'Receita futura recebida', data: Utils.localISODate() });
+                if (!saved) throw new Error('Não foi possível registrar o recebimento.');
+            } catch (error) {
+                Utils.showToast(error?.message || 'Não foi possível registrar o recebimento; a previsão continua pendente.', 'error');
+                return false;
+            }
             Database.updateReceitaFutura(id, { status: 'recebida' });
-            Database.add('transacoes', { id: Date.now(), desc: item.desc, valor: item.valor, tipo: 'receita', categoria: item.categoria || 'Outros', bancoId: item.bancoId || (db.bancos[0]?.id ?? null), isCartao: false, formaPagamento: 'Receita futura recebida', data: Utils.localISODate() });
         } else {
-            App.markAgendamentoPaid(String(id));
+            const recorded = await App.markAgendamentoPaid(String(id));
+            if (!recorded) return false;
         }
         App.scheduleRender();
+        return true;
     },
     editAgenda: (id, col) => {
         const item = (db[col] || []).find(i => String(i.id) === String(id));
@@ -1488,7 +1510,7 @@ export const App = {
         modal.classList.add('hidden'); modal.classList.remove('flex'); modal.setAttribute('inert', ''); modal.setAttribute('aria-hidden', 'true');
     },
 
-    applyInvoiceClassification: () => {
+    applyInvoiceClassification: async () => {
         const group = document.getElementById('invoice-classification-group')?.value;
         const categoria = document.getElementById('invoice-classification-subgroup')?.value;
         const selected = (App.viewState.selectedTransactions || []).map(String).filter(Boolean);
@@ -1496,7 +1518,10 @@ export const App = {
             Utils.showToast('Selecione um grupo e uma categoria.', 'error');
             return;
         }
-        const changed = Database.updateTransactionCategories(selected, categoria);
+        let changed;
+        try { changed = await Database.updateTransactionCategories(selected, categoria); }
+        catch (error) { Utils.showToast(error?.message || 'Não foi possível salvar a classificação; nenhuma alteração foi mantida.', 'error'); return false; }
+        if (!changed) { Utils.showToast('Nenhuma transação foi classificada.', 'warning'); return false; }
         App.viewState.selectedTransactions = [];
         App.closeInvoiceClassification();
         App.renderInvoiceModal();
@@ -1542,30 +1567,34 @@ export const App = {
         Renderer.renderInvoiceAdjustmentsReview(pending);
     },
     closeInvoiceAdjustmentsReview: () => App.renderInvoiceModal(),
-    confirmInvoiceAdjustmentsBulk: () => {
+    confirmInvoiceAdjustmentsBulk: async () => {
         const cardId = App.viewState.activeCardId;
         if (!cardId) return;
         const pending = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth)
             .filter(a => !(a.lancamentoCriado && a.transactionId) && a.type !== 'unrecognized_purchase');
         if (!pending.length) { App.renderInvoiceModal(); return; }
         let created = 0; let alreadyExists = 0; let failed = 0;
-        pending.forEach(a => {
-            const result = ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, a.id);
-            if (!result.ok) failed++; else if (result.alreadyExists) alreadyExists++; else created++;
-        });
+        for (const adjustment of pending) {
+            try {
+                const result = await ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, adjustment.id);
+                if (!result.ok) failed++; else if (result.alreadyExists) alreadyExists++; else created++;
+            } catch (_) { failed++; }
+        }
         App.renderInvoiceModal();
         App.scheduleRender();
         if (failed) Utils.showToast(`${created} criado(s), ${failed} não puderam ser criados.`, 'error');
         else Utils.showToast(`${created + alreadyExists} ajuste(s) processado(s); ${created} novo(s), sem duplicidades.`, 'success');
     },
-    createInvoiceAdjustmentTransaction: (id) => {
+    createInvoiceAdjustmentTransaction: async (id) => {
         const cardId = App.viewState.activeCardId;
         const adjustment = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth).find(a => String(a.id) === String(id));
         if (!adjustment || (adjustment.lancamentoCriado && adjustment.transactionId)) return;
         const isCredit = adjustment.effect === 'credit' || adjustment.sign === -1;
         const kind = isCredit ? 'receita/crédito' : 'despesa';
         if (!confirm(`Criar ${kind} de ${Utils.formatMoney(adjustment.amount)} para “${adjustment.description || 'Ajuste de fatura'}”? Esta ação altera o histórico e não pode ser desfeita automaticamente.`)) return;
-        const result = ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, id);
+        let result;
+        try { result = await ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, id); }
+        catch (error) { Utils.showToast(error?.message || 'Não foi possível salvar o lançamento; os dados anteriores foram mantidos.', 'error'); return false; }
         if (!result.ok) { Utils.showToast('Não foi possível criar o lançamento.', 'error'); return; }
         App.renderInvoiceModal();
         App.scheduleRender();
