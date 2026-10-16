@@ -31,6 +31,21 @@ export const Renderer = {
             // Delegar a renderização para a estratégia correta baseada no nome da página
             if (PageRenderers[currentPage]) {
                 PageRenderers[currentPage](appState);
+                // All real route templates are composed inside the same live
+                // canvas after their existing data/actions have rendered. This
+                // is a structural layout primitive, not a data/demo renderer.
+                const main = document.getElementById('main-content');
+                if (main && !main.querySelector(':scope > .nv-live-page')) {
+                    const page = document.createElement('div');
+                    page.className = `nv-live-page nv-live-page--${currentPage.toLowerCase()}`;
+                    page.setAttribute('data-live-route', currentPage);
+                    while (main.firstChild) page.appendChild(main.firstChild);
+                    main.appendChild(page);
+                } else if (main) {
+                    const page = main.querySelector(':scope > .nv-live-page');
+                    page.className = `nv-live-page nv-live-page--${currentPage.toLowerCase()}`;
+                    page.setAttribute('data-live-route', currentPage);
+                }
             } else {
                 console.warn('Página não encontrada no renderizador:', currentPage);
             }

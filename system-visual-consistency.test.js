@@ -143,7 +143,7 @@ describe('shared visual language across Avenera pages', () => {
         expect(compactCss).toContain('--nv-ui-page-radius:16px');
         expect(index).toContain('styles.css?v=20260925-anora-restoration-2');
         expect(index).toContain('styles-v4.css?v=20260925-v4-shell-1');
-        expect(worker).toContain("avenera-app-shell-v22");
+        expect(worker).toContain("avenera-app-shell-v25");
         expect(worker).toContain('./styles.css?v=20260925-anora-restoration-2');
         expect(worker).toContain('./styles-v4.css?v=20260925-v4-shell-1');
     });

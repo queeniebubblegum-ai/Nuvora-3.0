@@ -36,7 +36,7 @@ describe('Redesign v4 is the live Avenera shell, without replacing page renderer
         expect(ignore).not.toMatch(/^styles-v4\.css\s*$/m);
         expect(app).toContain('styles-v4.css?v=20260925-v4-shell-1');
         expect(worker).toContain('./styles-v4.css?v=20260925-v4-shell-1');
-        expect(worker).toContain("avenera-app-shell-v22");
+        expect(worker).toContain("avenera-app-shell-v25");
     });
 
     it('integrates all valid destinations with the existing App navigation and active-state hooks', () => {
@@ -91,7 +91,7 @@ describe('Redesign v4 is the live Avenera shell, without replacing page renderer
         expect(app).not.toContain('data-action="new-transaction"');
         expect(worker).toContain('./styles.css?v=20260925-anora-restoration-2');
         expect(worker).toContain('./styles-v4.css?v=20260925-v4-shell-1');
-        expect(worker).toContain("avenera-app-shell-v22");
+        expect(worker).toContain("avenera-app-shell-v25");
     });
 
     it('keeps the standalone prototype explicitly visual-only and usable with the scoped CSS', () => {

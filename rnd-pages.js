@@ -616,38 +616,15 @@ export const PageRenderers = {
     },
 
     Metas: (appState) => {
-        const actionsHtml = `<button data-action="openModal" data-modal="modal-meta" class="bg-brand-medium text-white px-6 py-2.5 rounded-[12px] font-bold text-sm shadow-brand-glow hover:-translate-y-0.5 transition-all hover:bg-brand-dark"><i class="fa-solid fa-plus mr-2"></i> Criar Meta</button>`;
-        
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-standard-page-header nv-standard-page-header--goals flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Metas e Reservas</h2>
-                    <p class="text-text-secondary text-sm">Planeje seus objetivos financeiros.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
+            ${renderPageHeader({ eyebrow: 'Progresso financeiro', title: 'Metas e reservas', subtitle: 'Acompanhe seus objetivos e valores reservados sem confundir reserva virtual com saldo bancário.', className: 'nv-standard-page-header nv-standard-page-header--goals', actions: [{ label: 'Criar meta', icon: 'fa-plus', variant: 'primary', action: 'openModal', attributes: { 'data-modal': 'modal-meta' } }] })}
             <details class="nv-standard-page-panel bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-bullseye text-brand-medium mr-2"></i>Metas e reservas</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.goalsPage(db.metas, db.transacoes, { reservas: db.reservas, bancos: db.bancos })}</div></details>
         `);
     },
 
     Orcamento: (appState) => {
-        const actionsHtml = `
-            <button data-action="openModal" data-modal="modal-orcamento-inteligente" class="bg-surface border border-brand-medium text-brand-medium px-5 py-2.5 rounded-[12px] text-sm font-bold shadow-soft hover:bg-brand-medium hover:text-white transition-all flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Inteligente</button>
-            <button data-action="openModal" data-modal="modal-orcamento" class="bg-brand-medium text-white px-5 py-2.5 rounded-[12px] text-sm font-bold shadow-brand-glow hover:-translate-y-0.5 hover:bg-brand-dark transition-all"><i class="fa-solid fa-plus mr-2"></i> Definir Limite</button>
-        `;
-        
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-standard-page-header nv-standard-page-header--budget flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Orçamento Mensal</h2>
-                    <p class="text-text-secondary text-sm">Estabeleça limites e controle seus gastos.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
+            ${renderPageHeader({ eyebrow: 'Planejamento', title: 'Orçamento mensal', subtitle: 'Estabeleça limites por categoria e acompanhe gastos realizados no período.', className: 'nv-standard-page-header nv-standard-page-header--budget', actions: [{ label: 'Orçamento inteligente', icon: 'fa-wand-magic-sparkles', action: 'openModal', attributes: { 'data-modal': 'modal-orcamento-inteligente' } }, { label: 'Definir limite', icon: 'fa-plus', variant: 'primary', action: 'openModal', attributes: { 'data-modal': 'modal-orcamento' } }] })}
             <details class="nv-standard-page-panel bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-wallet text-brand-medium mr-2"></i>Orçamento mensal</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.budgetView(db.orcamentos, db.transacoes, appState)}</div></details>
         `);
     },
@@ -738,12 +715,7 @@ export const PageRenderers = {
 
     Configuracoes: (appState) => {
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-standard-page-header nv-standard-page-header--settings flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Configurações</h2>
-                    <p class="text-text-secondary text-sm">Gerencie seu perfil e as configurações do sistema.</p>
-                </div>
-            </div>
+            ${renderPageHeader({ eyebrow: 'Sistema', title: 'Configurações', subtitle: 'Gerencie seu perfil, preferências e recursos de dados locais.', className: 'nv-standard-page-header nv-standard-page-header--settings' })}
             ${Components.settingsPage(db, settingsGroups)}
         `);
     },

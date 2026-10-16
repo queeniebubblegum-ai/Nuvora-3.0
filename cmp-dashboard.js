@@ -53,7 +53,7 @@ export const DashboardComponents = {
         const projectionTone = projectionAvailable ? financialValueClass(projection.value) : financialValueClass(null);
 
         const resultadoCard = `
-        <div class="nv-dashboard-card nv-summary-card nv-summary-card--result group">
+        <article class="nv-dashboard-card nv-summary-card nv-summary-card--result group" >
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-2">
                     <span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Resultado do período</span>
@@ -63,27 +63,27 @@ export const DashboardComponents = {
             </div>
             <h3 data-currency-value="${resultadoPeriodo}" class="text-3xl font-bold ${resultadoColor} ${financialValueClass(resultadoPeriodo)} mb-1 font-mono tracking-tight">${Utils.formatMoney(resultadoPeriodo)}</h3>
             <p class="text-[11px] text-text-secondary font-medium">Receitas ${Utils.formatMoney(atual.receitas)} · Despesas ${Utils.formatMoney(atual.despesas)}</p>
-        </div>`;
+        </article>`;
 
         const projectionCard = `
-        <div class="nv-dashboard-card nv-summary-card nv-summary-card--projection group" aria-label="Projeção de saldo no fim do mês">
+        <article class="nv-dashboard-card nv-summary-card nv-summary-card--projection group"  aria-label="Projeção de saldo no fim do mês">
             <div class="flex justify-between items-start mb-4"><div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Fim do mês</span></div><div class="w-10 h-10 text-brand-medium bg-brand-soft rounded-[12px] flex items-center justify-center text-base shadow-sm"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></div></div>
             <h3 data-currency-value="${projectionAvailable ? projection.value : ''}" class="text-3xl font-bold ${projectionTone} mb-1 font-mono tracking-tight">${projectionValue}</h3>
             <p class="text-[11px] text-text-secondary font-medium" title="${Utils.escapeHTML(projection.explanation || 'Dados futuros insuficientes para projetar.')}">${Utils.escapeHTML(projectionAvailable ? 'Saldo estimado no fim do mês' : 'Dados insuficientes para projetar')}</p>
-        </div>`;
+        </article>`;
 
         const vencimentosCard = `
-        <div class="nv-dashboard-card nv-summary-card nv-summary-card--due group">
+        <article class="nv-dashboard-card nv-summary-card nv-summary-card--due group" >
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Próximos vencimentos</span></div>
                 <div class="w-10 h-10 ${vencimentos > 0 ? 'text-danger bg-danger/10' : 'text-success bg-success/10'} rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-clock" aria-hidden="true"></i></div>
             </div>
             <h3 data-currency-value="${vencimentos}" class="text-3xl font-bold ${vencimentosColor} ${financialValueClass(vencimentos)} mb-1 font-mono tracking-tight">${Utils.formatMoney(vencimentos)}</h3>
             <p class="text-[11px] text-text-secondary font-medium">Contas pendentes de hoje até o fim do mês</p>
-        </div>`;
+        </article>`;
 
         return `
-        <div class="nv-dashboard-summary-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div class="nv-dashboard-summary-grid nv-live-metric-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" role="group" aria-label="Indicadores principais">
             ${CoreComponents._buildSummaryCard('Saldo atual', atual.saldo, '', true, 'fa-wallet', 'Saldo global de todas as contas')}
             ${resultadoCard}
             ${vencimentosCard}

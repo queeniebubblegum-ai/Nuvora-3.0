@@ -12,6 +12,6 @@ describe('V4 brand mark sizing', () => {
 
     it('bumps the app-shell cache after changing the shell markup', () => {
         const serviceWorker = readFileSync(resolve(process.cwd(), 'service-worker.js'), 'utf8');
-        expect(serviceWorker).toContain("avenera-app-shell-v22");
+        expect(serviceWorker).toContain("avenera-app-shell-v25");
     });
 });

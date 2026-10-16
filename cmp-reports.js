@@ -37,7 +37,7 @@ export const ReportComponents = {
         else if (selectedTab === 'patrimonio') contentHtml = ReportComponents.reportPatrimonio(database, state);
 
         return `
-            <section class="nv-reports-workspace" aria-label="Relatórios financeiros">
+            <section class="nv-reports-workspace nv-live-composition" data-layout="analysis-workspace" aria-label="Relatórios financeiros">
                 <header class="nv-reports-selected-heading" aria-label="Relatório selecionado">
                     <div class="nv-reports-selected-icon"><i class="fa-solid ${selected.icon}"></i></div>
                     <div class="nv-reports-selected-copy"><p>${selected.eyebrow}</p><h1>${selected.title}</h1><span class="nv-reports-selected-period">Período: ${Utils.escapeHTML(selectedPeriod)}</span><span>${selected.description}</span></div>
