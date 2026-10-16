@@ -1,0 +1,158 @@
+/* Avenera mockup v4 — visual layer only.
+   Keeps the existing renderers and business rules intact while aligning the
+   shell with avenera-mockup-completo-v4.html. */
+:root {
+  --mock-page: #F4F5F9;
+  --mock-surface: #FFFFFF;
+  --mock-surface-2: #F0F1F6;
+  --mock-border: #E1E3EB;
+  --mock-text: #242333;
+  --mock-muted: #737386;
+  --mock-muted-2: #9696A5;
+  --mock-brand: #4C3C70;
+  --mock-action: #5B3AA2;
+  --mock-violet: #8170B5;
+  --mock-violet-soft: #EEEAF7;
+}
+
+body {
+  background: var(--mock-page) !important;
+  color: var(--mock-text) !important;
+  font-family: "Public Sans", Inter, ui-sans-serif, system-ui, sans-serif !important;
+}
+
+.font-display,
+.nv-v4-scope .font-display,
+.nv-page-header h1,
+.nv-page-header__copy h1 {
+  font-family: "Fraunces", Georgia, serif !important;
+  letter-spacing: -.035em;
+}
+
+.nv-v4-topbar {
+  background: color-mix(in srgb, var(--mock-surface) 94%, transparent) !important;
+  border-bottom: 1px solid var(--mock-border) !important;
+  min-height: 62px !important;
+  padding-inline: clamp(14px, 3vw, 32px) !important;
+  backdrop-filter: blur(10px);
+}
+
+.nv-v4-layout { background: var(--mock-page) !important; }
+.nv-v4-sidebar {
+  background: var(--mock-surface) !important;
+  border-right: 1px solid var(--mock-border) !important;
+  width: 228px !important;
+}
+
+.nv-v4-sidebar > .flex.items-center {
+  border-bottom: 1px solid var(--mock-border) !important;
+  height: 64px !important;
+  padding-inline: 18px !important;
+}
+
+.nv-v4-sidebar .nv-v4-nav-link,
+.nv-v4-sidebar .nv-v4-group-toggle {
+  border-radius: 9px !important;
+  color: var(--mock-muted) !important;
+  font-size: 12px !important;
+  min-height: 37px !important;
+  transition: background .16s ease, color .16s ease !important;
+}
+
+.nv-v4-sidebar .nv-v4-nav-link:hover,
+.nv-v4-sidebar .nv-v4-group-toggle:hover {
+  background: var(--mock-surface-2) !important;
+  color: var(--mock-text) !important;
+}
+
+.nv-v4-sidebar .nv-v4-nav-link.active {
+  background: var(--mock-violet-soft) !important;
+  box-shadow: inset 2px 0 var(--mock-action) !important;
+  color: var(--mock-action) !important;
+  font-weight: 700 !important;
+}
+
+.nv-v4-sidebar .nv-v4-nav-link i,
+.nv-v4-sidebar .nv-v4-group-toggle i { color: var(--mock-muted-2) !important; }
+.nv-v4-sidebar .nv-v4-nav-link.active i { color: var(--mock-action) !important; }
+
+.nv-v4-section-label {
+  color: var(--mock-muted-2) !important;
+  font-size: 9px !important;
+  letter-spacing: .13em !important;
+  text-transform: uppercase !important;
+}
+
+.nv-v4-profile-area { border-color: var(--mock-border) !important; }
+.nv-v4-main { background: var(--mock-page) !important; }
+#main-content {
+  max-width: 1240px !important;
+  padding: 24px clamp(14px, 3vw, 32px) 96px !important;
+}
+
+.nv-page-header {
+  margin-bottom: 18px !important;
+}
+.nv-page-header__eyebrow {
+  color: var(--mock-action) !important;
+  font-size: 9px !important;
+  letter-spacing: .14em !important;
+}
+.nv-page-header__copy h1 {
+  color: var(--mock-text) !important;
+  font-size: clamp(24px, 3vw, 32px) !important;
+  line-height: 1.08 !important;
+}
+.nv-page-header__subtitle { color: var(--mock-muted) !important; font-size: 11px !important; }
+
+.nv-page-header__action,
+.btn-primary,
+.nv-dashboard-primary-action {
+  background: var(--mock-action) !important;
+  border-color: var(--mock-action) !important;
+  border-radius: 10px !important;
+  color: #fff !important;
+  min-height: 36px !important;
+}
+.nv-page-header__action.is-secondary,
+.btn-secondary,
+.nv-dashboard-secondary-action {
+  background: var(--mock-surface) !important;
+  border: 1px solid var(--mock-border) !important;
+  border-radius: 10px !important;
+  color: var(--mock-text) !important;
+}
+
+.nv-dashboard-card,
+.nv-dashboard-financial,
+.nv-dashboard-attention,
+.surface,
+.nv-standard-page,
+.nv-contacts-summary,
+.nv-contacts-list {
+  background: var(--mock-surface) !important;
+  border-color: var(--mock-border) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 2px rgba(35, 32, 28, .04) !important;
+}
+
+.nv-dashboard-filter,
+.nv-dashboard-date,
+.nv-dashboard-filter__option.is-active {
+  background: var(--mock-surface-2) !important;
+  border-color: var(--mock-border) !important;
+}
+.nv-dashboard-filter__option.is-active { color: var(--mock-action) !important; }
+
+.nv-v4-mobile-dock {
+  background: color-mix(in srgb, var(--mock-surface) 96%, transparent) !important;
+  border-color: var(--mock-border) !important;
+}
+
+@media (max-width: 1024px) {
+  .nv-v4-sidebar { width: 210px !important; }
+}
+@media (max-width: 767px) {
+  #main-content { padding: 18px 12px 106px !important; }
+  .nv-v4-topbar { min-height: 56px !important; padding-inline: 10px !important; }
+}
