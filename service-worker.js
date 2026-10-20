@@ -1,6 +1,6 @@
 // Increment when local application assets change so installed clients fetch
 // the latest modules, including the shared cent-precision money helpers.
-const APP_CACHE_NAME = 'avenera-app-shell-v34';
+const APP_CACHE_NAME = 'avenera-app-shell-v35';
 // Kept as an explicit migration marker so diagnostics can identify and remove
 // the previous shell version after an update.
 const LEGACY_APP_CACHE_NAME = 'avenera-app-shell-v26';
