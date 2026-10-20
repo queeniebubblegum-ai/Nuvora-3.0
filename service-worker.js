@@ -1,6 +1,6 @@
 // Increment when local application assets change so installed clients fetch
 // the latest modules, including the shared cent-precision money helpers.
-const APP_CACHE_NAME = 'avenera-app-shell-v35';
+const APP_CACHE_NAME = 'avenera-app-shell-v32';
 // Kept as an explicit migration marker so diagnostics can identify and remove
 // the previous shell version after an update.
 const LEGACY_APP_CACHE_NAME = 'avenera-app-shell-v26';
@@ -22,6 +22,13 @@ const LOCAL_ASSETS = [
     './redesign-fase2.css?v=20260925',
     './mockup-theme.css?v=20261016-v6',
     './mockup-theme.css',
+    './design-system.css?v=20261016-mockups-1',
+    './design-system.css',
+    './modal-design.js',
+    './cmp-experience.js',
+    './experience.js',
+    './cmp-workspaces.js',
+    './ctrl-investimentos.js',
     './modal-shortcuts.js',
     './manifest.json',
     './privacidade/index.html',

@@ -2,6 +2,7 @@ import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { ImportError, IMPORT_ERROR_CODES, asImportError } from './import-errors.js';
 import { shouldAnchorImportedTransactionsToStatementBalance, statementBalanceAnchorMetadata, normalizeStatementBalance, statementBalanceAdjustment } from './ofx-balance.js';
+import { CSVManager } from './csv-manager.js';
 
 export const OFXManager = {
     iniciarImportacaoOFX: (bancoId, viewState) => {
@@ -38,8 +39,15 @@ export const OFXManager = {
     },
 
     handleOfxBancoChange: (novoBancoId, viewState, renderCallback, openModalCallback) => {
+        viewState.bancoAlvoOFX = novoBancoId || '';
+        if (viewState.tipoImportacao === 'CSV') {
+            CSVManager.handleBancoChange(novoBancoId, viewState, openModalCallback);
+            renderCallback?.();
+            return;
+        }
         if(viewState.rawOfxString) {
             OFXManager.processarEVerificarDuplicidades(viewState.rawOfxString, novoBancoId, viewState, renderCallback, openModalCallback);
+            renderCallback?.();
         }
     },
 

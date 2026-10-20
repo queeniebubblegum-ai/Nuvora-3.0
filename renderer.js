@@ -26,10 +26,14 @@ export const Renderer = {
             // Native details/summary groups stay keyboard operable and expose the
             // active destination; mobile dock controls are not nested in a group.
             document.querySelectorAll('.nv-sidebar__group').forEach(group => {
-                group.open = [...group.querySelectorAll('.nav-item')].some(item => routeForItem(item) === currentPage);
+                if (!group.dataset.initialized || [...group.querySelectorAll('.nav-item')].some(item => routeForItem(item) === currentPage)) group.open = true;
+                group.dataset.initialized = 'true';
             });
             // Delegar a renderização para a estratégia correta baseada no nome da página
             if (PageRenderers[currentPage]) {
+                const routeTitles = { Dashboard: 'Visão geral', Transacoes: 'Lançamentos', Contas: 'Contas e cartões', Planejamento: 'Planejamento', Agendamentos: 'Agenda de contas', Relatorios: 'Relatórios', Conciliacao: 'Conciliação', Importacao: 'Importar extrato', Investimentos: 'Investimentos', Categorias: 'Categorias', Contatos: 'Pessoas', Anora: 'Anora', Configuracoes: 'Configurações', Metas: 'Metas', Orcamento: 'Orçamento' };
+                const title = document.getElementById('nv-topbar-title');
+                if (title) title.textContent = routeTitles[currentPage] || currentPage;
                 PageRenderers[currentPage](appState);
                 // All real route templates are composed inside the same live
                 // canvas after their existing data/actions have rendered. This

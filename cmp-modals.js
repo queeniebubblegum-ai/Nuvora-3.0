@@ -89,6 +89,15 @@ export const Modals = {
                     <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Categoria</label>
                     <select id="agendamento-categoria" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none text-text-primary transition-all"></select>
                 </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label for="agendamento-banco" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Conta</label><select id="agendamento-banco" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></select></div>
+                    <div><label for="agendamento-contato" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Pessoa (opcional)</label><select id="agendamento-contato" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="">Nenhuma</option></select></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label for="agendamento-repeticao" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Repetir</label><select id="agendamento-repeticao" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="unica">Não repetir</option><option value="semanal">Toda semana</option><option value="mensal">Todo mês</option><option value="anual">Todo ano</option></select></div>
+                    <div><label for="agendamento-repeticoes" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Ocorrências</label><input id="agendamento-repeticoes" type="number" min="1" max="120" step="1" value="1" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
+                </div>
+                <p class="nv-dialog-hint">A previsão não altera o saldo. O valor é registrado somente quando você confirmar o pagamento ou recebimento.</p>
                 
                 <div class="shrink-0 mt-3">
                     <button id="agendamento-submit" type="submit" class="w-full py-3 bg-brand-medium text-white font-bold rounded-[10px] shadow-soft hover:bg-brand-dark transition-all hover:-translate-y-0.5">Adicionar na Agenda</button>
@@ -169,10 +178,11 @@ export const Modals = {
     <div id="modal-contato" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
             <div class="flex justify-between items-center mb-5 shrink-0">
-                <h3 class="text-lg font-bold font-primary text-text-primary">Novo Contato</h3>
+                <h3 id="contato-titulo" class="text-lg font-bold font-primary text-text-primary">Novo Contato</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <form data-submit="contato" class="space-y-4 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
+                <input id="contato-id" type="hidden" value="">
                 <div>
                     <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Tipo</label>
                     <select id="contato-tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm">
@@ -201,7 +211,7 @@ export const Modals = {
                     <textarea id="contato-endereco" rows="2" placeholder="Rua, número, cidade" class="w-full p-2.5 bg-surface border border-border rounded-[10px] focus:border-brand-medium outline-none text-text-primary text-sm resize-none"></textarea>
                 </div>
                 <div class="shrink-0 mt-3">
-                    <button type="submit" class="w-full py-2.5 bg-brand-medium hover:bg-brand-dark text-white text-sm font-bold rounded-[10px] shadow-soft transition-all">Salvar Registro</button>
+                    <button id="contato-submit" type="submit" class="w-full py-2.5 bg-brand-medium hover:bg-brand-dark text-white text-sm font-bold rounded-[10px] shadow-soft transition-all">Salvar contato</button>
                 </div>
             </form>
         </div>
@@ -235,6 +245,7 @@ export const Modals = {
             <div class="p-4 border-t border-border shrink-0 flex gap-2">
                 <button data-action="closeModal" class="flex-1 py-2.5 rounded-[10px] border border-border text-text-primary text-sm font-bold hover:bg-bg transition-colors">Fechar</button>
                 <button id="contato-perfil-exportar" class="flex-1 py-2.5 rounded-[10px] bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors"><i class="fa-solid fa-file-csv mr-1"></i>Exportar CSV</button>
+                <button type="button" id="contato-perfil-editar" data-action="editContact" class="flex-1 py-2.5 rounded-[10px] bg-brand-medium text-white text-sm font-bold">Editar contato</button>
             </div>
         </div>
     </div>
@@ -287,6 +298,7 @@ export const Modals = {
                         <input type="color" id="nova-categoria-cor" value="#3B82F6" class="w-full h-[42px] p-1 bg-surface border border-border rounded-[10px] cursor-pointer">
                     </div>
                 </div>
+                <div><label for="nova-categoria-palavras" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Regra automática (opcional)</label><input id="nova-categoria-palavras" type="text" autocomplete="off" placeholder="Ex.: petshop, patinhas, veterinário" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><p class="nv-dialog-hint">Separe palavras-chave por vírgulas para sugerir esta categoria nos próximos lançamentos.</p></div>
                 <div class="shrink-0 mt-3">
                     <button id="nova-categoria-submit" type="submit" class="w-full bg-brand-medium text-white px-5 py-2.5 rounded-[10px] font-bold text-sm hover:bg-brand-dark transition-colors shadow-soft">Criar Categoria</button>
                 </div>
@@ -329,40 +341,45 @@ export const Modals = {
             <form data-submit="transacao" class="space-y-3.5 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <input type="hidden" id="input-tipo" value="despesa">
                 
-                <div class="mb-3 text-center bg-bg p-3 rounded-[12px] border border-dashed border-border shrink-0">
-                    <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Valor</label>
-                    <div class="relative flex items-center justify-center">
-                        <span class="text-xl text-text-secondary font-bold mr-1 font-mono">R$</span>
-                        <input id="input-valor" type="number" step="0.01" placeholder="0.00" required class="w-3/4 bg-transparent text-4xl font-black text-text-primary text-center focus:outline-none placeholder-text-secondary/30 font-mono transition-all">
-                    </div>
-                </div>
-
                 <div>
-                    <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Descrição</label>
+                    <label for="input-desc" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Descrição</label>
                     <input id="input-desc" type="text" placeholder="Ex: Supermercado..." required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary">
-                    <div id="smart-category-badge" class="hidden text-[10px] font-mentor bg-bg text-brand-medium border border-border px-3 py-1.5 mt-2 rounded-[8px] items-center gap-2 w-fit transition-all"></div>
                 </div>
                 
                 <div class="grid grid-cols-2 gap-3">
                     <div>
-                        <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Data</label>
-                        <input id="input-data-trans" type="date" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary">
+                        <label for="input-valor" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Valor (R$)</label>
+                        <input id="input-valor" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0,00" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm font-mono focus:border-brand-medium outline-none text-text-primary">
                     </div>
                     <div>
-                        <div class="flex items-center justify-between mb-1"><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider">Categoria</label><button type="button" onclick="App.openModal('modal-categoria'); event.stopPropagation()" title="Nova categoria" class="w-5 h-5 rounded-full bg-brand-medium/10 text-brand-medium text-[10px] font-bold">+</button></div>
-                        <select id="input-categoria-grupo" data-change="filterTransactionSubgroups" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm mb-2 focus:border-brand-medium outline-none transition-all text-text-primary"><option value="">Grupo principal</option></select>
-                        <select id="input-categoria-subgrupo" data-change="selectTransactionSubgroup" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary"><option value="">Subgrupo (opcional)</option></select>
-                        <select id="input-categoria" aria-hidden="true" tabindex="-1" class="hidden"></select>
+                        <label for="input-data-trans" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Data</label>
+                        <input id="input-data-trans" type="date" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary">
                     </div>
                 </div>
 
                 <div class="grid grid-cols-2 gap-3">
-                    <div class="col-span-2">
-                        <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Conta</label>
+                    <div>
+                        <div class="flex items-center justify-between mb-1"><label for="input-categoria-grupo" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider">Categoria</label><button type="button" onclick="App.openModal('modal-categoria'); event.stopPropagation()" title="Nova categoria" aria-label="Nova categoria" class="w-5 h-5 rounded-full bg-brand-medium/10 text-brand-medium text-[10px] font-bold">+</button></div>
+                        <select id="input-categoria-grupo" data-change="filterTransactionSubgroups" aria-label="Grupo da categoria" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm mb-2 focus:border-brand-medium outline-none transition-all text-text-primary"><option value="">Grupo principal</option></select>
+                        <select id="input-categoria-subgrupo" data-change="selectTransactionSubgroup" aria-label="Subcategoria opcional" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary"><option value="">Subgrupo (opcional)</option></select>
+                        <select id="input-categoria" aria-hidden="true" tabindex="-1" class="hidden"></select>
+                    </div>
+                    <div>
+                        <label for="input-banco-trans" class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Conta</label>
                         <select id="input-banco-trans" data-change="handleBancoChange" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary">
                             <option value="" disabled selected>Selecione a conta</option>
                         </select>
                     </div>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between mb-1"><label for="input-contato" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider">Pessoa (opcional)</label><button type="button" onclick="App.openModal('modal-contato'); event.stopPropagation()" title="Novo contato" aria-label="Novo contato" class="w-5 h-5 rounded-full bg-brand-medium/10 text-brand-medium text-[10px] font-bold">+</button></div>
+                    <select id="input-contato" class="w-full p-2.5 bg-surface border border-border rounded-[8px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary"></select>
+                </div>
+
+                <div id="smart-category-badge" class="hidden text-[10px] font-mentor bg-bg text-brand-medium border border-border px-3 py-1.5 mt-2 rounded-[8px] items-center gap-2 w-fit transition-all"></div>
+
+                <div class="grid grid-cols-2 gap-3">
                     <div id="div-forma-pagamento" class="col-span-2">
                         <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Forma de Pagamento</label>
                         <select id="input-forma-pagamento" data-change="handleFormaPagamentoChange" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary">
@@ -398,11 +415,6 @@ export const Modals = {
                     </button>
                     
                     <div id="opcionais-transacao" class="hidden mt-3 space-y-3 p-3 border border-border rounded-[10px] bg-bg">
-                        <div>
-                            <div class="flex items-center justify-between mb-1"><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider">Contato</label><button type="button" onclick="App.openModal('modal-contato'); event.stopPropagation()" title="Novo contato" class="w-5 h-5 rounded-full bg-brand-medium/10 text-brand-medium text-[10px] font-bold">+</button></div>
-                            <select id="input-contato" class="w-full p-2.5 bg-surface border border-border rounded-[8px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary"></select>
-                        </div>
-
                         <div id="div-recorrente">
                             <label class="flex items-center gap-2 text-xs text-text-primary cursor-pointer p-1">
                                 <input type="checkbox" id="input-recorrente" data-change="toggleRecorrente" class="w-4 h-4 text-brand-medium bg-surface border-border rounded"> Repetir mensalmente
@@ -419,8 +431,9 @@ export const Modals = {
                 <div id="transacao-simulacao-resultado" class="hidden mt-3 shrink-0"></div>
 
                 <div class="flex gap-2 pt-3 border-t border-border mt-3 shrink-0">
+                    <button type="button" data-action="closeModal" class="flex-1 py-3 bg-surface border border-border text-text-primary rounded-[10px] text-sm font-bold">Cancelar</button>
                     <button type="button" id="btn-simular-transacao" data-action="simularTransacaoGeral" class="hidden flex-1 py-3 bg-bg text-brand-medium rounded-[10px] font-bold text-sm hover:border-border border border-transparent transition-colors">Simular</button>
-                    <button type="submit" id="btn-submit-transacao" class="w-full py-3 bg-brand-medium text-white rounded-[10px] text-sm font-bold shadow-soft hover:bg-brand-dark transition-all">Adicionar</button>
+                    <button type="submit" id="btn-submit-transacao" class="flex-1 py-3 bg-brand-medium text-white rounded-[10px] text-sm font-bold shadow-soft hover:bg-brand-dark transition-all">Salvar lançamento</button>
                 </div>
             </form>
             <div id="inline-transferencia" class="hidden flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
@@ -451,6 +464,7 @@ export const Modals = {
                     <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome da Conta</label>
                     <input id="banco-nome" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm outline-none text-text-primary">
                 </div>
+                <div><label for="banco-tipo" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Tipo de conta</label><select id="banco-tipo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"><option value="corrente">Conta corrente</option><option value="poupanca">Poupança</option><option value="carteira">Carteira</option><option value="investimento">Conta de investimentos</option></select></div>
                 <div>
                     <label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Saldo Inicial (R$)</label>
                     <input id="banco-saldo" type="number" step="0.01" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm outline-none text-text-primary">
@@ -476,6 +490,7 @@ export const Modals = {
                     </select>
                 </div>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome</label><input type="text" id="cartao-nome" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></div>
+                <div><label for="cartao-final" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Final do cartão (opcional)</label><input id="cartao-final" type="text" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="Ex.: 4421" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm font-mono text-text-primary"></div>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Limite (R$)</label><input type="number" step="0.01" id="cartao-limite" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] font-mono text-sm text-text-primary"></div>
                 <div class="grid grid-cols-2 gap-3">
                     <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Dia Fechamento</label><input type="number" min="1" max="31" id="cartao-dia-fech" required class="w-full p-2.5 bg-surface font-mono border border-border rounded-[10px] text-sm text-text-primary"></div>

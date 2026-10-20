@@ -1,9 +1,9 @@
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 const arrayCollections = [
     'transacoes', 'bancos', 'cartoes', 'conciliacoesFaturas', 'metas', 'reservas',
     'orcamentos', 'notificacoes', 'agendamentos', 'categorias', 'contatos',
-    'historicoMentoria', 'receitasFuturas', 'assinaturas', 'investimentos'
+    'historicoMentoria', 'receitasFuturas', 'assinaturas', 'investimentos', 'fechamentosMes'
 ];
 
 const clone = value => {

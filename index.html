@@ -17,23 +17,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/remixicon@4/fonts/remixicon.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-    <!-- Ordem de carregamento de CSS (consolidado):
-         1. styles.css ........ base Tailwind + tokens do app (não remover)
-         2. redesign-fase2.css . ajustes da fase 2 sobre a base
-         3. styles-v4.css ..... escopado em .nv-v4-scope (shell/dock/FAB)
-         4. redesign-v4-coordinated.css . camada coordenada do redesign
-         5. mockup-theme.css .. tema visual final (carrega por último)
-         Nenhum usa @import; todos com ?v= para quebra de cache. -->
     <link rel="stylesheet" href="./styles.css?v=20260925-anora-restoration-2">
     <link rel="stylesheet" href="./redesign-fase2.css?v=20260925">
     <link rel="stylesheet" href="./styles-v4.css?v=20260925-v4-shell-1">
     <link rel="stylesheet" href="./redesign-v4-coordinated.css?v=20261016-layout-v4">
     <link rel="stylesheet" href="./mockup-theme.css?v=20261016-v6">
+    <link rel="stylesheet" href="./design-system.css?v=20261016-mockups-1">
 
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -44,40 +37,6 @@
         /* Keep the page container out of a transform stacking context so fixed-layer CTAs remain hit-testable. */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
-
-        /* === Etapa 1: fundação do layout estável ===
-           Altura fixa em 100vh/dvh, uma única área de rolagem (main),
-           contêineres flex com min-height:0 para encolherem e não
-           expandirem o body. Nada é escondido — o excesso rola dentro
-           da área destinada. */
-        html, body { height: 100%; overscroll-behavior: none; }
-        .nv-v4-layout { min-height: 0; }
-        main.nv-main { min-height: 0; }
-        /* sidebar: o nav interno precisa poder encolher e rolar */
-        .nv-v4-sidebar nav[aria-label="Navegação principal"] { min-height: 0; }
-        /* gaveta de notificações: conteúdo interno rola sem vazar */
-        #notif-content { min-height: 0; }
-        /* protege os wrappers de escopo v4: se display:contents falhar,
-           o layout inteiro quebra — força com !important */
-        .nv-v4-scope-contents { display: contents !important; }
-        #main-content { max-width: 100%; }
-
-        /* === Etapa 2: experiência mobile / app nativo ===
-           - elimina rolagem horizontal acidental (causa do "zoom necessário")
-           - mídia e gráficos nunca estouram a largura da tela
-           - áreas de toque confortáveis (≥44px) no celular
-           - font-size 16px em campos evita o zoom automático do iOS ao focar
-           - text-size-adjust evita inflação de texto no Safari */
-        html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-        img, canvas, svg, video, iframe, embed, object { max-width: 100%; }
-        .nv-v4-topbar button, .nv-v4-topbar [role="button"],
-        .nv-v4-mobile-nav, .nv-v4-nav-link, .btn, .btn-ghost, .btn-primary,
-        button, [role="button"], summary { touch-action: manipulation; }
-        @media (max-width: 640px) {
-            .nv-v4-topbar button, .nv-v4-topbar [role="button"] { min-height: 40px; min-width: 40px; }
-            .nv-v4-mobile-nav { min-height: 48px; }
-            input, select, textarea { font-size: 16px; }
-        }
     </style>
 </head>
 <body class="nv-app-root bg-bg font-primary text-text-primary h-screen overflow-hidden flex flex-col transition-colors duration-300">
@@ -99,7 +58,7 @@
             </div>
         </div>
 
-            <div id="nv-topbar-month" class="nv-mockup-topbar-month" aria-label="Mês selecionado">Setembro 2026</div>
+            <div class="nv-topbar-context"><span id="nv-topbar-title">Visão geral</span><span id="nv-topbar-month" class="nv-mockup-topbar-month" aria-label="Mês selecionado"></span></div>
             <div class="nv-topbar-actions flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
             <input type="file" id="backup-input" class="hidden" accept=".json">
                 <button type="button" data-action="openTransactionSearch" aria-label="Buscar no Avenera" title="Buscar no Avenera" class="nv-v4-search-button hidden md:inline-flex btn-ghost">
@@ -131,9 +90,9 @@
                     <div class="p-4 border-b border-border bg-brand text-white">
                         <p class="text-[11px] font-bold uppercase tracking-wider mb-2">Perfil da Mentoria</p>
                         <select id="anora-rigor-select" data-change="updateAnoraPreference" data-preference="style" onclick="event.stopPropagation()" class="w-full bg-white/10 border border-white/20 rounded-r1 text-xs p-2 outline-none text-white cursor-pointer font-medium">
-                            <option class="text-text" value="suave">🍃 Modo Suave</option>
-                            <option class="text-text" value="equilibrado" selected>⚖️ Modo Equilibrado</option>
-                            <option class="text-text" value="rigoroso">🎯 Foco Extremo (Rigoroso)</option>
+                            <option class="text-text" value="suave">Modo suave</option>
+                            <option class="text-text" value="equilibrado" selected>Modo equilibrado</option>
+                            <option class="text-text" value="rigoroso">Modo rigoroso</option>
                         </select>
                     </div>
                     <div class="p-2 flex flex-col gap-1">
@@ -168,46 +127,58 @@
                 <div class="w-9 h-9 rounded-r2 bg-action flex items-center justify-center text-white font-display font-bold" aria-hidden="true">A</div>
                 <div class="nv-sidebar-brand-copy">
                     <p class="font-display font-semibold text-text leading-tight">Avenera</p>
+                    <span class="nv-sidebar-tagline">organize sua vida</span>
                 </div>
                 <button type="button" class="lg:hidden ml-auto btn-ghost !px-2.5" onclick="toggleSidebar()" aria-label="Fechar menu">✕</button>
             </div>
             <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-1" aria-label="Navegação principal">
                 <div class="px-2 pb-2">
                     <p class="nv-v4-section-label">Visão geral</p>
-                    <button type="button" data-action="navigate" data-payload="Dashboard" data-page-route="Dashboard" id="nav-Dashboard" class="nv-v4-nav-link nav-item w-full"><i class="fa-solid fa-border-all" aria-hidden="true"></i><span>Visão geral</span></button>
+                    <button type="button" data-action="navigate" data-payload="Dashboard" id="nav-Dashboard" class="nv-v4-nav-link nav-item w-full"><i class="fa-solid fa-border-all" aria-hidden="true"></i><span>Visão geral</span></button>
                 </div>
                 <details class="nv-sidebar__group nv-v4-nav-group" data-nav-group="finance">
                     <summary class="nv-v4-group-toggle"><span><i class="fa-solid fa-wallet" aria-hidden="true"></i>Finanças</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items nv-v4-group-items">
-                        <button type="button" data-action="navigate" data-payload="Transacoes" data-page-route="Transacoes" id="nav-Transacoes" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i><span>Lançamentos</span></button>
-                        <button type="button" data-action="navigate" data-payload="Planejamento" data-page-route="Planejamento" id="nav-Planejamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i><span>Planejamento</span></button>
-                        <button type="button" data-action="navigate" data-payload="Agendamentos" data-page-route="Agendamentos" id="nav-Agendamentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Agenda de contas</span></button>
-                        <button type="button" data-action="navigate" data-payload="Contas" data-page-route="Contas" id="nav-Contas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-wallet" aria-hidden="true"></i><span>Contas e cartões</span></button>
-                        <button type="button" data-action="navigate" data-payload="Investimentos" data-page-route="Investimentos" id="nav-Investimentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Investimentos</span></button>
-                        <button type="button" data-action="navigate" data-payload="Metas" data-page-route="Metas" id="nav-Metas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-bullseye" aria-hidden="true"></i><span>Metas</span></button>
-                        <button type="button" data-action="navigate" data-payload="Orcamento" data-page-route="Orcamento" id="nav-Orcamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><span>Orçamento</span></button>
-                        <button type="button" data-action="navigate" data-payload="Relatorios" data-page-route="Relatorios" id="nav-Relatorios" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Relatórios</span></button>
-                        <button type="button" data-action="navigate" data-payload="Conciliacao" data-page-route="Conciliacao" id="nav-Conciliacao" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i><span>Conciliação</span></button>
-                        <button type="button" data-action="navigate" data-payload="Importacao" data-page-route="Importacao" id="nav-Importacao" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i><span>Importar extrato</span></button>
+                        <button type="button" data-action="navigate" data-payload="Transacoes" id="nav-Transacoes" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i><span>Lançamentos</span></button>
+                        <button type="button" data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i><span>Planejamento</span></button>
+                        <button type="button" data-action="navigate" data-payload="Agendamentos" id="nav-Agendamentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Agenda de contas</span></button>
+                        <button type="button" data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-wallet" aria-hidden="true"></i><span>Contas e cartões</span></button>
+                        <button type="button" data-action="navigate" data-payload="Investimentos" id="nav-Investimentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Investimentos</span></button>
+                        <button type="button" data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-bullseye" aria-hidden="true"></i><span>Metas</span></button>
+                        <button type="button" data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><span>Orçamento</span></button>
+                        <button type="button" data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Relatórios</span></button>
+                        <button type="button" data-action="navigate" data-payload="Conciliacao" id="nav-Conciliacao" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i><span>Conciliação</span></button>
+                        <button type="button" data-action="navigate" data-payload="Importacao" id="nav-Importacao" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i><span>Importar extrato</span></button>
                     </div>
                 </details>
                 <details class="nv-sidebar__group nv-v4-nav-group" data-nav-group="organization">
                     <summary class="nv-v4-group-toggle"><span><i class="fa-solid fa-layer-group" aria-hidden="true"></i>Organização</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items nv-v4-group-items">
-                        <button type="button" data-action="navigate" data-payload="Categorias" data-page-route="Categorias" id="nav-Categorias" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-tags" aria-hidden="true"></i><span>Categorias</span></button>
-                        <button type="button" data-action="navigate" data-payload="Contatos" data-page-route="Contatos" id="nav-Contatos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-address-book" aria-hidden="true"></i><span>Pessoas</span></button>
+                        <button type="button" data-action="navigate" data-payload="Categorias" id="nav-Categorias" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-tags" aria-hidden="true"></i><span>Categorias</span></button>
+                        <button type="button" data-action="navigate" data-payload="Contatos" id="nav-Contatos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-address-book" aria-hidden="true"></i><span>Pessoas</span></button>
                     </div>
                 </details>
                 <div class="nv-v4-system-nav">
                     <details class="nv-sidebar__group nv-v4-nav-group" data-nav-group="system">
                         <summary class="nv-v4-group-toggle"><span><i class="fa-solid fa-gear" aria-hidden="true"></i>Sistema</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                         <div class="nv-sidebar__group-items nv-v4-group-items">
-                            <button type="button" data-action="navigate" data-payload="Anora" data-page-route="Anora" id="nav-Anora" class="nv-v4-nav-link nav-item"><i class="ri-sparkling-line" aria-hidden="true"></i><span>Anora</span></button>
-                            <button type="button" data-action="navigate" data-payload="Configuracoes" data-page-route="Configuracoes" id="nav-Configuracoes" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-gear" aria-hidden="true"></i><span>Configurações</span></button>
+                            <button type="button" data-action="navigate" data-payload="Anora" id="nav-Anora" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i><span>Anora</span></button>
+                            <button type="button" data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-gear" aria-hidden="true"></i><span>Configurações</span></button>
                         </div>
                     </details>
                 </div>
             </nav>
+            <div class="nv-v4-profile-area border-t border-border p-3 shrink-0">
+                <button type="button" data-action="navigate" data-payload="Anora" data-page-route="Anora" id="nv-v4-sidebar-profile" aria-label="Abrir Anora" class="nv-v4-profile-button nav-item w-full">
+                    <img src="assets/perfil.svg" alt="" class="w-9 h-9 rounded-full bg-surface-2">
+                    <span class="nv-sidebar-anora-glyph" aria-hidden="true"><i class="fa-solid fa-sparkles"></i></span>
+                    <span class="flex-1 text-left min-w-0">
+                        <span class="block text-sm font-semibold text-text truncate">Anora</span>
+                        <span class="block text-[10px] text-muted truncate">1 sugestão útil</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-[10px] text-muted" aria-hidden="true"></i>
+                </button>
+            </div>
         </aside>
         </div>
 

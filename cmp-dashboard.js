@@ -425,29 +425,27 @@ export const DashboardComponents = {
 
     dashboardMockupFlow: (transacoes = []) => {
         const now = new Date();
-        const months = Array.from({ length: 6 }, (_, index) => {
-            const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
-            return { date, label: date.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''), income: 0, expense: 0 };
+        const months = Array.from({length:6},(_,index) => {
+            const date = new Date(now.getFullYear(),now.getMonth()-(5-index),1);
+            return {date,label:date.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),income:0,expense:0};
         });
         transacoes.forEach(transaction => {
-            const date = transaction?.data ? new Date(`${String(transaction.data).slice(0, 10)}T12:00:00`) : null;
-            if (!date || Number.isNaN(date.getTime()) || isTransferTransaction(transaction)) return;
+            const date = new Date(`${String(transaction?.data || '').slice(0,10)}T12:00:00`);
+            if(Number.isNaN(date.getTime()) || isTransferTransaction(transaction)) return;
             const month = months.find(item => item.date.getFullYear() === date.getFullYear() && item.date.getMonth() === date.getMonth());
-            if (!month) return;
-            if (isIncome(transaction)) month.income += Math.abs(Number(transaction.valor) || 0);
-            if (isExpense(transaction)) month.expense += Math.abs(Number(transaction.valor) || 0);
+            if(!month) return;
+            if(isIncome(transaction)) month.income += Number(transaction.valor) || 0;
+            if(isExpense(transaction)) month.expense += Number(transaction.valor) || 0;
         });
-        const max = Math.max(...months.flatMap(item => [item.income, item.expense]), 1);
-        const points = (key, baseline = 154) => months.map((item, index) => {
-            const x = 18 + index * 112;
-            const y = baseline - ((item[key] / max) * 112);
-            return `${x},${Math.max(24, Math.min(baseline, y)).toFixed(1)}`;
-        }).join(' ');
+        const max = Math.max(...months.flatMap(item => [item.income,item.expense]),1);
         const hasData = months.some(item => item.income || item.expense);
-        const incomePoints = hasData ? points('income') : '18,140 130,137 242,142 354,134 466,139 578,132';
-        const expensePoints = hasData ? points('expense') : '18,148 130,146 242,149 354,144 466,147 578,145';
-        const labels = months.map(item => `<text x="${18 + months.indexOf(item) * 112}" y="180" font-size="10" text-anchor="middle">${item.label}</text>`).join('');
-        return `<section class="nv-mockup-flow nv-dashboard-card" aria-label="Fluxo de caixa"><header class="nv-mockup-flow__header"><div><p class="nv-dashboard-eyebrow">Análise financeira</p><h3>Fluxo de caixa</h3><p>Entradas e saídas realizadas nos últimos meses.</p></div><div class="nv-mockup-flow__legend"><span><i class="is-income"></i>Receitas</span><span><i class="is-expense"></i>Despesas</span></div></header><div class="nv-mockup-flow__chart"><svg viewBox="0 0 600 190" preserveAspectRatio="none" role="img" aria-label="${hasData ? 'Fluxo de caixa dos últimos seis meses' : 'Fluxo de caixa aguardando lançamentos'}"><path d="M0 154H600M0 120H600M0 86H600M0 52H600M0 18H600" class="nv-mockup-flow__grid-line"></path><polyline points="${incomePoints}" class="nv-mockup-flow__line is-income"></polyline><polyline points="${expensePoints}" class="nv-mockup-flow__line is-expense"></polyline><g class="nv-mockup-flow__labels">${labels}<text x="4" y="22" font-size="9">R$</text><text x="4" y="156" font-size="9">0</text></g></svg></div>${hasData ? '' : '<p class="nv-mockup-flow__neutral"><i class="fa-regular fa-circle-info" aria-hidden="true"></i> Registre entradas e despesas para formar seu histórico.</p>'}</section>`;
+        const bars = months.map((item,index) => {
+            const x = 55 + index*88;
+            const income = Math.max(0,item.income / max*150), expense = Math.max(0,item.expense / max*150);
+            return `<g><title>${item.label}: receitas ${Utils.formatMoney(item.income)}, despesas ${Utils.formatMoney(item.expense)}</title><rect x="${x-16}" y="${176-income}" width="15" height="${income}" rx="4" class="nv-flow-bar--income"></rect><rect x="${x+3}" y="${176-expense}" width="15" height="${expense}" rx="4" class="nv-flow-bar--expense"></rect><text x="${x}" y="201" text-anchor="middle" font-size="10">${item.label}</text></g>`;
+        }).join('');
+        const chart = hasData ? `<svg viewBox="0 0 550 215" role="img" aria-label="Receitas e despesas realizadas nos últimos seis meses"><path d="M25 26H535M25 76H535M25 126H535M25 176H535" class="nv-mockup-flow__grid-line"></path><g class="nv-mockup-flow__labels">${bars}</g></svg>` : '<div class="nv-flow-empty"><i class="fa-solid fa-chart-column" aria-hidden="true"></i><strong>Seu fluxo começa com o primeiro lançamento</strong><p>As receitas e despesas realizadas aparecerão aqui.</p></div>';
+        return `<section class="nv-mockup-flow nv-dashboard-card" aria-label="Fluxo de caixa"><header class="nv-mockup-flow__header"><div><h3>Fluxo de caixa · 6 meses</h3><p>Receitas e despesas realizadas</p></div><div class="nv-mockup-flow__legend"><span><i class="is-income"></i>Receitas</span><span><i class="is-expense"></i>Despesas</span></div></header><div class="nv-mockup-flow__chart">${chart}</div></section>`;
     },
 
     dashboardMockupAccounts: (bancos = [], cartoes = [], compras = []) => {
@@ -544,7 +542,7 @@ export const DashboardComponents = {
             ].join('');
             const states = [isOutside ? 'is-outside' : '', isToday ? 'is-today agenda-day--today' : '', isSelected ? 'is-selected' : '', lista.length ? 'agenda-day--has-items' : ''].filter(Boolean).join(' ');
             const label = `${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${lista.length ? `, ${lista.length} ${lista.length === 1 ? 'item' : 'itens'}` : ''}`;
-            cells.push(`<button type="button" data-action="showAgendaDay" onclick="App.showAgendaDay('${dateKey}')" data-payload="${dateKey}" class="calendar-day agenda-day ${states}" aria-label="${Utils.escapeHTML(label)}" aria-current="${isToday ? 'date' : 'false'}" aria-pressed="${isSelected ? 'true' : 'false'}"><span class="calendar-day-number">${date.getDate()}</span>${dots ? `<span class="calendar-day-dots" aria-label="Indicadores do dia">${dots}</span>` : '<span class="calendar-day-dots" aria-hidden="true"></span>'}</button>`);
+            cells.push(`<button type="button" data-action="showAgendaDay" data-payload="${dateKey}" class="calendar-day agenda-day ${states}" aria-label="${Utils.escapeHTML(label)}" aria-current="${isToday ? 'date' : 'false'}" aria-pressed="${isSelected ? 'true' : 'false'}"><span class="calendar-day-number">${date.getDate()}</span>${dots ? `<span class="calendar-day-dots" aria-label="Indicadores do dia">${dots}</span>` : '<span class="calendar-day-dots" aria-hidden="true"></span>'}</button>`);
         }
         return `<section class="nv-dashboard-card nv-dashboard-agenda agenda-calendar" aria-label="Agenda financeira"><header class="calendar-header"><div><p class="calendar-eyebrow">Planejamento</p><h3 class="calendar-title">Agenda financeira</h3><p class="calendar-subtitle">${nomes[mes]} de ${ano} · selecione um dia para ver os detalhes</p></div><div class="calendar-controls"><button type="button" data-action="resetAgendaToday" class="calendar-today" aria-label="Ir para hoje">Hoje</button><div class="calendar-nav" role="group" aria-label="Navegação da agenda"><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="calendar-nav-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="calendar-nav-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div></header><div class="calendar-weekdays agenda-weekdays" aria-hidden="true">${diasSemana.map(dia => `<span>${dia}</span>`).join('')}</div><div class="calendar-grid agenda-grid" role="grid" aria-label="${nomes[mes]} de ${ano}">${cells.join('')}</div><footer class="calendar-legend" aria-label="Legenda da agenda"><span><i class="calendar-legend-dot calendar-legend-dot--commitment" aria-hidden="true"></i>Compromisso</span><span><i class="calendar-legend-dot calendar-legend-dot--due-date" aria-hidden="true"></i>Vencimento</span><span><i class="calendar-legend-dot calendar-legend-dot--completed" aria-hidden="true"></i>Concluído</span></footer></section>`;
     },

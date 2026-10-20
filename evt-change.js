@@ -17,6 +17,7 @@ export const ChangeEvents = {
             const target = e.target;
             
             const changeMap = {
+                'setFontScale': () => App.setFontScale(target.value),
                 'setFilter': () => App.setFilter(target.getAttribute('data-filter-key'), target.value),
                 'setReportPeriod': () => App.setReportPeriod(target.value),
                 'setReportCashflowPeriod': () => App.setReportCashflowPeriod(target.value),

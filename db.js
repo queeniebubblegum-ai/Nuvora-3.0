@@ -41,6 +41,7 @@ const initialDB = {
     receitasFuturas: [],
     assinaturas: [],
     investimentos: [],
+    fechamentosMes: [],
     // Persisted write timestamp; null means freshness is not trustworthy yet.
     metadados: { ultimaAtualizacao: null, schemaVersion: CURRENT_SCHEMA_VERSION }
 };
@@ -394,8 +395,8 @@ const cloneCollectionForRollback = value => Array.isArray(value)
     ? value.map(item => item && typeof item === 'object' ? { ...item } : item)
     : value && typeof value === 'object' ? { ...value } : value;
 
-const snapshotTransactionState = () => Object.fromEntries(
-    [...TRANSACTION_PERSIST_COLLECTIONS, 'metadados'].map(col => [col, cloneCollectionForRollback(db[col])])
+const snapshotTransactionState = (cols = TRANSACTION_PERSIST_COLLECTIONS) => Object.fromEntries(
+    [...new Set([...TRANSACTION_PERSIST_COLLECTIONS, ...cols, 'metadados'])].map(col => [col, cloneCollectionForRollback(db[col])])
 );
 
 const restoreTransactionState = snapshot => {
@@ -413,7 +414,7 @@ const enqueueTransactionMutation = run => {
 };
 
 const commitTransactionMutation = (mutate, cols = TRANSACTION_PERSIST_COLLECTIONS) => enqueueTransactionMutation(async () => {
-    const snapshot = snapshotTransactionState();
+    const snapshot = snapshotTransactionState(cols);
     try {
         const result = mutate();
         if (result === NO_TRANSACTION_MUTATION) return false;
@@ -1215,6 +1216,8 @@ export const CategoryRepo = {
         categoria.paiId = paiId;
         if (data.icone) categoria.icone = data.icone;
         if (data.cor) categoria.cor = data.cor;
+        if (Array.isArray(data.palavrasChave)) categoria.palavrasChave = [...new Set(data.palavrasChave
+            .map(word => String(word).trim().toLocaleLowerCase('pt-BR')).filter(Boolean))];
         // ativo/arquivada/fixa are lifecycle/protection state, not editable form fields.
         if (eraPrincipal && antigo !== nome) db.categorias.forEach(c => { if (c !== categoria && c.grupo === antigo) c.grupo = nome; });
         if (antigo !== nome) CategoryRepo._references(antigo, nome);
@@ -1252,9 +1255,93 @@ export const CategoryRepo = {
 };
 
 export const ContactRepo = {
-    add: (item) => { db.contatos.unshift(item); persist('contatos'); return true; },
+    add: (item) => {
+        if (!item || !String(item.nome || '').trim() || db.contatos.some(contact => String(contact.id) === String(item.id))) return false;
+        db.contatos.unshift({ ...item, nome: String(item.nome).trim() });
+        persist('contatos'); return true;
+    },
+    update: (id, data) => {
+        const index = db.contatos.findIndex(item => String(item.id) === String(id));
+        if (index < 0 || !String(data?.nome || '').trim()) return false;
+        const current = db.contatos[index];
+        // Contact IDs are foreign keys on transactions and forecasts. Editing
+        // the profile must never replace the ID or recreate its financial history.
+        db.contatos[index] = { ...current, ...data, id: current.id, nome: String(data.nome).trim() };
+        persist('contatos'); return true;
+    },
     remove: (id) => { db.contatos = db.contatos.filter(i => i.id.toString() !== id.toString()); persist('contatos'); }
 };
+
+const saveContactAtomically = (id, data) => commitTransactionMutation(() => {
+    const nome = String(data?.nome || '').trim();
+    const email = String(data?.email || '').trim();
+    if (!nome || !['pf', 'pj'].includes(data?.tipo || 'pf') || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw new Error('Confira o nome, tipo e e-mail da pessoa.');
+    const index = id ? db.contatos.findIndex(contact => String(contact.id) === String(id)) : -1;
+    if (id && index < 0) throw new Error('Esta pessoa não existe mais.');
+    const current = index >= 0 ? db.contatos[index] : null;
+    const saved = { ...(current || {}), ...data, nome, email,
+        id: current?.id ?? data.id ?? globalThis.crypto?.randomUUID?.() ?? `contato-${Date.now()}-${Math.random().toString(36).slice(2, 10)}` };
+    if (index >= 0) db.contatos[index] = saved;
+    else {
+        if (db.contatos.some(contact => String(contact.id) === String(saved.id))) throw new Error('Esta pessoa já está cadastrada.');
+        db.contatos.unshift(saved);
+    }
+    return saved;
+}, ['contatos']);
+
+const financialMonthKey = (year, month) => {
+    if (!Number.isInteger(year) || year < 1900 || year > 9999 || !Number.isInteger(month) || month < 0 || month > 11) throw new Error('Selecione um mês e ano válidos.');
+    return `${year}-${String(month + 1).padStart(2, '0')}`;
+};
+
+// Closing is an auditable snapshot. The ledger remains editable until a future
+// centrally enforced period-lock feature is implemented; lock:true is rejected.
+const closeFinancialMonth = ({ year, month, lock = false } = {}) => commitTransactionMutation(() => {
+    const period = financialMonthKey(year, month);
+    if (lock) throw new Error('O bloqueio de lançamentos por mês ainda não está disponível. Use fechamento sem bloqueio.');
+    if (!Array.isArray(db.fechamentosMes)) db.fechamentosMes = [];
+    const index = db.fechamentosMes.findIndex(item => item.periodo === period);
+    const current = db.fechamentosMes[index];
+    if (current?.status === 'fechado') return current;
+    const transactions = db.transacoes.filter(transaction => {
+        const date = parseLocalDate(transaction.data);
+        return date && date.getFullYear() === year && date.getMonth() === month;
+    });
+    const totals = calculatePeriodTotals(transactions);
+    const capturedAt = new Date().toISOString();
+    const bankBalance = (db.bancos || []).reduce((total, bank) => addMoney(total, bank.saldo), 0);
+    const reserved = (db.reservas || []).reduce((total, reserve) => addMoney(total, reserve.saldo), 0);
+    const pending = [
+        ...(db.agendamentos || []).filter(item => !['pago', 'recebida', 'cancelado', 'cancelada'].includes(item.status)),
+        ...(db.receitasFuturas || []).filter(item => !['pago', 'recebida', 'cancelado', 'cancelada'].includes(item.status))
+    ].filter(item => String(item.dataVencimento || item.data || '').slice(0, 7) === period);
+    const record = {
+        id: `fechamento-${period}`, periodo: period, year, month, status: 'fechado', locked: false,
+        fechadoEm: capturedAt, receitas: totals.income, despesas: totals.expense,
+        resultado: addMoney(totals.income, -totals.expense), quantidadeLancamentos: transactions.length,
+        pendencias: pending.length, transacoesIds: transactions.map(item => item.id),
+        saldoBancario: bankBalance, saldoReservado: reserved, saldoDisponivel: addMoney(bankBalance, -reserved),
+        // Account balances are captured at close time. They are not presented
+        // as reconstructed historical month-end balances for previous periods.
+        saldosReferencia: 'momento-do-fechamento', saldosCapturadosEm: capturedAt,
+        contas: (db.bancos || []).map(bank => ({ id: bank.id, nome: bank.nome, saldo: fromCents(toCents(bank.saldo)) })),
+        historico: current ? [...(current.historico || []), { fechadoEm: current.fechadoEm, reabertoEm: current.reabertoEm, receitas: current.receitas, despesas: current.despesas, resultado: current.resultado }] : []
+    };
+    if (index >= 0) db.fechamentosMes[index] = record;
+    else db.fechamentosMes.unshift(record);
+    return record;
+}, ['fechamentosMes']);
+
+const reopenFinancialMonth = ({ year, month } = {}) => commitTransactionMutation(() => {
+    const period = financialMonthKey(year, month);
+    const index = (db.fechamentosMes || []).findIndex(item => item.periodo === period);
+    if (index < 0) throw new Error('Este mês ainda não possui fechamento.');
+    const current = db.fechamentosMes[index];
+    if (current.status === 'aberto') return current;
+    const updated = { ...current, status: 'aberto', locked: false, reabertoEm: new Date().toISOString() };
+    db.fechamentosMes[index] = updated;
+    return updated;
+}, ['fechamentosMes']);
 
 export const NotificationRepo = {
     add: (item) => { db.notificacoes.unshift(item); persist('notificacoes'); return true; },
@@ -1280,6 +1367,92 @@ export const ScheduleRepo = {
     },
     remove: (id) => { db.agendamentos = db.agendamentos.filter(i => i.id.toString() !== id.toString()); persist('agendamentos'); }
 };
+
+const normalizedForecast = (item, collection = 'agendamentos') => {
+    if (!item || typeof item !== 'object' || item.id == null || String(item.id) === '') throw new Error('Previsão inválida.');
+    const desc = String(item.desc || '').trim();
+    const date = String(item.dataVencimento || item.data || '');
+    const tipo = item.tipo || (collection === 'receitasFuturas' ? 'receita' : 'despesa');
+    const value = Number(item.valor);
+    if (!desc || !Number.isFinite(value) || toCents(value) <= 0 || !isValidTransferDate(date) || !['receita', 'despesa'].includes(tipo)) {
+        throw new Error('Informe descrição, valor, tipo e vencimento válidos.');
+    }
+    const bank = item.bancoId == null || item.bancoId === '' ? null : db.bancos.find(account => String(account.id) === String(item.bancoId));
+    const contact = item.contatoId == null || item.contatoId === '' ? null : db.contatos.find(person => String(person.id) === String(item.contatoId));
+    if (item.bancoId != null && item.bancoId !== '' && !bank) throw new Error('A conta selecionada não existe mais.');
+    if (item.contatoId != null && item.contatoId !== '' && !contact) throw new Error('A pessoa selecionada não existe mais.');
+    return { ...item, desc, valor: fromCents(toCents(value)), tipo, bancoId: bank?.id ?? null,
+        contatoId: contact?.id ?? null, dataVencimento: date,
+        ...(collection === 'receitasFuturas' ? { data: date } : {}) };
+};
+
+// Schedule creation and settlement use the same mutation queue as the ledger.
+// One failed write rolls back the complete series, or the balance and its status.
+const addSchedulesAtomically = items => commitTransactionMutation(() => {
+    if (!Array.isArray(items) || !items.length || items.length > 120) throw new Error('Informe de 1 a 120 ocorrências.');
+    const rows = items.map(item => normalizedForecast(item));
+    const ids = new Set(db.agendamentos.map(item => String(item.id)));
+    rows.forEach(row => {
+        if (ids.has(String(row.id))) throw new Error('Esta previsão já está cadastrada.');
+        ids.add(String(row.id));
+    });
+    db.agendamentos = [...rows, ...db.agendamentos];
+    return rows;
+}, ['agendamentos']);
+
+const saveForecastAtomically = (id, collection, data) => commitTransactionMutation(() => {
+    if (!['agendamentos', 'receitasFuturas'].includes(collection)) throw new Error('Origem da previsão inválida.');
+    const index = db[collection].findIndex(item => String(item.id) === String(id));
+    if (index < 0) throw new Error('Esta previsão não existe mais.');
+    const current = db[collection][index];
+    if (['pago', 'recebida'].includes(current.status)) throw new Error('Esta previsão já foi realizada. Edite o lançamento no histórico.');
+    if (current.categoria === 'Fatura Cartão') throw new Error('Use o fluxo de fatura para alterar este compromisso.');
+    const nextCollection = collection === 'receitasFuturas' && data.tipo === 'despesa' ? 'agendamentos' : collection;
+    const updated = normalizedForecast({ ...current, ...data, id: current.id, status: current.status || (collection === 'receitasFuturas' ? 'prevista' : 'pendente') }, nextCollection);
+    if (nextCollection !== collection) {
+        if (db[nextCollection].some(item => String(item.id) === String(id))) throw new Error('Já existe uma previsão com este identificador.');
+        db[collection].splice(index, 1);
+        updated.status = 'pendente';
+        db[nextCollection].unshift(updated);
+    } else db[collection][index] = updated;
+    return { schedule: updated, collection: nextCollection };
+}, ['agendamentos', 'receitasFuturas']);
+
+const settleScheduleAtomically = (id, options = {}) => commitTransactionMutation(() => {
+    const collection = options.collection || 'agendamentos';
+    if (!['agendamentos', 'receitasFuturas'].includes(collection)) throw new Error('Origem da previsão inválida.');
+    const index = db[collection].findIndex(item => String(item.id) === String(id));
+    if (index < 0) throw new Error('Esta previsão não existe mais.');
+    const current = db[collection][index];
+    if (current.categoria === 'Fatura Cartão' || current.pagamentoFaturaAutomatico) throw new Error('Use o pagamento de fatura para este compromisso.');
+    const reference = collection === 'receitasFuturas' ? 'receitaFuturaId' : 'agendamentoId';
+    const existing = db.transacoes.find(transaction => String(transaction[reference] ?? '') === String(id));
+    if (existing) return { transaction: existing, schedule: current, alreadySettled: true };
+    if (['pago', 'recebida'].includes(current.status)) throw new Error('Esta previsão já foi realizada. Consulte o histórico antes de lançar novamente.');
+    if (['cancelado', 'cancelada'].includes(current.status)) throw new Error('Esta previsão está cancelada.');
+    const bank = db.bancos.find(account => String(account.id) === String(options.bankId ?? current.bancoId ?? ''));
+    if (!bank) throw new Error('Selecione uma conta válida antes de realizar a previsão.');
+    const now = new Date();
+    const date = options.date || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (!isValidTransferDate(date)) throw new Error('Informe uma data de realização válida.');
+    const normalized = normalizedForecast({ ...current, bancoId: bank.id }, collection);
+    const transaction = {
+        id: `agenda-${collection}-${String(current.id)}`,
+        [reference]: current.id, desc: normalized.desc, valor: normalized.valor,
+        tipo: collection === 'receitasFuturas' ? 'receita' : normalized.tipo,
+        categoria: normalized.categoria || 'Outros', bancoId: bank.id, contatoId: normalized.contatoId,
+        isCartao: false, formaPagamento: collection === 'receitasFuturas' ? 'Receita futura recebida' : 'Automático (Agendamento)',
+        data: date, parcelaAtual: current.parcelaAtual || 1, totalParcelas: current.totalParcelas || 1,
+        recorrente: current.recorrente === true, grupoId: current.grupoId || null,
+        codigoRef: `AGENDA-${String(current.id)}`
+    };
+    if (db.transacoes.some(item => String(item.id) === transaction.id)) throw new Error('O identificador desta realização já existe no histórico.');
+    db.transacoes.unshift(transaction);
+    applyBalanceDelta(transaction, false, false);
+    const schedule = { ...current, bancoId: bank.id, status: collection === 'receitasFuturas' ? 'recebida' : 'pago', transacaoId: transaction.id, dataRealizacao: date };
+    db[collection][index] = schedule;
+    return { transaction, schedule, alreadySettled: false };
+}, ['transacoes', 'bancos', 'agendamentos', 'receitasFuturas']);
 
 export const FutureIncomeRepo = {
     add: (item) => { db.receitasFuturas.unshift({ ...item, status: item.status || 'prevista' }); persist('receitasFuturas'); return true; },
@@ -1454,6 +1627,12 @@ export const Database = {
     },
     addRecorrente: TransactionsRepo.addRecurrent,
     addRecurringTransactionAtomically,
+    addSchedulesAtomically,
+    saveForecastAtomically,
+    settleScheduleAtomically,
+    saveContactAtomically,
+    closeFinancialMonth,
+    reopenFinancialMonth,
     addTransactionsAtomically: TransactionsRepo.addMany,
     remove: (col, id) => {
         switch(col) {
@@ -1480,6 +1659,7 @@ export const Database = {
     updateTransactionCategories: TransactionsRepo.updateCategories,
     updateAgendamento: ScheduleRepo.update,
     updateReceitaFutura: FutureIncomeRepo.update,
+    updateContact: ContactRepo.update,
     addCardExpense: TransactionsRepo.addCardExpense,
     updateConfig: NotificationRepo.updateConfig,
     updateBudget: BudgetRepo.updateLimit,

@@ -1,6 +1,30 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { App } from './app.js';
+import { isValidTransferDate } from './financial-transfers.js';
+
+const scheduleId = () => globalThis.crypto?.randomUUID?.() || `previsao-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+export const buildScheduleOccurrences = (base, repetition = 'unica', quantity = 1, idFactory = scheduleId) => {
+    if (!isValidTransferDate(base?.dataVencimento)) throw new Error('Informe um vencimento válido.');
+    if (!['unica', 'semanal', 'mensal', 'anual'].includes(repetition)) throw new Error('Selecione uma repetição válida.');
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 120) throw new Error('Informe de 1 a 120 ocorrências.');
+    const count = repetition === 'unica' ? 1 : quantity;
+    const original = Utils.parseLocalDate(base.dataVencimento);
+    const groupId = count > 1 ? idFactory() : null;
+    return Array.from({ length: count }, (_, index) => {
+        let date = base.dataVencimento;
+        if (repetition === 'mensal' || repetition === 'anual') date = Utils.addMonthsSafe(base.dataVencimento, index * (repetition === 'anual' ? 12 : 1));
+        if (repetition === 'semanal') {
+            const next = new Date(original);
+            next.setDate(original.getDate() + index * 7);
+            date = `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}-${String(next.getDate()).padStart(2, '0')}`;
+        }
+        return { ...base, id: idFactory(), dataVencimento: date,
+            repeticao: repetition, recorrente: count > 1, grupoId: groupId,
+            parcelaAtual: index + 1, totalParcelas: count };
+    });
+};
 
 export const PlaneamentoController = {
     submitReceitaFutura: (e) => {
@@ -41,33 +65,41 @@ export const PlaneamentoController = {
         App.scheduleRender();
     },
 
-    submitAgendamento: (e) => {
+    submitAgendamento: async (e) => {
         e.preventDefault();
         const tipo = document.getElementById('agendamento-tipo').value;
-        const desc = document.getElementById('agendamento-desc').value;
+        const desc = document.getElementById('agendamento-desc').value.trim();
         const valor = Number(document.getElementById('agendamento-valor').value);
         const dataVencimento = document.getElementById('agendamento-data').value;
         const categoria = document.getElementById('agendamento-categoria').value;
         
-        const bancoIdRaw = document.getElementById('agendamento-banco')?.value;
-        const bancoId = bancoIdRaw ? String(bancoIdRaw) : (db.bancos.length > 0 ? db.bancos[0].id : null);
-        if (!desc.trim() || !Number.isFinite(valor) || valor <= 0 || !dataVencimento) { Utils.showToast('Informe descrição, valor e vencimento válidos.', 'error'); return; }
-        if (bancoId && !db.bancos.some(bank => String(bank.id) === String(bancoId))) { Utils.showToast('Selecione uma conta válida.', 'error'); return; }
-        
         const editId = document.getElementById('agendamento-edit-id')?.value;
         const editCol = document.getElementById('agendamento-edit-col')?.value || 'agendamentos';
-        const dados = { desc, valor, dataVencimento, categoria, tipo, status: 'pendente', bancoId };
-        if (editId) {
-            if (editCol === 'receitasFuturas') Database.updateReceitaFutura(editId, { ...dados, data: dataVencimento });
-            else Database.updateAgendamento(editId, dados);
-        } else {
-            Database.add('agendamentos', { id: Date.now(), ...dados });
+        const existing = editId ? (db[editCol] || []).find(item => String(item.id) === String(editId)) : null;
+        const bancoInput = document.getElementById('agendamento-banco');
+        const bancoIdRaw = bancoInput ? bancoInput.value : (existing?.bancoId ?? db.bancos[0]?.id ?? '');
+        const banco = db.bancos.find(bank => String(bank.id) === String(bancoIdRaw));
+        const contatoInput = document.getElementById('agendamento-contato');
+        const contatoIdRaw = contatoInput ? contatoInput.value : (existing?.contatoId ?? '');
+        const contato = db.contatos.find(person => String(person.id) === String(contatoIdRaw));
+        const repeticao = document.getElementById('agendamento-repeticao')?.value || 'unica';
+        const repetitionsRaw = document.getElementById('agendamento-repeticoes')?.value;
+        const repeticoes = repeticao === 'unica' ? 1 : Number(repetitionsRaw || 1);
+        if (!desc || !Number.isFinite(valor) || valor <= 0 || !isValidTransferDate(dataVencimento) || !['despesa', 'receita'].includes(tipo)) { Utils.showToast('Informe descrição, valor, tipo e vencimento válidos.', 'error'); return; }
+        if (bancoIdRaw && !banco) { Utils.showToast('Selecione uma conta válida.', 'error'); return; }
+        if (contatoIdRaw && !contato) { Utils.showToast('Selecione uma pessoa válida.', 'error'); return; }
+        const dados = { desc, valor, dataVencimento, categoria, tipo, bancoId: banco?.id ?? null, contatoId: contato?.id ?? null };
+        try {
+            if (editId) await Database.saveForecastAtomically(editId, editCol, dados);
+            else await Database.addSchedulesAtomically(buildScheduleOccurrences({ ...dados, status: 'pendente' }, repeticao, repeticoes));
+            const editField = document.getElementById('agendamento-edit-id');
+            if (editField) editField.value = '';
+            Utils.showToast(editId ? 'Previsão atualizada!' : repeticoes > 1 ? `${repeticoes} previsões criadas na agenda!` : 'Previsão criada na agenda!', 'success');
+            App.closeModal();
+            App.scheduleRender();
+        } catch (error) {
+            Utils.showToast(error?.message || 'Não foi possível salvar a previsão. Os dados anteriores foram mantidos.', 'error');
         }
-        document.getElementById('agendamento-edit-id').value = '';
-        Utils.showToast(editId ? 'Previsão atualizada!' : 'Conta agendada com sucesso!', 'success');
-        App.closeModal();
-        // Atualiza também o Dashboard, onde a agenda é exibida.
-        App.scheduleRender();
     },
 
     submitMeta: (e) => {

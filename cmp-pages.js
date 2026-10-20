@@ -9,6 +9,7 @@ import { addMoney } from './money-math.js';
 import { cardInvoiceDueDate } from './invoice-provisioning.js';
 import { isInvoiceSchedulePending } from './invoice-payment.js';
 import { renderTransactionTypeMenu } from './transaction-type-menu.js';
+import { renderPeopleTable } from './cmp-experience.js';
 
 export const accountPortfolioSummary = ({
     banks = [],
@@ -202,46 +203,7 @@ export const PageComponents = {
     },
 
     contatosPage: (contatos = []) => {
-        const source = Array.isArray(contatos) ? contatos : [];
-        const escape = value => Utils.escapeHTML(String(value ?? ''));
-        const initials = name => String(name || 'Contato')
-            .trim()
-            .split(/\s+/)
-            .filter(Boolean)
-            .slice(0, 2)
-            .map(part => part[0])
-            .join('')
-            .toLocaleUpperCase('pt-BR') || 'CT';
-        const documentLabel = document => document ? String(document) : 'Documento não informado';
-
-        const listHtml = source.map(contact => {
-            const name = String(contact?.nome || 'Contato sem nome').trim() || 'Contato sem nome';
-            const id = escape(contact?.id);
-            const tipoLabel = contact?.tipo === 'pj' ? 'PJ' : 'PF';
-            const tipoIcon = contact?.tipo === 'pj' ? 'fa-building' : 'fa-user';
-            const metaParts = [];
-            if (contact?.documento) metaParts.push(escape(String(contact.documento)));
-            if (contact?.telefone) metaParts.push('<i class="fa-solid fa-phone" aria-hidden="true"></i> ' + escape(String(contact.telefone)));
-            if (contact?.email) metaParts.push('<i class="fa-solid fa-envelope" aria-hidden="true"></i> ' + escape(String(contact.email)));
-            const metaHtml = metaParts.length ? metaParts.join(' · ') : 'Sem detalhes adicionais';
-            return `<article data-key="${id}" class="nv-contact-row">
-                <span class="nv-contact-avatar" aria-hidden="true">${escape(initials(name))}</span>
-                <div class="nv-contact-copy"><h3>${escape(name)}</h3><p>${metaHtml}</p></div>
-                <span class="nv-contact-type"><i class="fa-solid ${tipoIcon}" aria-hidden="true"></i>${tipoLabel}</span>
-                <button type="button" onclick="App.openContatoPerfil('${id}')" class="nv-contact-delete" style="color:var(--c-brand-medium)" title="Ver perfil de ${escape(name)}" aria-label="Ver perfil"><i class="fa-solid fa-eye" aria-hidden="true"></i></button>
-                <button type="button" data-action="delete" data-col="contatos" data-id="${id}" class="nv-contact-delete" title="Excluir ${escape(name)}" aria-label="Excluir ${escape(name)}"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
-            </article>`;
-        }).join('');
-
-        const emptyState = `<section class="nv-contacts-empty" aria-labelledby="nv-contacts-empty-title">
-            <span class="nv-contacts-empty__icon"><i class="fa-regular fa-address-book" aria-hidden="true"></i></span>
-            <div><h3 id="nv-contacts-empty-title">Nenhum contato registrado</h3><p>Adicione pessoas ou empresas para dar contexto aos seus lançamentos.</p></div>
-            <button type="button" data-action="openModal" data-modal="modal-contato" class="nv-contacts-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i>Adicionar pessoa</button>
-        </section>`;
-
-        return source.length
-            ? `<section class="nv-contacts-list" aria-label="Contatos cadastrados">${listHtml}</section>`
-            : emptyState;
+        return renderPeopleTable(Array.isArray(contatos) ? contatos : [], db.transacoes || []);
     },
 
     categoriesPage: (db) => {
@@ -296,6 +258,10 @@ export const PageComponents = {
         };
         const groupCards = (items) => groupBy(items).map(([group, entries]) => {
             const base = entries.find(item => item.principal) || entries[0];
+            const names = new Set(entries.map(item => item.nome));
+            const transactions = (db.transacoes || []).filter(item => names.has(item.categoria) && (isIncome(item) || isExpense(item)));
+            const total = transactions.reduce((sum,item) => addMoney(sum, item.valor),0);
+            const keywords = entries.flatMap(item => Array.isArray(item.raw?.palavrasChave) ? item.raw.palavrasChave : []).slice(0,4);
             const searchText = entries.map(item => `${item.nome} ${item.grupo} ${item.subgrupo} ${item.tipoLabel} ${item.statusLabel} ${item.principal ? 'categoria principal grupo' : 'subcategoria'}`).join(' ');
             const rows = entries.map(item => {
                 const rowLabel = item.principal ? item.nome : item.subgrupo || item.nome;
@@ -303,7 +269,7 @@ export const PageComponents = {
                 const rowSearch = `${item.nome} ${item.grupo} ${item.subgrupo} ${item.tipoLabel} ${item.statusLabel} ${hierarchy}`;
                 return `<div class="nv-category-subrow ${item.archived ? 'is-archived' : ''}" data-category-row data-category-id="${escape(item.id)}" data-search="${escape(rowSearch.toLocaleLowerCase('pt-BR'))}" data-category-status="${item.archived ? 'archived' : 'active'}"><span class="nv-category-row-icon" style="background:${escape(item.color)}" title="${escape(item.nome)}"><i class="fa-solid ${escape(item.icon)}" aria-hidden="true"></i></span><span class="nv-category-subrow__name"><strong>${escape(rowLabel)}</strong><small>${escape(hierarchy)}</small></span><span class="nv-category-type nv-category-type--${item.tipo === 'receita' ? 'income' : 'expense'}">${escape(item.tipoLabel)}</span><span class="nv-category-status ${item.archived ? 'is-archived' : item.fixa ? 'is-fixed' : 'is-custom'}">${escape(item.statusLabel)}</span>${actionMenu(item)}</div>`;
             }).join('');
-            return `<details class="nv-category-card" data-category-type="${base.tipo}" data-category-count="${entries.length}" data-group-count="1" data-search="${escape(searchText.toLocaleLowerCase('pt-BR'))}"><summary class="nv-category-card__summary"><span class="nv-category-card__icon" style="background:${escape(base.color)}"><i class="fa-solid ${escape(base.icon)}" aria-hidden="true"></i></span><span class="nv-category-card__main"><strong>${escape(group)}</strong><span>Grupo · ${entries.length} ${entries.length === 1 ? 'categoria' : 'categorias'}</span></span><span class="nv-category-card__type">${escape(base.tipoLabel)}</span><span class="nv-category-card__count">${entries.length} ${entries.length === 1 ? 'registro' : 'registros'}</span><i class="fa-solid fa-chevron-down nv-category-card__chevron" aria-hidden="true"></i></summary><div class="nv-category-subrows">${rows}</div></details>`;
+            return `<details class="nv-category-card" data-category-type="${base.tipo}" data-category-count="${entries.length}" data-group-count="1" data-search="${escape(searchText.toLocaleLowerCase('pt-BR'))}"><summary class="nv-category-card__summary"><span class="nv-category-card__icon" style="background:${escape(base.color)}"><i class="fa-solid ${escape(base.icon)}" aria-hidden="true"></i></span><span class="nv-category-card__main"><strong>${escape(group)}</strong><span>${keywords.length ? `Regra: ${escape(keywords.join(', '))}` : `${entries.length} ${entries.length === 1 ? 'categoria' : 'categorias'} · abrir para gerenciar`}</span></span><span class="nv-category-card__type">${escape(base.tipoLabel)}</span><span class="nv-category-card__count">${transactions.length} lançamentos</span><strong class="nv-category-card__metric">${Utils.formatMoney(total)}</strong><i class="fa-solid fa-chevron-down nv-category-card__chevron" aria-hidden="true"></i></summary><div class="nv-category-subrows">${rows}</div></details>`;
         }).join('');
         const section = (type, title, icon, items, emptyText) => `<section class="nv-category-section" data-category-section="${type}" aria-labelledby="nv-category-${type}-title"><div class="nv-category-section__heading"><div><p class="nv-category-eyebrow">Organização</p><h3 id="nv-category-${type}-title"><i class="fa-solid ${icon}" aria-hidden="true"></i>${title}</h3></div><span class="nv-category-section__count" data-section-count>${items.length} ${items.length === 1 ? 'categorias' : 'categorias'} · ${groupBy(items).length} ${groupBy(items).length === 1 ? 'grupo' : 'grupos'}</span></div><div class="nv-category-list">${groupCards(items) || `<div class="nv-category-empty"><i class="fa-solid fa-tag" aria-hidden="true"></i><span>${emptyText}</span></div>`}</div></section>`;
         const card = (value, label, icon, extra = '') => `<div class="nv-category-summary-card ${extra}"><span class="nv-category-summary-card__icon"><i class="fa-solid ${icon}" aria-hidden="true"></i></span><span><strong>${value}</strong><small>${label}</small></span></div>`;
@@ -406,7 +372,7 @@ export const PageComponents = {
             const dateHeading = dateInfo.key !== previousDateKey
                 ? `<div class="nv-tx-date-heading" role="heading" aria-level="3"><span>${Utils.escapeHTML(dateInfo.label)}</span></div>`
                 : '';
-            const contato = t.contatoId && db.contatos ? db.contatos.find(c => c.id === t.contatoId) : null;
+            const contato = t.contatoId && db.contatos ? db.contatos.find(c => String(c.id) === String(t.contatoId)) : null;
             const banco = db.bancos?.find(b => String(b.id) === String(t.bancoId));
             const reserva = (db.reservas || []).find(item => String(item.id) === String(t.bancoId));
             const metaReserva = reserva && db.metas?.find(item => String(item.id) === String(reserva.goalId));
@@ -797,7 +763,7 @@ export const PageComponents = {
         const hoje = new Date(); 
         const tresMesesAtras = new Date(); 
         tresMesesAtras.setMonth(hoje.getMonth() - 3);
-        const transacoesRecentes = transacoes.filter(t => t.id >= tresMesesAtras.getTime()); 
+        const transacoesRecentes = transacoes.filter(t => { const date = new Date(`${String(t.data || '').slice(0,10)}T12:00:00`); return !Number.isNaN(date.getTime()) && date >= tresMesesAtras && date <= hoje; });
         const recentTotals = calculatePeriodTotals(transacoesRecentes);
         const receitas = recentTotals.income;
         const despesas = recentTotals.expense;
@@ -906,15 +872,15 @@ export const PageComponents = {
                     <button type="submit" class="nv-settings-primary-action"><i class="fa-solid fa-floppy-disk" aria-hidden="true"></i> Salvar perfil</button>
                 </form>`,
             appearance: `
-                <div class="nv-settings-option-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i></span><div class="nv-settings-option-copy"><strong>Tema escuro</strong><small data-settings-theme-state>Modo atual: ${isDark ? 'escuro' : 'claro'}</small></div><button type="button" data-action="toggleTheme" class="nv-settings-switch ${isDark ? 'is-on' : ''}" aria-label="Alternar tema"><span aria-hidden="true"></span></button></div>
-                <div class="nv-settings-static-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-text-height" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Tamanho da fonte</strong></span><span class="nv-settings-static-value">Padrão <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></div>
+                <div class="nv-settings-option-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i></span><div class="nv-settings-option-copy"><strong>Tema escuro</strong><small data-settings-theme-state>Modo atual: ${isDark ? 'escuro' : 'claro'}</small></div><button type="button" data-action="toggleTheme" class="nv-settings-switch ${isDark ? 'is-on' : ''}" aria-label="Alternar tema" aria-pressed="${isDark}"><span aria-hidden="true"></span></button></div>
+                <label class="nv-settings-static-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-text-height" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Tamanho da fonte</strong></span><select aria-label="Tamanho da fonte" data-change="setFontScale"><option value="1">Padrão</option><option value="1.1">Ampliada</option><option value="1.2">Grande</option></select></label>
                 <div class="nv-settings-static-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-language" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Idioma</strong></span><span class="nv-settings-static-value">Português (BR) <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></div>
                 <div class="nv-settings-static-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-circle-dollar-to-slot" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Moeda</strong></span><span class="nv-settings-static-value">BRL (R$) <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></div>
                 <label class="nv-settings-option-row nv-settings-option-row--toggle nv-settings-motion-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-wand-magic-sparkles" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Redução de movimento</strong><small>Reduz animações e transições da interface neste navegador.</small></span><input type="checkbox" data-change="setReducedMotion" ${reducedMotion ? 'checked' : ''} aria-label="Ativar redução de movimento"></label>`,
             data: `
                 <div class="nv-settings-option-row"><span class="nv-settings-option-icon"><i class="fa-regular fa-bell" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Alertas da Anora</strong></span><input type="checkbox" data-change="updateAnoraPreference" data-preference="notifications" ${preferences.notifications ? 'checked' : ''} aria-label="Ativar alertas da Anora"></div>
                 <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-regular fa-calendar-check" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Lembretes de vencimento</strong><small>Mostra alertas para compromissos próximos do vencimento.</small></span><input type="checkbox" data-change="updateNotificationConfig" data-config-key="lembretesVencimentoAtivo" ${db.configNotificacoes?.lembretesVencimentoAtivo !== false ? 'checked' : ''} aria-label="Ativar lembretes de vencimento"></label>
-                <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-solid fa-rotate" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Sincronização automática</strong><small>Ativa a atualização automática quando uma integração estiver disponível.</small></span><input type="checkbox" data-change="updateNotificationConfig" data-config-key="sincronizacaoAutomaticaAtiva" ${db.configNotificacoes?.sincronizacaoAutomaticaAtiva !== false ? 'checked' : ''} aria-label="Ativar sincronização automática"></label>
+                <div class="nv-settings-static-row"><span class="nv-settings-option-icon"><i class="fa-solid fa-hard-drive" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Armazenamento neste dispositivo</strong><small>Salvamento automático local. Use o backup para levar seus dados a outro dispositivo.</small></span><span class="nv-workspace-pill">Local</span></div>
                 <div class="nv-settings-static-row nv-settings-data-action"><span class="nv-settings-option-icon"><i class="fa-solid fa-download" aria-hidden="true"></i></span><button type="button" data-action="exportBackup" class="nv-settings-inline-action"><strong>Exportar backup</strong><span>.json <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></button></div>
                 <div class="nv-settings-static-row nv-settings-data-action"><span class="nv-settings-option-icon"><i class="fa-solid fa-upload" aria-hidden="true"></i></span><button type="button" data-action="importBackupPicker" class="nv-settings-inline-action"><strong>Importar dados</strong><span>CSV / OFX / backup <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></button></div>
                 <div class="nv-settings-static-row nv-settings-data-action is-danger"><span class="nv-settings-option-icon"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></span><button type="button" data-action="clearAllData" class="nv-settings-inline-action"><strong>Limpar todos os dados</strong><span>irreversível <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></button></div>
@@ -926,9 +892,10 @@ export const PageComponents = {
                     <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-solid fa-lock" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Telemetria local</strong><small>Registra apenas interações genéricas neste navegador. Desativada por padrão; nada é enviado à rede.</small></span><input type="checkbox" data-change="updateAnoraPreference" data-preference="localTelemetry" ${preferences.localTelemetry ? 'checked' : ''} aria-label="Ativar telemetria local"></label></div>`
         };
 
-        const groupSections = groups.map(group => {
+        const groupSections = [...groups, {id:'about', title:'Sobre', description:'Avenera · organização financeira pessoal', icon:'fa-circle-info'}].map(group => {
             const id = escape(group.id);
-            return `<section class="nv-settings-panel" data-settings-group="${id}" id="settings-group-${id}" tabindex="-1" aria-labelledby="settings-title-${id}"><header class="nv-settings-panel__header"><span class="nv-settings-panel__icon"><i class="fa-solid ${escape(group.icon)}" aria-hidden="true"></i></span><div><p class="nv-settings-eyebrow">Configuração</p><h2 id="settings-title-${id}">${escape(group.title)}</h2><p>${escape(group.description)}</p></div></header>${contentByGroup[group.id] || `<div class="nv-settings-empty">${itemsList(group.items, 'fa-circle-info')}</div>`}</section>`;
+            const content = group.id === 'profile' ? `<div class="nv-settings-about"><div class="nv-settings-profile-identity"><span class="nv-contact-avatar">${escape((db.usuario?.nome || 'P').slice(0,1).toUpperCase())}</span><span><strong>${escape(db.usuario?.nome || 'Seu perfil')}</strong><small>${escape(db.usuario?.email || db.usuario?.subtitulo || 'Perfil pessoal')}</small></span></div><div><span>Moeda</span><strong>BRL (R$)</strong></div><div><span>Idioma</span><strong>Português (BR)</strong></div></div><details class="nv-settings-profile-editor"><summary>Editar perfil</summary>${contentByGroup.profile}</details>` : contentByGroup[group.id];
+            return `<section class="nv-settings-panel" data-settings-group="${id}" id="settings-group-${id}" tabindex="-1" aria-labelledby="settings-title-${id}"><header class="nv-settings-panel__header"><span class="nv-settings-panel__icon"><i class="fa-solid ${escape(group.icon)}" aria-hidden="true"></i></span><div><p class="nv-settings-eyebrow">Configuração</p><h2 id="settings-title-${id}">${escape(group.title)}</h2><p>${escape(group.description)}</p></div></header>${content || (group.id === 'about' ? '<div class="nv-settings-about"><div><span>Versão</span><strong>3.0 · beta</strong></div><div><span>Moeda base</span><strong>BRL (R$)</strong></div><div><span>Privacidade</span><a href="./privacidade/" target="_blank" rel="noopener">Ver política</a></div><div><span>Suporte</span><a href="./suporte/" target="_blank" rel="noopener">Obter ajuda</a></div><p>Seus registros financeiros ficam armazenados neste navegador.</p></div>' : `<div class="nv-settings-empty">${itemsList(group.items, 'fa-circle-info')}</div>`)}</section>`;
         }).join('');
 
         const profileName = escape(db.usuario?.nome || 'Perfil demonstrativo');

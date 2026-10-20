@@ -324,9 +324,9 @@ export const TransacoesController = {
         e.preventDefault();
         const form = e.target;
         const id = document.getElementById('edit-id').value;
-        const desc = document.getElementById('edit-desc').value;
+        const desc = document.getElementById('edit-desc').value.trim();
         const valor = Math.abs(parseFloat(document.getElementById('edit-valor').value));
-        if (valor === 0 || isNaN(valor)) { Utils.showToast('O valor deve ser maior que zero.', 'warning'); return; }
+        if (!desc || !Number.isFinite(valor) || valor <= 0) { Utils.showToast('Informe descrição e valor maiores que zero.', 'warning'); return; }
 
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Atualizando...");
@@ -336,7 +336,9 @@ export const TransacoesController = {
                 const data = document.getElementById('edit-data').value;
                 const categoria = document.getElementById('edit-categoria').value;
                 const contatoIdRaw = document.getElementById('edit-contato').value;
-                const contatoId = contatoIdRaw ? parseInt(contatoIdRaw) : null;
+                const contato = db.contatos.find(item => String(item.id) === String(contatoIdRaw));
+                if (contatoIdRaw && !contato) throw new Error('Selecione uma pessoa válida ou deixe o campo em branco.');
+                const contatoId = contato ? contato.id : null;
                 const updated = await Database.updateTransaction(id, { desc, valor, data, categoria, contatoId });
 
                 if (updated) {

@@ -91,6 +91,9 @@ export const ClickEvents = {
                 'deleteCategory': () => App.deleteCategory(btn.getAttribute('data-id')),
                 'viewCategory': () => Utils.showToast('Categorias padrão são protegidas e somente para consulta.', 'info'),
                 'setCategoryStatus': () => App.setCategoryStatus(btn.getAttribute('data-payload') || 'active'),
+                'editContact': () => App.editContact(btn.getAttribute('data-id')),
+                'openContactProfile': () => App.openContatoPerfil(btn.getAttribute('data-id')),
+                'setAgendaView': () => App.setAgendaView(btn.getAttribute('data-payload')),
                 'editAgenda': () => App.editAgenda(btn.getAttribute('data-id'), btn.getAttribute('data-col')),
                 'acceptClassification': () => App.acceptClassification(),
                 'editClassification': () => App.editClassification(),
@@ -130,7 +133,7 @@ export const ClickEvents = {
                 'changeAgendaMonth': () => App.changeAgendaMonth(parseInt(btn.getAttribute('data-dir'))),
                 'resetAgendaToday': () => App.resetAgendaToday(),
                 'showAgendaDay': () => App.showAgendaDay(btn.getAttribute('data-payload')),
-                'addAgendaOnDate': () => App.addAgendaOnDate(),
+                'addAgendaOnDate': () => App.addAgendaOnDate(btn.getAttribute('data-date')),
                 'setReportTab': () => App.setReportTab(btn.getAttribute('data-payload')),
                 'setCategoryType': () => App.setCategoryType(btn.getAttribute('data-payload') || 'all'),
                 'exportPDF': () => App.exportToPDF(),
@@ -151,15 +154,7 @@ export const ClickEvents = {
                 'silenciarAnora': () => {
                     Utils.showToast('Alertas da Anora silenciados por 24 horas.', 'success');
                     document.getElementById('anora-menu').classList.add('hidden');
-                },
-                // Aliases para componentes v4 (transacoes-v4 / dashboard-v4 /
-                // modal-transacao-v4). Ainda não são carregados por padrão, mas
-                // se forem ativados estes botões não ficam mudos — resolvem
-                // para os handlers já existentes e testados.
-                'new-transaction': () => App.openModal('modal-transacao'),
-                'quick-despesa': () => App.openModal('modal-transacao', 'despesa'),
-                'quick-receita': () => App.openModal('modal-transacao', 'receita'),
-                'close-modal': () => App.closeModal(true, btn.closest('[id^="modal-"]')?.id || null)
+                }
             };
 
             const handler = actionsMap[action];

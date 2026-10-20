@@ -1,6 +1,5 @@
 import { Controllers } from './controllers.js';
 import { SubmitGuard } from './submit-guard.js';
-import { Utils } from './utils.js';
 
 export const SubmitEvents = {
     setup: () => {
@@ -38,12 +37,6 @@ export const SubmitEvents = {
                 if (!SubmitGuard.run(form, () => submitMap[action](e))) {
                     e.preventDefault();
                 }
-            } else if (action) {
-                // Formulário com data-submit desconhecido: SEMPRE previne o
-                // envio nativo (que recarregaria a página e perderia dados)
-                // e avisa o usuário, em vez de falhar silenciosamente.
-                e.preventDefault();
-                Utils.showToast('Este formulário ainda não está pronto para envio.', 'error');
             }
         });
     }

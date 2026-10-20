@@ -11,6 +11,8 @@ import { cashflowProjectionFromDatabase } from './cashflow-projection.js';
 import { PRIORITY_KEYS, resolvePriority } from './priority.js';
 import { renderTransactionTypeMenu } from './transaction-type-menu.js';
 import { renderAnoraPage } from './rnd-anora.js';
+import { renderReconciliationWorkspace, renderImportWorkspace, renderInvestmentsWorkspace } from './cmp-workspaces.js';
+import { renderAgendaDetails, renderAgendaRecords } from './cmp-experience.js';
 
 export const settingsGroups = [
     { id: 'profile', title: 'Perfil', description: 'Dados e preferências pessoais.', icon: 'fa-user', items: ['Nome', 'Moeda', 'Preferências pessoais'] },
@@ -107,68 +109,13 @@ const renderMockupDashboardTriple = ({ budget = {}, cartoes = [], compras = [], 
 
 export const PageRenderers = {
     Conciliacao: (appState) => {
-        const cartoes = db.cartoes || [];
-        const hoje = new Date();
-        const mes = hoje.getMonth(), ano = hoje.getFullYear();
-        const conciliadas = (db.conciliacoesFaturas || []);
-        let conciliadasCount = 0;
-        const cardsHtml = cartoes.map(card => {
-            const chave = `${card.id}_${ano}_${mes}`;
-            const rec = conciliadas.find(r => String(r.chave) === String(chave));
-            const valorFatura = (db.transacoes || []).filter(t => t.isCartao && String(t.bancoId) === String(card.id) && !t.transferenciaInterna && new Date((t.data || '') + 'T12:00:00').getMonth() === mes && new Date((t.data || '') + 'T12:00:00').getFullYear() === ano).reduce((s, t) => s + (Number(t.valor) || 0), 0);
-            const conciliado = !!(rec && rec.valorFaturaReal != null);
-            if (conciliado) conciliadasCount++;
-            return `<div class="nv-accounts-card p-4 flex items-center justify-between gap-3">
-                <div class="min-w-0"><p class="font-bold text-text-primary">${Utils.escapeHTML(card.nome || 'Cartão')}</p><p class="text-xs text-text-secondary">Fatura ${mes + 1}/${ano} · ${Utils.formatMoney(valorFatura)} em lançamentos</p></div>
-                <span class="text-xs font-bold ${conciliado ? 'text-success' : 'text-warning'}">${conciliado ? 'Conciliada' : 'Em aberto'}</span>
-                <button type="button" onclick="App.viewState.activeCardId='${Utils.escapeHTML(String(card.id))}';App.viewState.invoiceMonth=${mes};App.viewState.invoiceYear=${ano};App.renderInvoiceModal();App.openModal('modal-fatura-detalhes');" class="px-3 py-2 rounded-[10px] bg-brand-medium text-white text-xs font-bold hover:bg-brand-dark transition-colors shrink-0">Conferir</button>
-            </div>`;
-        }).join('');
-        document.getElementById('main-content').innerHTML = `
-            ${renderPageHeader({ eyebrow: 'Faturas', title: 'Conciliação', subtitle: 'Confira o extrato contra os lançamentos e ajuste juros, multas e estornos.', actions: [{ label: 'Contas e cartões', icon: 'fa-wallet', action: 'navigate', payload: 'Contas' }] })}
-            <div class="grid grid-cols-3 gap-3">
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-text-primary">${cartoes.length}</p><p class="text-xs text-text-secondary">Cartões</p></div>
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-success">${conciliadasCount}</p><p class="text-xs text-text-secondary">Conciliados</p></div>
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-warning">${cartoes.length - conciliadasCount}</p><p class="text-xs text-text-secondary">Em aberto</p></div>
-            </div>
-            <div class="space-y-3">${cardsHtml || '<p class="text-sm text-text-secondary text-center py-8 bg-bg rounded-[16px] border border-dashed border-border">Nenhum cartão cadastrado ainda.</p>'}</div>
-            <p class="text-xs text-text-secondary text-center"><i class="fa-solid fa-circle-info mr-1"></i> A conciliação detalhada (lançamentos, ajustes, provisões) abre no painel da fatura ao clicar em Conferir.</p>
-        `;
+        UIRenderer.updateDOM('main-content', renderReconciliationWorkspace(db, appState));
     },
     Importacao: (appState) => {
-        document.getElementById('main-content').innerHTML = `
-            ${renderPageHeader({ eyebrow: 'Extratos', title: 'Importar lançamentos', subtitle: 'Traga seus lançamentos de OFX ou CSV — a Anora categoriza automaticamente.' })}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="nv-accounts-card p-6 text-center">
-                    <div class="w-14 h-14 mx-auto mb-3 rounded-[14px] bg-brand-soft text-brand-medium flex items-center justify-center text-2xl"><i class="fa-solid fa-file-import"></i></div>
-                    <h3 class="font-bold text-text-primary mb-1">Arquivo OFX</h3>
-                    <p class="text-xs text-text-secondary mb-4">Formato padrão dos bancos brasileiros. Traz data, descrição e valor.</p>
-                    <button type="button" onclick="document.getElementById('input-ofx-file').click()" class="w-full py-2.5 rounded-[10px] bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors">Escolher arquivo OFX</button>
-                </div>
-                <div class="nv-accounts-card p-6 text-center">
-                    <div class="w-14 h-14 mx-auto mb-3 rounded-[14px] bg-success/15 text-success flex items-center justify-center text-2xl"><i class="fa-solid fa-file-csv"></i></div>
-                    <h3 class="font-bold text-text-primary mb-1">Planilha CSV</h3>
-                    <p class="text-xs text-text-secondary mb-4">Excel ou Google Sheets exportado em CSV. Você confere os lançamentos.</p>
-                    <button type="button" onclick="document.getElementById('input-csv-file').click()" class="w-full py-2.5 rounded-[10px] bg-success text-white text-sm font-bold hover:opacity-90 transition-opacity">Escolher arquivo CSV</button>
-                </div>
-            </div>
-            <div class="nv-settings-panel p-5">
-                <p class="text-sm font-bold text-text-primary mb-2"><i class="fa-solid fa-list-check mr-2 text-brand-medium"></i>Como funciona</p>
-                <ol class="text-xs text-text-secondary space-y-1.5 list-decimal list-inside">
-                    <li>Escolha o arquivo (OFX ou CSV) — ele é lido só no seu dispositivo, nada vai para a nuvem.</li>
-                    <li>Revise os lançamentos detectados na prévia (o app já mostra o que vai entrar).</li>
-                    <li>Confirme — os lançamentos entram com categoria sugerida pela Anora e você ajusta o que quiser.</li>
-                </ol>
-            </div>
-        `;
+        UIRenderer.updateDOM('main-content', renderImportWorkspace(db, appState));
     },
     Anora: () => renderAnoraPage(),
     Dashboard: (appState) => {
-        const hora = new Date().getHours();
-        let saudacao = 'Boa noite';
-        if (hora >= 5 && hora < 12) saudacao = 'Bom dia';
-        else if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
-        
         const dadosAnora = MentorEngine.extrairDadosParaAnora(db, Database);
         const resultadoMentoria = MentorEngine.calculateMentorScore(dadosAnora);
         const hojeInsight = new Date();
@@ -346,7 +293,7 @@ export const PageRenderers = {
         // Legacy actions remain supported by the shell even though the mockup
         // moves them to the global topbar: data-action="iniciarFechamentoMes"
         // and data-action="openModal" data-modal="modal-simulador".
-        const actionsHtml = `<button type="button" data-action="setDashboardPeriod" data-payload="este_mes" class="nv-mockup-period-control" aria-label="Alterar período">‹ ${Utils.escapeHTML(dashboardPeriodLabel)} ›</button>`;
+        const actionsHtml = `<details class="nv-dashboard-tools"><summary class="nv-workspace-button is-secondary">${Utils.escapeHTML(dashboardPeriodLabel)} <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-dashboard-tools-menu">${Object.entries(dashboardPeriodLabels).map(([value,label]) => `<button type="button" data-action="setDashboardPeriod" data-payload="${value}">${label}</button>`).join('')}<label>Por dia<input type="date" aria-label="Data do dashboard" data-change="setDashboardDate" value="${dashboardPeriodIsDate ? requestedDashboardPeriod : ''}"></label><hr><button type="button" data-action="iniciarFechamentoMes">Fechar mês</button><button type="button" data-action="openModal" data-modal="modal-simulador">Simular compra</button></div></details><button type="button" class="nv-workspace-button is-secondary" data-action="exportBackup"><i class="fa-solid fa-download" aria-hidden="true"></i>Exportar</button><button type="button" class="nv-workspace-button is-primary" data-action="openTypeSelector"><i class="fa-solid fa-plus" aria-hidden="true"></i>Novo lançamento</button>`;
         
         const totaisPeriodoAnterior = calculatePeriodTotals(transacoesAnteriores);
         const anterior = {
@@ -375,8 +322,8 @@ export const PageRenderers = {
             <header class="nv-dashboard-header nv-mockup-page-head flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
                     <p class="nv-dashboard-eyebrow">${Utils.escapeHTML(dashboardPeriodLabel).toUpperCase()}</p>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Visão geral</h2>
-                    <p class="text-text-secondary text-sm">Panorama do mês, contas e próximos passos.</p>
+                    <h1 class="text-2xl font-bold text-text-primary mb-1">Visão geral</h1>
+                    <p class="text-text-secondary text-sm">Panorama do período, contas e próximos passos.</p>
                     ${freshness ? `<span class="nv-data-freshness" title="${Utils.escapeHTML(freshness.title)}" aria-label="${Utils.escapeHTML(freshness.title)}"><i class="fa-regular fa-clock" aria-hidden="true"></i>${Utils.escapeHTML(freshness.relative)}</span>` : ''}
                 </div>
                 <div class="flex flex-wrap gap-3">
@@ -389,7 +336,7 @@ export const PageRenderers = {
             ${Components.dashboardMockupKpis(atual)}
 
             <!-- Components.dashboardCards / Resultado financeiro remain part of the compatibility contract while the mockup KPI renderer owns this layout. -->
-            ${Components.nextDecisionBlock(atual, priorityContext)}
+            <details class="nv-dashboard-context"><summary>Revisão do período e próximos passos</summary>${Components.nextDecisionBlock(atual, priorityContext)}
             ${Components.attentionStrip(atual, {
                 ...priorityContext,
                 contasAtrasadas,
@@ -397,7 +344,7 @@ export const PageRenderers = {
                 // The prioritized decision owns the winning narrative; do not
                 // render a duplicate competing alert below it.
                 excludePriority: nextDecision?.priority
-            })}
+            })}</details>
             <div class="nv-mockup-dashboard-grid">
                 ${Components.dashboardMockupFlow(db.transacoes || [])}
                 ${Components.dashboardMockupAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
@@ -509,19 +456,11 @@ export const PageRenderers = {
     },
 
     Agendamentos: (appState) => {
-        const actionsHtml = `<button type="button" data-action="openModal" data-modal="modal-agendamento" class="nv-agenda-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Nova Conta</span></button>`;
-        
         UIRenderer.updateDOM('main-content', `
             <div class="nv-agenda-page">
-                <header class="nv-agenda-page-header nv-standard-page-header nv-standard-page-header--agenda">
-                    <div class="nv-agenda-page-heading">
-                        <h1>Contas a Pagar e Receber</h1>
-                        <p>Gerencie suas obrigações e previsões financeiras.</p>
-                    </div>
-                    <div class="nv-agenda-page-actions">${actionsHtml}</div>
-                </header>
-                ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
-                ${Components.agendamentosPage(db, appState)}
+                ${renderPageHeader({eyebrow:'Calendário financeiro',title:'Agenda de contas',subtitle:'Vencimentos, pagamentos e recebimentos em um só lugar.', actions:[{label:'Novo agendamento',icon:'fa-plus',action:'openModal',variant:'primary',attributes:{'data-modal':'modal-agendamento'}}]})}
+                <div class="nv-agenda-workspace">${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}${renderAgendaDetails(db, appState)}</div>
+                ${renderAgendaRecords(db, appState)}
             </div>
         `);
     },
@@ -650,21 +589,7 @@ export const PageRenderers = {
     },
 
     Investimentos: (appState) => {
-        const investments = Array.isArray(db.investimentos) ? db.investimentos : [];
-        const total = investments.reduce((sum, item) => sum + (Number(item.valorAtual) || 0), 0);
-        const contribution = investments.reduce((sum, item) => sum + (Number(item.aporte) || 0), 0);
-        const allocation = investments.length ? Math.round((contribution / Math.max(total, 1)) * 100) : 0;
-        const rows = investments.map(item => `<article class="nv-investment-row">
-            <span class="nv-investment-icon"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
-            <div class="nv-investment-copy"><strong>${Utils.escapeHTML(item.nome || 'Investimento')}</strong><small>${Utils.escapeHTML(item.classe || 'Carteira')}${item.instituicao ? ` · ${Utils.escapeHTML(item.instituicao)}` : ''}</small></div>
-            <div class="nv-investment-value"><strong>${Utils.formatMoney(Number(item.valorAtual) || 0)}</strong><small>${item.aporte ? `Aporte ${Utils.formatMoney(Number(item.aporte) || 0)}` : 'Valor atual informado'}</small></div>
-            <button type="button" data-action="delete" data-col="investimentos" data-id="${Utils.escapeHTML(String(item.id))}" class="nv-investment-delete" aria-label="Excluir ${Utils.escapeHTML(item.nome || 'investimento')}" title="Excluir"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
-        </article>`).join('');
-        UIRenderer.updateDOM('main-content', `
-            ${renderPageHeader({ eyebrow: 'Patrimônio', title: 'Investimentos', subtitle: 'Acompanhe a carteira e seus aportes sem misturar patrimônio com saldo disponível.', className: 'nv-investments-header', actions: [{ label: 'Novo investimento', icon: 'fa-plus', action: 'openModal', variant: 'primary', attributes: { 'data-modal': 'modal-investimento' } }] })}
-            <section class="nv-investments-metrics" aria-label="Resumo dos investimentos"><article><span>Total investido</span><strong>${Utils.formatMoney(total)}</strong><small>Valor atual da carteira</small></article><article><span>Aportes registrados</span><strong>${Utils.formatMoney(contribution)}</strong><small>Entradas informadas manualmente</small></article><article><span>Posições ativas</span><strong>${investments.length}</strong><small>${allocation ? `${allocation}% do valor atual em aportes` : 'Cadastre uma posição para acompanhar'}</small></article></section>
-            <section class="nv-investments-panel" aria-labelledby="nv-investments-title"><header><div><p class="nv-investments-eyebrow">Carteira</p><h2 id="nv-investments-title">Ativos cadastrados</h2><p>Os valores são informativos e não movimentam as contas automaticamente.</p></div><span class="nv-investments-count">${investments.length} ${investments.length === 1 ? 'posição' : 'posições'}</span></header>${rows || `<div class="nv-investments-empty"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><strong>Nenhum investimento cadastrado</strong><p>Adicione uma posição para acompanhar seu patrimônio e revisar aportes.</p><button type="button" data-action="openModal" data-modal="modal-investimento">Adicionar investimento</button></div>`}</section>
-        `);
+        UIRenderer.updateDOM('main-content', renderInvestmentsWorkspace(db, appState));
     },
 
     Metas: (appState) => {

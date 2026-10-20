@@ -5,7 +5,7 @@ export const BACKUP_SCHEMA_VERSION = 1;
 const ARRAY_COLLECTIONS = [
     'transacoes', 'bancos', 'cartoes', 'conciliacoesFaturas', 'metas', 'reservas',
     'orcamentos', 'notificacoes', 'agendamentos', 'categorias', 'contatos',
-    'historicoMentoria', 'receitasFuturas', 'assinaturas', 'investimentos',
+    'historicoMentoria', 'receitasFuturas', 'assinaturas', 'investimentos', 'fechamentosMes',
 ];
 const OBJECT_COLLECTIONS = ['usuario', 'configNotificacoes', 'metadados'];
 const REQUIRED_COLLECTIONS = ['transacoes', 'bancos'];

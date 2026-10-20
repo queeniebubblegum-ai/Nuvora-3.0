@@ -109,11 +109,15 @@ export const UIRenderer = {
     },
 
     updateContatoSelect: () => {
-        const select = document.getElementById('input-contato');
+        ['input-contato', 'agendamento-contato'].forEach(id => {
+        const select = document.getElementById(id);
         if (select) {
+            const current = select.value;
             select.innerHTML = '<option value="">Nenhum</option>' + 
                 db.contatos.map(c => `<option value="${c.id}">${Utils.escapeHTML(c.nome)} - ${Utils.escapeHTML(c.documento || 'Sem doc')}</option>`).join('');
+            select.value = current;
         }
+        });
     },
 
     updateBankSelect: () => {
@@ -121,6 +125,8 @@ export const UIRenderer = {
             const displayName = Utils.formatBankName(b);
             return `<option value="${b.id}">${Utils.escapeHTML(displayName)}</option>`;
         }).join('');
+        const agendaBank = document.getElementById('agendamento-banco');
+        if (agendaBank) { const current = agendaBank.value; agendaBank.innerHTML = '<option value="">Selecione a conta</option>' + bankOptions; agendaBank.value = current; }
 
         const selectBancoTrans = document.getElementById('input-banco-trans');
         if (selectBancoTrans) {
