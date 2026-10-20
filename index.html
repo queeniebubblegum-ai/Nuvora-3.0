@@ -54,6 +54,23 @@
            o layout inteiro quebra — força com !important */
         .nv-v4-scope-contents { display: contents !important; }
         #main-content { max-width: 100%; }
+
+        /* === Etapa 2: experiência mobile / app nativo ===
+           - elimina rolagem horizontal acidental (causa do "zoom necessário")
+           - mídia e gráficos nunca estouram a largura da tela
+           - áreas de toque confortáveis (≥44px) no celular
+           - font-size 16px em campos evita o zoom automático do iOS ao focar
+           - text-size-adjust evita inflação de texto no Safari */
+        html, body { overflow-x: hidden; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        img, canvas, svg, video, iframe, embed, object { max-width: 100%; }
+        .nv-v4-topbar button, .nv-v4-topbar [role="button"],
+        .nv-v4-mobile-nav, .nv-v4-nav-link, .btn, .btn-ghost, .btn-primary,
+        button, [role="button"], summary { touch-action: manipulation; }
+        @media (max-width: 640px) {
+            .nv-v4-topbar button, .nv-v4-topbar [role="button"] { min-height: 40px; min-width: 40px; }
+            .nv-v4-mobile-nav { min-height: 48px; }
+            input, select, textarea { font-size: 16px; }
+        }
     </style>
 </head>
 <body class="nv-app-root bg-bg font-primary text-text-primary h-screen overflow-hidden flex flex-col transition-colors duration-300">
