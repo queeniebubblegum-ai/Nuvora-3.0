@@ -151,7 +151,15 @@ export const ClickEvents = {
                 'silenciarAnora': () => {
                     Utils.showToast('Alertas da Anora silenciados por 24 horas.', 'success');
                     document.getElementById('anora-menu').classList.add('hidden');
-                }
+                },
+                // Aliases para componentes v4 (transacoes-v4 / dashboard-v4 /
+                // modal-transacao-v4). Ainda não são carregados por padrão, mas
+                // se forem ativados estes botões não ficam mudos — resolvem
+                // para os handlers já existentes e testados.
+                'new-transaction': () => App.openModal('modal-transacao'),
+                'quick-despesa': () => App.openModal('modal-transacao', 'despesa'),
+                'quick-receita': () => App.openModal('modal-transacao', 'receita'),
+                'close-modal': () => App.closeModal(true, btn.closest('[id^="modal-"]')?.id || null)
             };
 
             const handler = actionsMap[action];
