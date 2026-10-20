@@ -22,6 +22,13 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
+    <!-- Ordem de carregamento de CSS (consolidado):
+         1. styles.css ........ base Tailwind + tokens do app (não remover)
+         2. redesign-fase2.css . ajustes da fase 2 sobre a base
+         3. styles-v4.css ..... escopado em .nv-v4-scope (shell/dock/FAB)
+         4. redesign-v4-coordinated.css . camada coordenada do redesign
+         5. mockup-theme.css .. tema visual final (carrega por último)
+         Nenhum usa @import; todos com ?v= para quebra de cache. -->
     <link rel="stylesheet" href="./styles.css?v=20260925-anora-restoration-2">
     <link rel="stylesheet" href="./redesign-fase2.css?v=20260925">
     <link rel="stylesheet" href="./styles-v4.css?v=20260925-v4-shell-1">
