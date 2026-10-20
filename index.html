@@ -37,6 +37,23 @@
         /* Keep the page container out of a transform stacking context so fixed-layer CTAs remain hit-testable. */
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
+
+        /* === Etapa 1: fundação do layout estável ===
+           Altura fixa em 100vh/dvh, uma única área de rolagem (main),
+           contêineres flex com min-height:0 para encolherem e não
+           expandirem o body. Nada é escondido — o excesso rola dentro
+           da área destinada. */
+        html, body { height: 100%; overscroll-behavior: none; }
+        .nv-v4-layout { min-height: 0; }
+        main.nv-main { min-height: 0; }
+        /* sidebar: o nav interno precisa poder encolher e rolar */
+        .nv-v4-sidebar nav[aria-label="Navegação principal"] { min-height: 0; }
+        /* gaveta de notificações: conteúdo interno rola sem vazar */
+        #notif-content { min-height: 0; }
+        /* protege os wrappers de escopo v4: se display:contents falhar,
+           o layout inteiro quebra — força com !important */
+        .nv-v4-scope-contents { display: contents !important; }
+        #main-content { max-width: 100%; }
     </style>
 </head>
 <body class="nv-app-root bg-bg font-primary text-text-primary h-screen overflow-hidden flex flex-col transition-colors duration-300">
