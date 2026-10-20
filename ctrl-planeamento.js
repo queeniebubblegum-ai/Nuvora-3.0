@@ -6,7 +6,11 @@ export const PlaneamentoController = {
     submitReceitaFutura: (e) => {
         e.preventDefault();
         const form = e.target;
-        Database.add('receitasFuturas', { id: Date.now(), desc: form.querySelector('[name="desc"]').value.trim(), valor: parseFloat(form.querySelector('[name="valor"]').value), data: form.querySelector('[name="data"]').value, status: 'prevista' });
+        const desc = form.querySelector('[name="desc"]').value.trim();
+        const valor = Number(form.querySelector('[name="valor"]').value);
+        const data = form.querySelector('[name="data"]').value;
+        if (!desc || !Number.isFinite(valor) || valor <= 0 || !data) { Utils.showToast('Informe descrição, valor e data válidos.', 'error'); return; }
+        Database.add('receitasFuturas', { id: Date.now(), desc, valor, data, status: 'prevista' });
         Utils.showToast('Receita futura adicionada!', 'success');
         App.scheduleRender();
     },
@@ -14,7 +18,10 @@ export const PlaneamentoController = {
     submitAssinatura: (e) => {
         e.preventDefault();
         const form = e.target;
-        Database.add('assinaturas', { id: Date.now(), nome: form.querySelector('[name="nome"]').value.trim(), valor: parseFloat(form.querySelector('[name="valor"]').value), periodicidade: form.querySelector('[name="periodicidade"]').value, ativa: true });
+        const nome = form.querySelector('[name="nome"]').value.trim();
+        const valor = Number(form.querySelector('[name="valor"]').value);
+        if (!nome || !Number.isFinite(valor) || valor <= 0) { Utils.showToast('Informe nome e valor válidos.', 'error'); return; }
+        Database.add('assinaturas', { id: Date.now(), nome, valor, periodicidade: form.querySelector('[name="periodicidade"]').value, ativa: true });
         Utils.showToast('Assinatura adicionada!', 'success');
         App.scheduleRender();
     },
@@ -22,8 +29,15 @@ export const PlaneamentoController = {
     submitInvestimento: (e) => {
         e.preventDefault();
         const form = e.target;
-        Database.add('investimentos', { id: Date.now(), nome: form.querySelector('[name="nome"]').value.trim(), valorAtual: parseFloat(form.querySelector('[name="valorAtual"]').value) });
+        const nome = form.querySelector('[name="nome"]').value.trim();
+        const valorAtual = Number(form.querySelector('[name="valorAtual"]').value);
+        const aporteRaw = form.querySelector('[name="aporte"]')?.value;
+        const aporte = aporteRaw === '' || aporteRaw == null ? 0 : Number(aporteRaw);
+        const classe = form.querySelector('[name="classe"]')?.value.trim() || '';
+        if (!nome || !Number.isFinite(valorAtual) || valorAtual < 0 || !Number.isFinite(aporte) || aporte < 0) { Utils.showToast('Informe nome e valores válidos.', 'error'); return; }
+        Database.add('investimentos', { id: Date.now(), nome, valorAtual, aporte, classe });
         Utils.showToast('Investimento adicionado!', 'success');
+        App.closeModal();
         App.scheduleRender();
     },
 
@@ -31,12 +45,14 @@ export const PlaneamentoController = {
         e.preventDefault();
         const tipo = document.getElementById('agendamento-tipo').value;
         const desc = document.getElementById('agendamento-desc').value;
-        const valor = parseFloat(document.getElementById('agendamento-valor').value);
+        const valor = Number(document.getElementById('agendamento-valor').value);
         const dataVencimento = document.getElementById('agendamento-data').value;
         const categoria = document.getElementById('agendamento-categoria').value;
         
         const bancoIdRaw = document.getElementById('agendamento-banco')?.value;
-        const bancoId = bancoIdRaw ? parseInt(bancoIdRaw) : (db.bancos.length > 0 ? db.bancos[0].id : null);
+        const bancoId = bancoIdRaw ? String(bancoIdRaw) : (db.bancos.length > 0 ? db.bancos[0].id : null);
+        if (!desc.trim() || !Number.isFinite(valor) || valor <= 0 || !dataVencimento) { Utils.showToast('Informe descrição, valor e vencimento válidos.', 'error'); return; }
+        if (bancoId && !db.bancos.some(bank => String(bank.id) === String(bancoId))) { Utils.showToast('Selecione uma conta válida.', 'error'); return; }
         
         const editId = document.getElementById('agendamento-edit-id')?.value;
         const editCol = document.getElementById('agendamento-edit-col')?.value || 'agendamentos';

@@ -7,8 +7,12 @@ export const ContasController = {
         e.preventDefault();
         const instElement = document.getElementById('banco-instituicao');
         const instituicao = instElement ? instElement.value : 'Outro';
-        const nome = document.getElementById('banco-nome').value;
-        const saldo = parseFloat(document.getElementById('banco-saldo').value);
+        const nome = document.getElementById('banco-nome').value.trim();
+        const saldo = Number(document.getElementById('banco-saldo').value);
+        if (!nome || !Number.isFinite(saldo)) {
+            Utils.showToast('Informe o nome da conta e um saldo inicial válido.', 'error');
+            return;
+        }
         
         const bankColors = {
             'Nubank': '#8A05BE', 
@@ -46,10 +50,14 @@ export const ContasController = {
         const bancoId = bancoRelacionado ? bancoRelacionado.id : bancoIdRaw;
         const modeloElement = document.getElementById('cartao-modelo');
         const modelo = modeloElement ? modeloElement.value : 'custom';
-        const nome = document.getElementById('cartao-nome').value;
-        const limite = parseFloat(document.getElementById('cartao-limite').value);
-        const fechamento = parseInt(document.getElementById('cartao-dia-fech').value);
-        const vencimento = parseInt(document.getElementById('cartao-dia-venc').value);
+        const nome = document.getElementById('cartao-nome').value.trim();
+        const limite = Number(document.getElementById('cartao-limite').value);
+        const fechamento = Number(document.getElementById('cartao-dia-fech').value);
+        const vencimento = Number(document.getElementById('cartao-dia-venc').value);
+        if (!bancoRelacionado || !nome || !Number.isFinite(limite) || limite <= 0 || !Number.isInteger(fechamento) || fechamento < 1 || fechamento > 31 || !Number.isInteger(vencimento) || vencimento < 1 || vencimento > 31) {
+            Utils.showToast('Informe cartão, nome, limite e dias válidos.', 'error');
+            return;
+        }
         
         let cor = null;
         if (modelo === 'Nubank Ultravioleta') {

@@ -158,7 +158,7 @@ export const UIRenderer = {
                     <button data-action="exportBackup" class="flex-1 bg-brand-deep text-white px-5 py-3 rounded-[12px] font-bold shadow-soft hover:bg-brand-dark transition-colors text-center">
                         1. Fazer Backup
                     </button>
-                    <button onclick="if(confirm('Atenção: Esta ação irá apagar os dados do navegador para resolver o erro. Confirma?')) { localStorage.clear(); window.location.reload(); }" class="flex-1 bg-surface border border-border text-danger px-5 py-3 rounded-[12px] font-bold hover:bg-bg transition-colors text-center">
+                    <button data-action="clearAllData" class="flex-1 bg-surface border border-border text-danger px-5 py-3 rounded-[12px] font-bold hover:bg-bg transition-colors text-center">
                         2. Limpar Cache
                     </button>
                 </div>

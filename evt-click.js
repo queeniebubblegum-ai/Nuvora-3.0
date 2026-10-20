@@ -38,12 +38,13 @@ export const ClickEvents = {
                     App.navigate(btn.getAttribute('data-payload'));
                     const sidebar = document.getElementById('sidebar');
                     const isMobile = typeof window.matchMedia === 'function'
-                        ? window.matchMedia('(max-width: 767px)').matches
-                        : window.innerWidth < 768;
+                        ? window.matchMedia('(max-width: 1023px)').matches
+                        : window.innerWidth < 1024;
                     if (isMobile && sidebar && !sidebar.classList.contains('-translate-x-full')) {
                         window.toggleSidebar?.();
                     }
                 },
+                'openTypeSelector': () => App.openModal('modal-transacao'),
                 'openTransactionSearch': () => {
                     App.navigate('Transacoes');
                     // App.scheduleRender queues its renderer first; this following
@@ -73,6 +74,8 @@ export const ClickEvents = {
                 'toggleTheme': () => App.toggleTheme(),
                 'chooseProfilePhoto': () => App.chooseProfilePhoto(),
                 'importBackupPicker': () => App.importBackupPicker(),
+                'clearAllData': () => App.clearAllData(),
+                'runIntegrityCheck': () => App.runIntegrityCheck(),
                 'openModal': () => {
                     const prerequisiteMessage = btn.getAttribute('data-prerequisite-message');
                     if (prerequisiteMessage) Utils.showToast(prerequisiteMessage, 'warning');
@@ -122,6 +125,7 @@ export const ClickEvents = {
                 'applyInvoiceClassification': () => App.applyInvoiceClassification(),
                 'openCardExpenseModal': () => App.openCardExpenseModal(btn.getAttribute('data-id'), btn.getAttribute('data-nome')),
                 'setDashboardPeriod': () => App.setDashboardPeriod(btn.getAttribute('data-payload')),
+                'setDashboardRecentTab': () => App.setDashboardRecentTab(btn.getAttribute('data-payload')),
                 'changeMonth': () => App.changeMonth(btn.getAttribute('data-type'), parseInt(btn.getAttribute('data-dir'))),
                 'changeAgendaMonth': () => App.changeAgendaMonth(parseInt(btn.getAttribute('data-dir'))),
                 'resetAgendaToday': () => App.resetAgendaToday(),

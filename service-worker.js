@@ -1,6 +1,13 @@
 // Increment when local application assets change so installed clients fetch
 // the latest modules, including the shared cent-precision money helpers.
-const APP_CACHE_NAME = 'avenera-app-shell-v25';
+const APP_CACHE_NAME = 'avenera-app-shell-v30';
+// Kept as an explicit migration marker so diagnostics can identify and remove
+// the previous shell version after an update.
+const LEGACY_APP_CACHE_NAME = 'avenera-app-shell-v26';
+const PREVIOUS_APP_CACHE_NAME = 'avenera-app-shell-v27';
+// Historical marker retained for diagnostics and older clients that still
+// report the v25 shell during an update handshake.
+const HISTORIC_APP_CACHE_NAME = 'avenera-app-shell-v25';
 const CDN_CACHE_NAME = 'avenera-cdn-cache-v1';
 
 // Ficheiros locais essenciais da sua aplicação (Mapeamento Completo e Atualizado)
@@ -8,9 +15,13 @@ const LOCAL_ASSETS = [
     './',
     './index.html',
     './styles.css?v=20260925-anora-restoration-2',
+    './styles.css',
     './styles-v4.css?v=20260925-v4-shell-1',
-    './redesign-v4-coordinated.css?v=20261013-layout-v3',
+    './styles-v4.css',
+    './redesign-v4-coordinated.css?v=20261016-layout-v4',
     './redesign-fase2.css?v=20260925',
+    './mockup-theme.css?v=20261016-v6',
+    './mockup-theme.css',
     './modal-shortcuts.js',
     './manifest.json',
     './privacidade/index.html',
@@ -29,6 +40,8 @@ const LOCAL_ASSETS = [
     './util-date.js',
     './util-dom.js',
     './backup-format.js',
+    './financial-integrity.js',
+    './schema-migrations.js',
     
     // Módulos de Eventos
     './events.js',

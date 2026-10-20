@@ -38,8 +38,8 @@ export const ChangeEvents = {
                 'prepareCategoryParents': () => App.prepareCategoryParents(),
                 'toggleCategoryLevel': () => App.toggleCategoryLevel(target.value),
                 'handleCartaoBancoChange': () => {
-                    const bancoId = parseInt(target.value);
-                    const banco = db.bancos.find(b => b.id === bancoId);
+                    const bancoId = String(target.value || '');
+                    const banco = db.bancos.find(b => String(b.id) === bancoId);
                     if(banco) {
                         const modeloSelect = document.getElementById('cartao-modelo');
                         const nomeInput = document.getElementById('cartao-nome');
@@ -93,6 +93,11 @@ export const ChangeEvents = {
                     const divMeses = document.getElementById('div-meses-recorrente');
                     if (target.checked) divMeses.classList.remove('hidden');
                     else divMeses.classList.add('hidden');
+                },
+                'updateNotificationConfig': () => {
+                    const key = target.getAttribute('data-config-key');
+                    if (!key) return;
+                    App.updateNotificationConfig(key, target.checked === true);
                 },
                 'toggleSelectTx': () => {
                     const id = String(target.value);

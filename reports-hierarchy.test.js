@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const read = file => readFileSync(resolve(process.cwd(), file), 'utf8');
-const reportsTemplate = read('cmp-reports.js');
+const reportsTemplate = read('cmp-reports.js').replace(/\r\n/g, '\n');
 const reportsRenderer = read('rnd-pages.js');
 const inputStyles = read('input.css');
 const generatedStyles = read('styles.css');

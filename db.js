@@ -4,6 +4,8 @@ import { calculatePeriodTotals, isIncome, isInvoicePayment, isTransfer } from '.
 import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
 import { createTransfer, isValidTransferDate } from './financial-transfers.js';
 import { parseLocalDate } from './util-date.js';
+import { auditDatabase, reconcileBalances } from './financial-integrity.js';
+import { CURRENT_SCHEMA_VERSION, migrateDatabaseSnapshot } from './schema-migrations.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -30,7 +32,9 @@ const initialDB = {
     configNotificacoes: {
         contasAtivo: true, contasDias: 3,
         orcamentoAtivo: true, orcamentoPct: 80,
-        metasAtivo: true
+        metasAtivo: true,
+        lembretesVencimentoAtivo: true,
+        sincronizacaoAutomaticaAtiva: true
     },
     contatos: [],
     historicoMentoria: [],
@@ -38,7 +42,7 @@ const initialDB = {
     assinaturas: [],
     investimentos: [],
     // Persisted write timestamp; null means freshness is not trustworthy yet.
-    metadados: { ultimaAtualizacao: null }
+    metadados: { ultimaAtualizacao: null, schemaVersion: CURRENT_SCHEMA_VERSION }
 };
 
 export let db = {};
@@ -50,7 +54,7 @@ let Cache = {
 
 const IDB_NAME = 'NuvoraDB';
 const IDB_STORE = 'keyval';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 
 const IDB = {
     _db: null,
@@ -113,6 +117,22 @@ const IDB = {
         }
     })
 };
+
+// Remove all persisted collections in one IndexedDB transaction. Keeping this
+// operation in the data layer prevents UI recovery actions from clearing only
+// localStorage while the real application data remains in IndexedDB.
+IDB.clear = () => new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+        IDB._memoryStore = {};
+        resolve();
+        return;
+    }
+    const tx = IDB._db.transaction(IDB_STORE, 'readwrite');
+    const request = tx.objectStore(IDB_STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || request.error || new Error('Falha ao limpar os dados persistidos.'));
+    tx.onabort = () => reject(tx.error || new Error('Limpeza de dados interrompida.'));
+});
 
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
 
@@ -186,6 +206,16 @@ const loadData = async () => {
             db[col] = db[col].filter(item => item !== null && item !== undefined);
         }
     });
+
+    // Migrations are pure and deterministic. Persist the normalized snapshot
+    // once so legacy local data receives the same schema contract as new data.
+    const migrated = migrateDatabaseSnapshot(db, { defaults: initialDB });
+    if (migrated.changed) {
+        collections.forEach(col => {
+            if (migrated.database[col] !== undefined) db[col] = migrated.database[col];
+        });
+        await IDB.setMany(collections.map(col => [col, db[col]]));
+    }
 
     let goalsChanged = false;
     let reservesChanged = false;
@@ -355,7 +385,7 @@ const persistAtomically = async (cols, writer = entries => IDB.setMany(entries))
     if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
 };
 
-const TRANSACTION_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas'];
+const TRANSACTION_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas', 'agendamentos'];
 const NO_TRANSACTION_MUTATION = Symbol('no-transaction-mutation');
 let transactionPersistenceWriter = entries => IDB.setMany(entries);
 let transactionMutationQueue = Promise.resolve();
@@ -639,9 +669,13 @@ export const MentoriaRepo = {
 
 export const BankRepo = {
     add: (item) => { 
+        if (!item || typeof item !== 'object' || !String(item.nome || '').trim()) return false;
+        if (!Number.isFinite(Number(item.saldo))) return false;
         const novoBanco = {
             ...item,
+            nome: String(item.nome).trim(),
             saldo: fromCents(toCents(item.saldo)),
+            saldoInicial: fromCents(toCents(item.saldoInicial ?? item.saldo)),
             dataCriacao: item.dataCriacao || new Date().toISOString().split('T')[0]
         };
         db.bancos.unshift(novoBanco); 
@@ -659,7 +693,28 @@ export const BankRepo = {
         persist('bancos'); 
         return true;
     },
-    recalculateAll: () => {}
+    recalculateAll: async () => {
+        const changed = [];
+        db.bancos = db.bancos.map(bank => {
+            const opening = Number(bank?.saldoInicial);
+            if (!Number.isFinite(opening)) return bank;
+            const balanceCents = db.transacoes
+                .filter(t => !t?.isCartao && t?.saldoIncluidoNoSaldoDoExtrato !== true && String(t?.bancoId) === String(bank.id))
+                .reduce((total, t) => {
+                    const value = toCents(t?.valor);
+                    if (!value) return total;
+                    const signed = isTransfer(t)
+                        ? (t.transferenciaEntrada ? value : -value)
+                        : (isIncome(t) ? value : -value);
+                    return total + signed;
+                }, toCents(opening));
+            const next = fromCents(balanceCents);
+            if (next !== bank.saldo) changed.push({ id: bank.id, before: bank.saldo, after: next });
+            return { ...bank, saldo: next };
+        });
+        if (changed.length) await persistAtomically(['bancos']);
+        return changed;
+    }
 };
 
 export const TransactionsRepo = {
@@ -825,6 +880,18 @@ export const TransactionsRepo = {
         });
     }
 };
+
+// Recurring ledger entries and their future commitments must be committed as
+// one mutation. This prevents a successful first occurrence from being left
+// behind when one of the scheduled records cannot be persisted.
+const addRecurringTransactionAtomically = (transaction, schedules = []) => commitTransactionMutation(() => {
+    if (!transaction || typeof transaction !== 'object') return NO_TRANSACTION_MUTATION;
+    const normalizedSchedules = (Array.isArray(schedules) ? schedules : []).filter(item => item && typeof item === 'object');
+    db.transacoes.unshift({ ...transaction });
+    applyBalanceDelta(transaction, false, false);
+    db.agendamentos = [...normalizedSchedules.map(item => ({ ...item })), ...db.agendamentos];
+    return [{ ...transaction }, ...normalizedSchedules.map(item => ({ ...item }))];
+}, ['transacoes', 'bancos', 'reservas', 'metas', 'agendamentos']);
 
 export const CardRepo = {
     add: (item) => { db.cartoes.unshift(item); persist('cartoes'); return true; },
@@ -1252,14 +1319,36 @@ export const Database = {
     getComprasCartaoPorMes: TransactionsRepo.getCardExpensesByMonth,
     save: persist,
     getLastUpdated: () => db.metadados?.ultimaAtualizacao || null,
-    replaceAll: async (data) => {
+    auditIntegrity: (options = {}) => auditDatabase(db, options),
+    reconcileBalances: () => reconcileBalances(db),
+    getSchemaVersion: () => Number(db.metadados?.schemaVersion || 0),
+    replaceAll: async (data, options = {}) => {
         if (!data || typeof data !== 'object') throw new Error('Backup inválido');
 
-        for (const col of collections) {
-            if (!hasOwn(data, col)) continue;
+        const exact = options?.mode === 'exact';
+        const source = exact
+            ? Object.fromEntries(collections.map(col => [col, hasOwn(data, col) ? data[col] : cloneCollectionForRollback(initialDB[col])]))
+            : data;
+        // Validate the raw shape before migrations fill missing collections;
+        // malformed restore payloads must fail without mutating live data.
+        for (const col of (exact ? collections : collections.filter(name => hasOwn(source, name)))) {
+            if (Array.isArray(initialDB[col]) && hasOwn(source, col) && !Array.isArray(source[col])) {
+                throw new Error(`Coleção inválida: ${col}`);
+            }
+            if (!Array.isArray(initialDB[col]) && hasOwn(source, col) && (typeof source[col] !== 'object' || source[col] === null || Array.isArray(source[col]))) {
+                throw new Error(`Registro inválido: ${col}`);
+            }
+        }
+        const migrated = migrateDatabaseSnapshot(source, { defaults: initialDB });
+        const normalizedSource = migrated.database;
+        // Non-exact restores are patches: omitted collections must retain their
+        // current values instead of being replaced by migration defaults.
+        const replaceCollections = exact ? collections : collections.filter(col => hasOwn(data, col));
+
+        for (const col of replaceCollections) {
             if (Array.isArray(initialDB[col])) {
-                if (!Array.isArray(data[col])) throw new Error(`Coleção inválida: ${col}`);
-            } else if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
+                if (!Array.isArray(normalizedSource[col])) throw new Error(`Coleção inválida: ${col}`);
+            } else if (typeof normalizedSource[col] !== 'object' || normalizedSource[col] === null || Array.isArray(normalizedSource[col])) {
                 throw new Error(`Registro inválido: ${col}`);
             }
         }
@@ -1270,11 +1359,10 @@ export const Database = {
                 : (db[col] && typeof db[col] === 'object' ? { ...db[col] } : db[col])
         ]));
         try {
-            for (const col of collections) {
-                if (!hasOwn(data, col)) continue;
+            for (const col of replaceCollections) {
                 db[col] = Array.isArray(initialDB[col])
-                    ? data[col].map(item => item && typeof item === 'object' ? { ...item } : item)
-                    : { ...data[col] };
+                    ? normalizedSource[col].map(item => item && typeof item === 'object' ? { ...item } : item)
+                    : { ...normalizedSource[col] };
             }
 
             if (hasOwn(data, 'metas') && !hasOwn(data, 'reservas')) {
@@ -1324,6 +1412,28 @@ export const Database = {
             throw error;
         }
     },
+    clearAll: async () => {
+        const snapshot = Object.fromEntries(collections.map(col => [col, cloneCollectionForRollback(db[col])]));
+        try {
+            await IDB.clear();
+            if (typeof localStorage !== 'undefined') {
+                collections.forEach(col => localStorage.removeItem(DB_PREFIX + col));
+            }
+            collections.forEach(col => {
+                db[col] = cloneCollectionForRollback(initialDB[col]);
+            });
+            db.metadados = { ultimaAtualizacao: new Date().toISOString() };
+            await IDB.setMany(collections.map(col => [col, db[col]]));
+            clearCache();
+            if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+            return true;
+        } catch (error) {
+            collections.forEach(col => { db[col] = snapshot[col]; });
+            try { await IDB.setMany(collections.map(col => [col, db[col]])); } catch (_) {}
+            clearCache();
+            throw error;
+        }
+    },
     saveMentoriaSnapshot: MentoriaRepo.saveSnapshot,
     add: (col, item) => {
         switch(col) {
@@ -1343,6 +1453,7 @@ export const Database = {
         return false;
     },
     addRecorrente: TransactionsRepo.addRecurrent,
+    addRecurringTransactionAtomically,
     addTransactionsAtomically: TransactionsRepo.addMany,
     remove: (col, id) => {
         switch(col) {

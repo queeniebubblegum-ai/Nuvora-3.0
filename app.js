@@ -54,7 +54,7 @@ const FechamentoManager = {
         const btnNext = document.getElementById('btn-fechamento-next');
         const progress = document.getElementById('fechamento-progress');
 
-        if(!content) return;
+        if (!content || !btnPrev || !btnNext || !progress) return;
 
         progress.style.width = `${((FechamentoManager.state.step + 1) / 3) * 100}%`;
         btnPrev.classList.toggle('hidden', FechamentoManager.state.step === 0);
@@ -239,6 +239,7 @@ export const App = {
         isNotifOpen: false,
         notifTab: 'alertas',
         dashboardPeriod: 'este_mes',
+        dashboardRecentTab: 'recent',
         reportPeriod: loadViewContext('reports.period', 6, isValidReportPeriod),
         reportCashflowPeriod: loadViewContext('reports.cashflowPeriod', 1, isValidCashflowPeriod),
         selectedTransactions: [],
@@ -258,6 +259,9 @@ export const App = {
         if (!allowed.has(String(groupId))) return false;
         const section = document.getElementById(`settings-group-${groupId}`);
         if (!section) return false;
+        document.querySelectorAll('.nv-settings-panel[data-settings-group]').forEach(panel => {
+            panel.classList.toggle('is-open', panel === section);
+        });
         document.querySelectorAll('.nv-settings-card[data-group]').forEach(button => {
             button.setAttribute('aria-pressed', String(button.getAttribute('data-group') === String(groupId)));
         });
@@ -295,8 +299,62 @@ export const App = {
         return prefs;
     },
 
+    updateNotificationConfig: (key, value) => {
+        const allowed = new Set(['contasAtivo', 'orcamentoAtivo', 'metasAtivo', 'lembretesVencimentoAtivo', 'sincronizacaoAutomaticaAtiva']);
+        if (!allowed.has(String(key))) return false;
+        Database.updateConfig(key, value === true);
+        Utils.showToast('Preferência de notificações atualizada.', 'success');
+        return true;
+    },
+
+    runIntegrityCheck: () => {
+        const report = Database.auditIntegrity();
+        const { errors = 0, warnings = 0 } = report.summary || {};
+        const issues = [...(report.errors || []), ...(report.warnings || [])].slice(0, 6);
+        const reportNode = document.getElementById('integrity-report');
+        if (reportNode) {
+            const tone = errors > 0 ? 'is-error' : warnings > 0 ? 'is-warning' : 'is-ok';
+            const summary = errors > 0
+                ? `${errors} erro(s) encontrado(s)`
+                : warnings > 0
+                    ? `Dados válidos · ${warnings} aviso(s)`
+                    : 'Dados financeiros consistentes';
+            reportNode.className = `nv-settings-integrity-report ${tone}`;
+            reportNode.innerHTML = `<strong>${Utils.escapeHTML(summary)}</strong>${issues.length ? `<ul>${issues.map(item => `<li><span>${Utils.escapeHTML(item.path || 'registro')}</span>${Utils.escapeHTML(item.message)}</li>`).join('')}</ul>` : '<span>Nenhuma inconsistência foi encontrada nas coleções auditadas.</span>'}`;
+        }
+        if (errors > 0) {
+            Utils.showToast(`Integridade: ${errors} erro(s) encontrado(s). Faça um backup antes de corrigir.`, 'error');
+        } else if (warnings > 0) {
+            Utils.showToast(`Integridade: dados válidos com ${warnings} aviso(s) para revisar.`, 'warning');
+        } else {
+            Utils.showToast('Integridade: contas e lançamentos estão consistentes.', 'success');
+        }
+        return report;
+    },
+
     chooseProfilePhoto: () => document.getElementById('input-foto-perfil')?.click(),
     importBackupPicker: () => document.getElementById('backup-input')?.click(),
+
+    clearAllData: async () => {
+        if (!window.confirm('Esta ação apagará todos os lançamentos, contas, cartões, metas e configurações financeiras deste navegador. Faça um backup antes de continuar. Deseja prosseguir?')) return false;
+        try {
+            await Database.clearAll();
+            // Remove only legacy application data and transient view state. Keep
+            // visual preferences and Anora privacy settings intact.
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('nexx_fin_v8_pro_') || key.startsWith('avenera:view:') || key.startsWith('avenera_last_manual_backup')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            Utils.showToast('Todos os dados financeiros foram removidos com segurança.', 'success');
+            setTimeout(() => window.location.reload(), 500);
+            return true;
+        } catch (error) {
+            console.error('Falha ao limpar os dados financeiros:', error);
+            Utils.showToast('Não foi possível limpar os dados. Nenhuma alteração incompleta foi mantida.', 'error');
+            return false;
+        }
+    },
 
     init: () => {
         if (App.isInitialized) return;
@@ -987,9 +1045,18 @@ export const App = {
         if (page !== 'Dashboard' && typeof window !== 'undefined') window.resetDashboardQuickAction?.();
         Router.navigate(page, skipHistory);
         App.scheduleRender(); 
+        const main = document.querySelector('main.nv-app-scroll');
+        if (main) {
+            if (typeof main.scrollTo === 'function') main.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            else main.scrollTop = 0;
+        }
     },
     
     setDashboardPeriod: (period) => { App.viewState.dashboardPeriod = period; },
+    setDashboardRecentTab: (tab) => {
+        const nextTab = tab === 'pending' ? 'pending' : 'recent';
+        App.viewState.dashboardRecentTab = nextTab;
+    },
     openContatoPerfil: (contatoId) => {
         const c = (db.contatos || []).find(x => String(x.id) === String(contatoId));
         if (!c) return;
@@ -1671,7 +1738,7 @@ export const App = {
                     localStorage.setItem('avenera_backup_antes_importacao', JSON.stringify(createBackupDocument(db, new Date().toISOString())));
                     recoveryCopySaved = true;
                 } catch (_error) {}
-                await Database.replaceAll(importedDB);
+                await Database.replaceAll(importedDB, { mode: 'exact' });
                 Utils.showToast(recoveryCopySaved
                     ? 'Backup restaurado com sucesso! Uma cópia local anterior foi preservada.'
                     : 'Backup restaurado; não foi possível guardar a cópia local anterior.', recoveryCopySaved ? 'success' : 'warning');

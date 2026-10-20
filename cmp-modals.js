@@ -50,7 +50,7 @@ export const Modals = {
     <div id="modal-agenda-dia" class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
         <div class="bg-surface w-full max-w-sm rounded-[16px] shadow-medium nv-modal-shell border border-border flex flex-col max-h-[75vh] overflow-hidden">
             <div class="p-5 border-b border-border flex justify-between items-center"><div><h3 class="text-lg font-bold text-text-primary">Agenda do dia</h3><p id="agenda-dia-data" class="text-xs text-text-secondary"></p></div><button data-action="closeModal" class="text-text-secondary"><i class="fa-solid fa-xmark"></i></button></div>
-            <div id="agenda-dia-lista" class="p-5 overflow-y-auto space-y-2"></div>
+            <div id="agenda-dia-lista" class="p-5 flex-1 min-h-0 overflow-y-auto overscroll-contain space-y-2"></div>
             <div class="p-4 border-t border-border"><button id="agenda-dia-adicionar" data-action="addAgendaOnDate" class="w-full py-2.5 rounded-lg bg-brand-medium text-white text-sm font-bold"><i class="fa-solid fa-plus mr-2"></i>Adicionar previsão neste dia</button></div>
         </div>
     </div>
@@ -722,7 +722,19 @@ export const Modals = {
         </div>
     </div>
     
-    <div id="modal-fechamento-mes" class="fixed inset-0 bg-brand-deep/80 hidden items-center justify-center backdrop-blur-md p-4 sm:p-6" style="z-index: 1000;">
+    <div id="modal-investimento" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/60 hidden items-center justify-center backdrop-blur-sm p-4 sm:p-6" style="z-index: 999;">
+        <div class="bg-surface w-full max-w-md rounded-[16px] p-5 shadow-medium nv-modal-shell border border-border flex flex-col max-h-[85vh] overflow-hidden">
+            <div class="flex justify-between items-center mb-5 shrink-0"><div><p class="text-[10px] uppercase font-bold text-brand-medium tracking-wider">Patrimônio</p><h3 class="text-lg font-bold font-primary text-text-primary">Novo investimento</h3></div><button type="button" data-action="closeModal" aria-label="Fechar" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button></div>
+            <form data-submit="investimento" class="space-y-4 overflow-y-auto pr-1">
+                <label class="block"><span class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Nome do ativo</span><input name="nome" required autocomplete="off" placeholder="Ex.: Tesouro IPCA+ 2029" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></label>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3"><label class="block"><span class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Valor atual (R$)</span><input name="valorAtual" type="number" min="0" step="0.01" required inputmode="decimal" placeholder="0,00" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm font-mono text-text-primary"></label><label class="block"><span class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Aporte registrado (R$)</span><input name="aporte" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Opcional" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm font-mono text-text-primary"></label></div>
+                <label class="block"><span class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Classe ou instituição</span><input name="classe" autocomplete="off" placeholder="Ex.: Renda fixa · Corretora" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></label>
+                <div class="flex gap-2 pt-2"><button type="button" data-action="closeModal" class="flex-1 py-2.5 bg-bg border border-border text-text-secondary text-sm font-bold rounded-[10px]">Cancelar</button><button type="submit" class="flex-1 py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px]">Salvar investimento</button></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-fechamento-mes" role="dialog" aria-modal="true" aria-hidden="true" inert class="fixed inset-0 bg-brand-deep/80 hidden items-center justify-center backdrop-blur-md p-4 sm:p-6" style="z-index: 1000;">
         <div class="bg-surface w-full max-w-md rounded-[20px] shadow-2xl border border-border flex flex-col h-auto max-h-[85vh] overflow-hidden relative">
             
             <div class="h-1.5 w-full bg-border absolute top-0 left-0">
@@ -736,12 +748,12 @@ export const Modals = {
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary bg-bg border border-border w-7 h-7 rounded-[6px] flex items-center justify-center transition-colors"><i class="fa-solid fa-xmark"></i></button>
             </div>
             
-            <div id="fechamento-content" class="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
+            <div id="fechamento-content" class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 space-y-4 scrollbar-hide">
                 </div>
             
             <div class="p-5 bg-bg border-t border-border shrink-0 flex gap-2">
-                <button id="btn-fechamento-prev" class="px-4 py-2.5 bg-surface border border-border text-text-primary text-sm font-bold rounded-[10px] hidden">Voltar</button>
-                <button id="btn-fechamento-next" class="flex-1 py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft hover:bg-brand-dark transition-all flex items-center justify-center gap-2">Continuar <i class="fa-solid fa-arrow-right"></i></button>
+                <button type="button" id="btn-fechamento-prev" class="px-4 py-2.5 bg-surface border border-border text-text-primary text-sm font-bold rounded-[10px] hidden">Voltar</button>
+                <button type="button" id="btn-fechamento-next" class="flex-1 py-2.5 bg-brand-medium text-white text-sm font-bold rounded-[10px] shadow-soft hover:bg-brand-dark transition-all flex items-center justify-center gap-2">Continuar <i class="fa-solid fa-arrow-right"></i></button>
             </div>
         </div>
     </div>

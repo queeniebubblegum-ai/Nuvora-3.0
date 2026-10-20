@@ -138,11 +138,11 @@ body.font-primary,
   font-feature-settings: "tnum" 1;
 }
 
-/* One shared content width and page-header rhythm. */
+/* One shared full-canvas layout and page-header rhythm. */
 #main-content {
   box-sizing: border-box;
   width: 100%;
-  max-width: 1280px !important;
+  max-width: none !important;
   padding: 24px 32px 96px !important;
   color: var(--c-text-primary);
 }
@@ -312,9 +312,11 @@ body.font-primary,
   font-family: var(--font-ui);
   min-width: 0;
 }
-#main-content :is(.nv-dashboard-shell, .nv-planning-page, .nv-transactions-page, .nv-contacts-page, .nv-categories-page, .nv-settings-page) {
-  margin-inline: auto;
-  max-width: 1240px;
+#main-content :is(.nv-dashboard-shell, .nv-planning-page, .nv-transactions-page, .nv-agenda-page, .nv-accounts-page, .nv-contacts-page, .nv-categories-page, .nv-settings-page, .nv-anora-page, .nv-reports-workspace, .nv-standard-page) {
+  box-sizing: border-box;
+  margin-inline: 0;
+  max-width: none;
+  width: 100%;
 }
 #main-content :is(.nv-page-header, .nv-dashboard-header, .nv-tx-page-header, .nv-planning-header, .nv-agenda-page-header, .nv-accounts-header, .nv-contacts-header, .nv-category-page-header, .nv-settings-header) {
   align-items: center;
@@ -455,7 +457,16 @@ body.font-primary,
   gap: 12px;
 }
 #main-content > .nv-live-page .nv-live-metric-grid > * { min-width: 0; }
-#main-content > .nv-live-page .nv-reports-workspace { min-width: 0; }
+#main-content > .nv-live-page .nv-reports-workspace,
+#main-content > .nv-live-page .nv-reports-workspace > *,
+#main-content > .nv-live-page .nv-reports-selected-heading,
+#main-content > .nv-live-page .nv-reports-navigation,
+#main-content > .nv-live-page .nv-report-export {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
 #main-content > .nv-live-page--metas .nv-standard-page-panel,
 #main-content > .nv-live-page--orcamento .nv-standard-page-panel {
   overflow: clip;
@@ -480,4 +491,11 @@ body.font-primary,
     padding-bottom: 0;
   }
   #main-content > .nv-live-page .nv-live-metric-grid { gap: 9px; }
+}
+@media (max-width: 560px) {
+  #main-content > .nv-live-page .nv-reports-selected-heading { width: 100%; }
+  #main-content > .nv-live-page .nv-reports-actions { flex: 1 1 100%; margin-left: 0; max-width: 100%; width: 100%; }
+  #main-content > .nv-live-page .nv-reports-actions > .flex { max-width: 100%; width: 100%; }
+  #main-content > .nv-live-page .nv-reports-export-button { max-width: 100%; white-space: normal; }
+  #main-content > .nv-live-page .nv-reports-tabs { max-width: 100%; min-width: 0; }
 }

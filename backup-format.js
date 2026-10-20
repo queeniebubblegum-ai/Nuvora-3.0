@@ -19,6 +19,33 @@ const cloneJSON = value => {
     }
 };
 
+const isValidDateValue = value => {
+    if (value === undefined || value === null || value === '') return true;
+    const date = new Date(String(value).length === 10 ? `${value}T12:00:00` : value);
+    return !Number.isNaN(date.getTime());
+};
+
+const validateFinancialRecords = (collection, records) => {
+    const ids = new Set();
+    const moneyFields = new Set(['valor', 'saldo', 'saldoInicial', 'limite', 'alvo', 'atual', 'valorAtual', 'rendaMensalMedia']);
+    const dateFields = new Set(['data', 'dataVencimento', 'dataPagamento', 'dataCriacao', 'proximaCobranca', 'dataProximaCobranca']);
+    records.forEach((record, index) => {
+        if (record.id !== undefined && record.id !== null) {
+            const id = String(record.id);
+            if (ids.has(id)) throw new Error(`A coleção ${collection} contém IDs duplicados (${id}).`);
+            ids.add(id);
+        }
+        Object.entries(record).forEach(([key, value]) => {
+            if (moneyFields.has(key) && value !== '' && value !== null && !Number.isFinite(Number(value))) {
+                throw new Error(`O campo ${collection}[${index}].${key} precisa ser numérico.`);
+            }
+            if (dateFields.has(key) && !isValidDateValue(value)) {
+                throw new Error(`A data ${collection}[${index}].${key} é inválida.`);
+            }
+        });
+    });
+};
+
 export const normalizeBackupDocument = document => {
     if (!isRecord(document)) throw new Error('O arquivo não contém um backup Avenera válido.');
 
@@ -45,6 +72,7 @@ export const normalizeBackupDocument = document => {
         if (!Array.isArray(database[collection]) || database[collection].some(item => !isRecord(item))) {
             throw new Error(`A coleção ${collection} está inválida no backup.`);
         }
+        validateFinancialRecords(collection, database[collection]);
     }
     for (const collection of OBJECT_COLLECTIONS) {
         if (database[collection] !== undefined && !isRecord(database[collection])) {

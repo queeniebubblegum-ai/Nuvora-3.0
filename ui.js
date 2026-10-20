@@ -5,6 +5,7 @@ import { SubmitGuard } from './submit-guard.js';
 
 export const UI = {
     modalSnapshots: {},
+    modalReturnFocus: {},
 
     captureModalState: (id) => {
         const modal = document.getElementById(id);
@@ -98,10 +99,17 @@ export const UI = {
 
         const m = document.getElementById(id);
         if (m) {
+            const active = document.activeElement;
+            UI.modalReturnFocus[id] = active && active !== document.body ? active : null;
             m.removeAttribute('inert');
             m.setAttribute('aria-hidden', 'false');
             m.classList.remove('hidden'); m.classList.add('flex');
             UI.captureModalState(id);
+            const scheduleFocus = globalThis.requestAnimationFrame || (callback => setTimeout(callback, 0));
+            scheduleFocus(() => {
+                const focusable = m.querySelector('[autofocus], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+                focusable?.focus?.({ preventScroll: true });
+            });
         }
     },
 
@@ -129,6 +137,8 @@ export const UI = {
             });
             if (modalId === 'modal-categoria') UI.resetCategoryModal();
             delete UI.modalSnapshots[modal.id];
+            UI.modalReturnFocus[modal.id]?.focus?.({ preventScroll: true });
+            delete UI.modalReturnFocus[modal.id];
             if (modalId === 'modal-fatura-detalhes') {
                 viewState.selectedTransactions = [];
                 viewState.activeCardId = null;
@@ -158,10 +168,14 @@ export const UI = {
             const el = document.getElementById(id); if(el) { el.innerHTML = ''; el.classList.add('hidden'); }
         });
         
-        document.querySelectorAll('form').forEach(form => {
-            form.reset();
-            SubmitFeedback.reset(form);
-            SubmitGuard.cancel(form);
+        document.querySelectorAll('div[id^="modal-"]').forEach(modal => {
+            modal.querySelectorAll('form').forEach(form => {
+                form.reset();
+                SubmitFeedback.reset(form);
+                SubmitGuard.cancel(form);
+            });
+            UI.modalReturnFocus[modal.id]?.focus?.({ preventScroll: true });
+            delete UI.modalReturnFocus[modal.id];
         });
         UI.resetCategoryModal();
         UI.modalSnapshots = {};

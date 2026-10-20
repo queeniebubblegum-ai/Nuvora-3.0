@@ -6,9 +6,9 @@ const read = file => fs.readFileSync(path.join(process.cwd(), file), 'utf8');
 const routes = [
   'Dashboard', 'Transacoes', 'Relatorios', 'Planejamento', 'Agendamentos', 'Contas',
   'Contatos', 'Metas', 'Orcamento', 'Categorias', 'Conciliacao', 'Importacao',
-  'Anora', 'Configuracoes'
+  'Anora', 'Configuracoes', 'Investimentos'
 ];
-const stylesheet = './redesign-v4-coordinated.css?v=20261013-layout-v3';
+const stylesheet = './redesign-v4-coordinated.css?v=20261016-layout-v4';
 
 describe('coordinated V4 design integration contract', () => {
   it('applies one token bridge after both existing page and shell stylesheets', () => {
@@ -40,7 +40,7 @@ describe('coordinated V4 design integration contract', () => {
       expect(router).toContain(`'${route}'`);
       expect(pages).toContain(route);
     }
-    expect(router).not.toContain("'Investimentos'");
+    expect(router).toContain("'Investimentos'");
     for (const primitive of ['.nv-page-header', '.nv-standard-page-header', '.nv-dashboard-header', '.nv-dashboard-card', '.nv-standard-page-panel', '.nv-agenda-list-card', '.nv-settings-panel', '.nv-analysis-metric', '.nv-accounts-card', '.nv-tx-panel', '.nv-planning-panel', '.nv-contacts-list']) {
       expect(css).toContain(primitive);
     }
@@ -72,8 +72,8 @@ describe('coordinated V4 design integration contract', () => {
   it('keeps shell/runtime asset versions synchronized with the service-worker cache', () => {
     const index = read('index.html');
     const worker = read('service-worker.js');
-    expect(index.match(/redesign-v4-coordinated\.css\?v=([^"']+)/)?.[1]).toBe('20261013-layout-v3');
-    expect(worker.match(/redesign-v4-coordinated\.css\?v=([^"']+)/)?.[1]).toBe('20261013-layout-v3');
+    expect(index.match(/redesign-v4-coordinated\.css\?v=([^"']+)/)?.[1]).toBe('20261016-layout-v4');
+    expect(worker.match(/redesign-v4-coordinated\.css\?v=([^"']+)/)?.[1]).toBe('20261016-layout-v4');
     expect(worker).toContain("avenera-app-shell-v25");
   });
 
@@ -102,7 +102,7 @@ describe('coordinated V4 design integration contract', () => {
       expect(pages + dashboard + reports).toContain(action);
     }
     expect(read('db.js')).toContain('indexedDB');
-    expect(read('router.js')).not.toContain("'Investimentos'");
+    expect(read('router.js')).toContain("'Investimentos'");
   });
 
   it('uses Public Sans for body text and Fraunces/Sora only for their intended roles', () => {

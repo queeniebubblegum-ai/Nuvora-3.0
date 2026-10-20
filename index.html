@@ -2,7 +2,7 @@
 <html lang="pt-BR" class="transition-colors duration-300">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Avenera</title>
     <meta name="description" content="Avenera: organização financeira pessoal com planejamento, contas e insights claros.">
     <meta property="og:title" content="Avenera">
@@ -22,11 +22,11 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
-    <link rel="stylesheet" href="styles.css?v=20260925-anora-restoration-2">
-    <link rel="stylesheet" href="redesign-fase2.css?v=20260925">
-    <link rel="stylesheet" href="styles-v4.css?v=20260925-v4-shell-1">
-    <link rel="stylesheet" href="redesign-v4-coordinated.css?v=20261013-layout-v3">
-    <link rel="stylesheet" href="mockup-theme.css?v=20261016-v4">
+    <link rel="stylesheet" href="./styles.css?v=20260925-anora-restoration-2">
+    <link rel="stylesheet" href="./redesign-fase2.css?v=20260925">
+    <link rel="stylesheet" href="./styles-v4.css?v=20260925-v4-shell-1">
+    <link rel="stylesheet" href="./redesign-v4-coordinated.css?v=20261016-layout-v4">
+    <link rel="stylesheet" href="./mockup-theme.css?v=20261016-v6">
 
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -39,7 +39,7 @@
         .animate-fadeIn { animation: fadeIn 0.4s ease-out forwards; }
     </style>
 </head>
-<body class="bg-bg font-primary text-text-primary h-screen overflow-hidden flex flex-col transition-colors duration-300">
+<body class="nv-app-root bg-bg font-primary text-text-primary h-screen overflow-hidden flex flex-col transition-colors duration-300">
 
     <div id="toast-container" class="flex flex-col gap-2 pointer-events-none items-stretch sm:items-end" style="position:fixed; right:20px; bottom:20px; left:auto; z-index:9999; width:min(420px,92vw);"></div>
 
@@ -48,7 +48,7 @@
 
     <div class="nv-v4-scope nv-v4-scope-contents">
     <header class="nv-v4-topbar shrink-0 h-16 flex items-center justify-between gap-3 px-3 sm:px-5 lg:px-7 relative" style="z-index: 50;">
-        <div class="flex items-center gap-3 min-w-0">
+            <div class="flex items-center gap-3 min-w-0 nv-topbar-brand">
             <button type="button" onclick="toggleSidebar()" aria-label="Abrir menu de navegação" class="lg:hidden btn-ghost !px-2.5">
                 <i class="fa-solid fa-bars" aria-hidden="true"></i>
             </button>
@@ -58,10 +58,11 @@
             </div>
         </div>
 
-        <div class="flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
+            <div id="nv-topbar-month" class="nv-mockup-topbar-month" aria-label="Mês selecionado">Setembro 2026</div>
+            <div class="nv-topbar-actions flex items-center justify-end gap-1.5 sm:gap-2 shrink-0">
             <input type="file" id="backup-input" class="hidden" accept=".json">
-            <button type="button" data-action="openTransactionSearch" aria-label="Buscar lançamentos" title="Buscar lançamentos" class="nv-v4-search-button hidden md:inline-flex btn-ghost">
-                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Buscar lançamentos</span>
+                <button type="button" data-action="openTransactionSearch" aria-label="Buscar no Avenera" title="Buscar no Avenera" class="nv-v4-search-button hidden md:inline-flex btn-ghost">
+                <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i><span>Buscar no Avenera</span><kbd>Ctrl K</kbd>
             </button>
             <div class="nv-v4-data-tools hidden sm:flex items-center gap-1" aria-label="Ferramentas de dados">
                 <button type="button" data-action="exportBackup" title="Exportar dados" aria-label="Exportar dados" class="btn-ghost !px-2.5">
@@ -71,6 +72,7 @@
                     <i class="fa-solid fa-upload" aria-hidden="true"></i>
                 </button>
             </div>
+            <button type="button" data-action="openTypeSelector" aria-label="Nova transação" class="nv-mockup-topbar-new"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Nova transação</span></button>
             <button type="button" aria-label="Abrir notificações" aria-controls="notif-drawer" onclick="Notifications.togglePanel()" class="btn-ghost !px-2.5 relative">
                 <i class="fa-regular fa-bell" aria-hidden="true"></i>
                 <span id="notif-badge-mobile" class="absolute top-1 right-1 bg-danger text-white text-[8px] w-3.5 h-3.5 flex items-center justify-center rounded-full hidden font-mono">0</span>
@@ -101,7 +103,7 @@
                     </div>
                 </div>
             </div>
-            <button type="button" data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes-perfil" aria-label="Abrir seu perfil e configurações" class="flex items-center gap-2 rounded-r2 p-1.5 transition-colors min-w-0">
+            <button type="button" data-action="navigate" data-payload="Configuracoes" id="nav-Configuracoes-perfil" aria-label="Abrir seu perfil e configurações" class="nv-mockup-topbar-profile flex items-center gap-2 rounded-r2 p-1.5 transition-colors min-w-0">
                 <img src="assets/perfil.svg" alt="Seu Perfil" class="w-9 h-9 rounded-full object-cover border-2 border-border">
                 <span class="hidden lg:block min-w-0 max-w-[110px] text-left">
                     <span class="block text-sm font-bold text-text truncate">Usuário</span>
@@ -115,7 +117,7 @@
     </header>
     </div>
 
-    <div class="nv-v4-layout flex-1">
+    <div class="nv-v4-layout flex-1 min-w-0">
         <div class="nv-v4-scope nv-v4-scope-contents">
         <div id="mobile-overlay" class="nv-v4-drawer-overlay fixed inset-0 bg-black/40 hidden lg:hidden" onclick="toggleSidebar()" style="z-index: 40;"></div>
         </div>
@@ -123,16 +125,16 @@
         <aside id="sidebar" class="nv-v4-sidebar fixed top-16 bottom-0 left-0 z-50 w-72 bg-surface border-r border-border flex flex-col -translate-x-full lg:static lg:translate-x-0 lg:h-auto transition-transform duration-200" style="z-index: 45;">
             <div class="flex items-center gap-3 px-5 h-16 border-b border-border shrink-0">
                 <div class="w-9 h-9 rounded-r2 bg-action flex items-center justify-center text-white font-display font-bold" aria-hidden="true">A</div>
-                <div>
+                <div class="nv-sidebar-brand-copy">
                     <p class="font-display font-semibold text-text leading-tight">Avenera</p>
-                    <p class="text-[11px] text-muted">finanças pessoais</p>
+                    <span class="nv-sidebar-study-badge">ESTUDO</span>
                 </div>
                 <button type="button" class="lg:hidden ml-auto btn-ghost !px-2.5" onclick="toggleSidebar()" aria-label="Fechar menu">✕</button>
             </div>
             <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-1" aria-label="Navegação principal">
                 <div class="px-2 pb-2">
                     <p class="nv-v4-section-label">Visão geral</p>
-                    <button type="button" data-action="navigate" data-payload="Dashboard" id="nav-Dashboard" class="nv-v4-nav-link nav-item w-full"><i class="fa-solid fa-border-all" aria-hidden="true"></i><span>Início</span></button>
+                    <button type="button" data-action="navigate" data-payload="Dashboard" id="nav-Dashboard" class="nv-v4-nav-link nav-item w-full"><i class="fa-solid fa-border-all" aria-hidden="true"></i><span>Visão geral</span></button>
                 </div>
                 <details class="nv-sidebar__group nv-v4-nav-group" data-nav-group="finance">
                     <summary class="nv-v4-group-toggle"><span><i class="fa-solid fa-wallet" aria-hidden="true"></i>Finanças</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
@@ -141,6 +143,7 @@
                         <button type="button" data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i><span>Planejamento</span></button>
                         <button type="button" data-action="navigate" data-payload="Agendamentos" id="nav-Agendamentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Agenda de contas</span></button>
                         <button type="button" data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-wallet" aria-hidden="true"></i><span>Contas e cartões</span></button>
+                        <button type="button" data-action="navigate" data-payload="Investimentos" id="nav-Investimentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Investimentos</span></button>
                         <button type="button" data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-bullseye" aria-hidden="true"></i><span>Metas</span></button>
                         <button type="button" data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><span>Orçamento</span></button>
                         <button type="button" data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Relatórios</span></button>
@@ -166,19 +169,21 @@
                 </div>
             </nav>
             <div class="nv-v4-profile-area border-t border-border p-3 shrink-0">
-                <button type="button" data-action="navigate" data-payload="Configuracoes" data-page-route="Configuracoes" id="nv-v4-sidebar-profile" aria-label="Abrir perfil" class="nv-v4-profile-button nav-item w-full">
+                <button type="button" data-action="navigate" data-payload="Anora" data-page-route="Anora" id="nv-v4-sidebar-profile" aria-label="Abrir Anora" class="nv-v4-profile-button nav-item w-full">
                     <img src="assets/perfil.svg" alt="" class="w-9 h-9 rounded-full bg-surface-2">
+                    <span class="nv-sidebar-anora-glyph" aria-hidden="true"><i class="fa-solid fa-sparkles"></i></span>
                     <span class="flex-1 text-left min-w-0">
-                        <span class="block text-sm font-semibold text-text truncate">Minha conta</span>
-                        <span class="block text-[10px] text-muted truncate">Ver perfil</span>
+                        <span class="block text-sm font-semibold text-text truncate">Anora</span>
+                        <span class="block text-[10px] text-muted truncate">1 sugestão útil</span>
                     </span>
+                    <i class="fa-solid fa-chevron-right text-[10px] text-muted" aria-hidden="true"></i>
                 </button>
             </div>
         </aside>
         </div>
 
-        <main class="nv-main nv-v4-main flex-1 overflow-y-auto relative w-full">
-            <div id="main-content" class="p-4 lg:p-8 pb-24 md:pb-8 space-y-6 animate-fadeIn max-w-[1400px] mx-auto"></div>
+        <main class="nv-main nv-v4-main nv-app-scroll flex-1 min-w-0 overflow-y-auto relative w-full">
+            <div id="main-content" class="w-full p-4 lg:p-8 pb-24 md:pb-8 space-y-6 animate-fadeIn"></div>
         </main>
     </div>
 

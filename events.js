@@ -7,6 +7,7 @@ import { Controllers } from './controllers.js';
 import { shouldHandleNewTransactionShortcut } from './financial-refinements.js';
 
 let newTransactionShortcutBound = false;
+let modalEscapeBound = false;
 
 const bindNewTransactionShortcut = () => {
     if (newTransactionShortcutBound) return;
@@ -68,6 +69,17 @@ export const EventManager = {
         ClickEvents.setup();
         ChangeEvents.setup();
         SubmitEvents.setup();
+
+        if (!modalEscapeBound) {
+            modalEscapeBound = true;
+            document.addEventListener('keydown', event => {
+                if (event.key !== 'Escape') return;
+                const visibleModal = [...document.querySelectorAll('[id^="modal-"]:not(.hidden)')].pop();
+                if (!visibleModal) return;
+                event.preventDefault();
+                App.closeModal(false, visibleModal.id);
+            });
+        }
 
         document.body.addEventListener('input', (e) => {
             if (e.target.matches('[data-input="setFilterDesc"]')) {
@@ -180,6 +192,20 @@ export const EventManager = {
             }
 
             // Limpa as variáveis físicas
+            activeCard = null;
+            currentX = 0;
+            isSwiping = false;
+        }, { passive: true });
+
+        document.body.addEventListener('touchcancel', () => {
+            if (!activeCard) return;
+            const txId = activeCard.parentElement?.getAttribute('data-id');
+            const btnEdit = txId ? document.getElementById(`swipe-edit-${txId}`) : null;
+            const btnDelete = txId ? document.getElementById(`swipe-delete-${txId}`) : null;
+            activeCard.style.transition = 'transform 0.2s ease';
+            activeCard.style.transform = 'translateX(0)';
+            if (btnEdit) btnEdit.style.opacity = 0;
+            if (btnDelete) btnDelete.style.opacity = 0;
             activeCard = null;
             currentX = 0;
             isSwiping = false;

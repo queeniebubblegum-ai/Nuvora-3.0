@@ -102,6 +102,10 @@ export const SistemaController = {
                 App.scheduleRender();
             }
             if (col === 'contatos') App.updateContatoSelect();
+            // Collection-specific screens do not have a generic live-list
+            // observer; refresh the active route after a persisted deletion so
+            // the UI never leaves a stale investment/contact card behind.
+            if (App.currentPage === 'Investimentos' || col === 'investimentos') App.scheduleRender();
         }
     }
 };

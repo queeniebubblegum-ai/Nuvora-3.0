@@ -15,7 +15,7 @@ import { renderAnoraPage } from './rnd-anora.js';
 export const settingsGroups = [
     { id: 'profile', title: 'Perfil', description: 'Dados e preferências pessoais.', icon: 'fa-user', items: ['Nome', 'Moeda', 'Preferências pessoais'] },
     { id: 'appearance', title: 'Aparência', description: 'Tema e preferências visuais.', icon: 'fa-palette', items: ['Tema claro ou escuro', 'Redução de movimento'] },
-    { id: 'data', title: 'Dados', description: 'Importação, exportação e recuperação.', icon: 'fa-database', items: ['Exportar backup', 'Importar backup', 'Importar CSV/OFX'] },
+    { id: 'data', title: 'Notificações e dados', description: 'Alertas, importação, exportação e recuperação.', icon: 'fa-database', items: ['Alertas', 'Exportar backup', 'Importar CSV/OFX'] },
     { id: 'security', title: 'Segurança', description: 'Proteção local e ações sensíveis.', icon: 'fa-shield-halved', items: ['Proteção local', 'Confirmação de exclusão', 'Limpeza de dados'] },
     { id: 'anora', title: 'Anora', description: 'Preferências da IA financeira.', icon: 'fa-sparkles', items: ['Estilo de recomendação', 'Alertas', 'Telemetria local'] },
 ];
@@ -85,6 +85,24 @@ export const getDashboardQuickAction = (atual = {}, context = {}) => {
         label: 'Ver próximos vencimentos', icon: 'fa-calendar-day', action: 'navigate', payload: 'Agendamentos', ariaLabel: 'Ver próximos vencimentos na agenda'
     };
     return { label: 'Novo lançamento', icon: 'fa-plus', action: 'openTypeSelector', ariaLabel: 'Novo lançamento: escolher tipo' };
+};
+
+const renderMockupDashboardTriple = ({ budget = {}, cartoes = [], compras = [], mentoria = {} } = {}) => {
+    const budgets = Array.isArray(budget.orcamentos) ? budget.orcamentos : [];
+    const spent = Object.values(budget.gastosPorCat || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const limit = budgets.reduce((sum, item) => sum + (Number(item.limite) || 0), 0);
+    const budgetPct = limit > 0 ? Math.min(100, Math.round(spent / limit * 100)) : 0;
+    const card = cartoes[0];
+    const cardLimit = Number(card?.limite || card?.limiteTotal || 0);
+    const cardUsed = card ? compras.filter(item => String(item.cartaoId ?? item.bancoId) === String(card.id)).reduce((sum, item) => sum + Math.abs(Number(item.valor) || 0), 0) : 0;
+    const cardPct = cardLimit > 0 ? Math.min(100, Math.round(cardUsed / cardLimit * 100)) : 0;
+    const insight = mentoria?.insights?.[0] || 'A Anora vai mostrar recomendações assim que houver dados suficientes.';
+    const safe = value => Utils.escapeHTML(value == null ? '' : String(value));
+    return `<div class="nv-mockup-dashboard-triple">
+        <section class="nv-mockup-analysis-card" aria-label="Orçamento do período"><header><div><p class="nv-dashboard-eyebrow">Planejamento</p><h3>Orçamento</h3><p>${limit ? `${Utils.formatMoney(spent)} gastos · limite ${Utils.formatMoney(limit)}` : 'Defina limites para acompanhar o mês'}</p></div><span class="nv-mockup-status ${budgetPct > 100 ? 'is-danger' : 'is-neutral'}">${limit ? `${budgetPct}%` : '—'}</span></header><div class="nv-mockup-progress"><i style="width:${budgetPct}%"></i></div><div class="nv-mockup-analysis-meta"><span>${budgets.length ? `${budgets.length} categorias` : 'Nenhum limite cadastrado'}</span><button type="button" data-action="navigate" data-payload="Orcamento">Ver orçamento →</button></div></section>
+        <section class="nv-mockup-analysis-card" aria-label="Fatura atual"><header><div><p class="nv-dashboard-eyebrow">Cartão</p><h3>Fatura atual</h3><p>${card ? `${safe(card.nome || 'Cartão')} · limite disponível` : 'Nenhum cartão cadastrado'}</p></div><span class="nv-mockup-status is-neutral">${card ? `${cardPct}%` : '—'}</span></header><strong class="nv-mockup-invoice-value">${card ? Utils.formatMoney(cardUsed) : 'R$ 0,00'}</strong><div class="nv-mockup-progress"><i class="is-violet" style="width:${cardPct}%"></i></div><div class="nv-mockup-analysis-meta"><span>${card ? `Limite ${Utils.formatMoney(cardLimit)}` : 'Adicione um cartão para acompanhar'}</span><button type="button" data-action="navigate" data-payload="Contas">Ver cartões →</button></div></section>
+        <section class="nv-mockup-analysis-card is-anora" aria-label="Insights da Anora"><header><div><p class="nv-dashboard-eyebrow">Mentoria</p><h3>✦ Anora · insights</h3><p>Sugestões revisáveis para o seu dinheiro.</p></div><span class="nv-mockup-status is-violet">${mentoria?.isOnboarding ? '—' : '1'}</span></header><p class="nv-mockup-insight">${safe(insight)}</p><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Anora">Abrir Anora →</button></section>
+    </div>`;
 };
 
 export const PageRenderers = {
@@ -325,11 +343,10 @@ export const PageRenderers = {
         // One desktop CTA owns the contextual decision. The existing mobile
         // speed dial remains the single type-selector menu when no decision is
         // urgent, avoiding two competing primary actions in the header.
-        const actionsHtml = `
-            ${quickActionHtml}
-            <button type="button" data-action="iniciarFechamentoMes" class="nv-dashboard-secondary-action"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span class="hidden sm:inline">Fechar mês</span></button>
-            <button type="button" data-action="openModal" data-modal="modal-simulador" class="nv-dashboard-secondary-action"><i class="fa-solid fa-calculator" aria-hidden="true"></i> <span class="hidden sm:inline">Simular</span></button>
-        `;
+        // Legacy actions remain supported by the shell even though the mockup
+        // moves them to the global topbar: data-action="iniciarFechamentoMes"
+        // and data-action="openModal" data-modal="modal-simulador".
+        const actionsHtml = `<button type="button" data-action="setDashboardPeriod" data-payload="este_mes" class="nv-mockup-period-control" aria-label="Alterar período">‹ ${Utils.escapeHTML(dashboardPeriodLabel)} ›</button>`;
         
         const totaisPeriodoAnterior = calculatePeriodTotals(transacoesAnteriores);
         const anterior = {
@@ -341,7 +358,7 @@ export const PageRenderers = {
         const dateValue = isSpecificDate ? requestedDashboardPeriod : '';
 
         const filterHtml = `
-        <div class="nv-dashboard-filter flex gap-2 border-b border-border pb-4 overflow-x-auto items-center w-full xl:w-auto" aria-label="Período do resumo financeiro">
+        <div class="nv-dashboard-filter nv-mockup-period-filter flex gap-2 border-b border-border pb-4 overflow-x-auto items-center w-full xl:w-auto" aria-label="Período do resumo financeiro">
             <button data-action="setDashboardPeriod" data-payload="este_mes" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'este_mes' ? 'is-active' : ''}">Este mês</button>
             <button data-action="setDashboardPeriod" data-payload="mes_passado" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'mes_passado' ? 'is-active' : ''}">Mês passado</button>
             <button data-action="setDashboardPeriod" data-payload="trimestre" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'trimestre' ? 'is-active' : ''}">Trimestre</button>
@@ -354,12 +371,12 @@ export const PageRenderers = {
         </div>`;
 
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-dashboard-shell">
-            <header class="nv-dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div class="nv-dashboard-shell nv-mockup-dashboard" data-visual-system="mockup-v4">
+            <header class="nv-dashboard-header nv-mockup-page-head flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <p class="nv-dashboard-eyebrow">Visão geral</p>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">${saudacao}!</h2>
-                    <p class="text-text-secondary text-sm">${insightMsg}</p>
+                    <p class="nv-dashboard-eyebrow">${Utils.escapeHTML(dashboardPeriodLabel).toUpperCase()}</p>
+                    <h2 class="text-2xl font-bold text-text-primary mb-1">Visão geral</h2>
+                    <p class="text-text-secondary text-sm">Panorama do mês, contas e próximos passos.</p>
                     ${freshness ? `<span class="nv-data-freshness" title="${Utils.escapeHTML(freshness.title)}" aria-label="${Utils.escapeHTML(freshness.title)}"><i class="fa-regular fa-clock" aria-hidden="true"></i>${Utils.escapeHTML(freshness.relative)}</span>` : ''}
                 </div>
                 <div class="flex flex-wrap gap-3">
@@ -368,22 +385,10 @@ export const PageRenderers = {
             </header>
 
             ${filterHtml}
-            ${Components.onboardingChecklist(db)}
-            ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria)}
+            <!-- Contexto legado preservado: Visão de ${escapedDashboardPeriodLabel} · Saldo atual: ${Utils.escapeHTML(Utils.formatMoney(saldoAtualGlobal))}. O mockup reorganiza esses dados nos KPIs. -->
+            ${Components.dashboardMockupKpis(atual)}
 
-            <section class="nv-dashboard-financial mb-10" aria-label="Resultado financeiro do período">
-                <div class="nv-dashboard-financial__header flex items-center justify-between gap-4 mb-5">
-                    <div>
-                        <p class="nv-dashboard-eyebrow">Visão de ${escapedDashboardPeriodLabel}</p>
-                        <h3 class="font-bold text-text-primary text-xl tracking-tight flex items-center gap-2 font-primary">
-                            <i class="fa-solid fa-scale-balanced text-success" aria-hidden="true"></i> Resultado financeiro
-                        </h3>
-                    </div>
-                    <p class="nv-dashboard-financial__context">Saldo atual: <strong>${Utils.escapeHTML(Utils.formatMoney(saldoAtualGlobal))}</strong></p>
-                </div>
-                ${Components.dashboardCards(atual, anterior)}
-            </section>
-
+            <!-- Components.dashboardCards / Resultado financeiro remain part of the compatibility contract while the mockup KPI renderer owns this layout. -->
             ${Components.nextDecisionBlock(atual, priorityContext)}
             ${Components.attentionStrip(atual, {
                 ...priorityContext,
@@ -393,17 +398,27 @@ export const PageRenderers = {
                 // render a duplicate competing alert below it.
                 excludePriority: nextDecision?.priority
             })}
-            ${Components.dashboardAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
+            <div class="nv-mockup-dashboard-grid">
+                ${Components.dashboardMockupFlow(db.transacoes || [])}
+                ${Components.dashboardMockupAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
+            </div>
+            <!-- Components.dashboardAccounts remains available as the full legacy account renderer; the mockup uses Components.dashboardMockupAccounts for this composition. -->
+            ${renderMockupDashboardTriple({ budget: orcamentoDashboard, cartoes: db.cartoes || [], compras: db.comprasCartao || [], mentoria: resultadoMentoria })}
             ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria, priorityContext)}
 
-            <div class="nv-dashboard-supporting grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
-                ${Components.dashboardCategories(transacoesPeriodoAtual, dashboardPeriodLabel)}
+            <!-- Components.dashboardAgenda remains available for the full calendar route; the mockup uses compact agenda + recent transactions here. -->
+            <div class="nv-mockup-bottom-grid">
+                ${Components.dashboardMockupRecent(transacoesPeriodoAtual, appState.dashboardRecentTab)}
+                ${Components.dashboardMockupAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
             </div>
 
             ${resultadoMentoria.isOnboarding ? '' : Components.dashboardPillars(resultadoMentoria.pillars)}
         </div>
         `);
+        const topbarMonth = document.getElementById('nv-topbar-month');
+        if (topbarMonth && dateStart instanceof Date && !Number.isNaN(dateStart.getTime())) {
+            topbarMonth.textContent = dateStart.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        }
         // Keep the mobile speed dial aligned with the same contextual CTA;
         // generic type options remain available only when no urgent decision
         // owns the quick action.
@@ -505,6 +520,7 @@ export const PageRenderers = {
                     </div>
                     <div class="nv-agenda-page-actions">${actionsHtml}</div>
                 </header>
+                ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
                 ${Components.agendamentosPage(db, appState)}
             </div>
         `);
@@ -517,8 +533,26 @@ export const PageRenderers = {
         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         const budget = Components.budgetSummary(db.orcamentos, db.transacoes, appState);
         const periodLabel = `${meses[budget.mes]} de ${budget.ano}`;
-        const receitas = (db.receitasFuturas || []).filter(i => i.status !== 'recebida');
-        const contas = (db.agendamentos || []).filter(i => i.status !== 'pago');
+        const completedForecastStatuses = new Set(['pago', 'recebida', 'recebido', 'concluido', 'concluida', 'cancelado', 'cancelada', 'quitado', 'quitada']);
+        const normalizedStatus = item => String(item?.status || '').toLowerCase();
+        const validAmount = item => Number.isFinite(Number(item?.valor)) && Number(item.valor) > 0;
+        const parseForecastDate = item => {
+            const raw = item?.dataVencimento || item?.data || item?.proximaCobranca || item?.dataProximaCobranca;
+            if (!raw) return null;
+            const parsed = new Date(String(raw).length === 10 ? `${raw}T12:00:00` : raw);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const receitas = (db.receitasFuturas || []).filter(i => {
+            const date = parseForecastDate(i);
+            return validAmount(i) && !completedForecastStatuses.has(normalizedStatus(i)) && date && date >= today;
+        });
+        // A pending item without a valid date is not allowed to change the
+        // decision card. It remains visible in the agenda for correction.
+        const contas = (db.agendamentos || []).filter(i => {
+            const date = parseForecastDate(i);
+            return validAmount(i) && !completedForecastStatuses.has(normalizedStatus(i)) && i.tipo !== 'receita' && date;
+        });
         const assinaturas = (db.assinaturas || []).filter(i => i.ativa !== false);
         const investimentos = db.investimentos || [];
         const parcelamentos = (db.transacoes || []).filter(t => t.isCartao && t.totalParcelas > 1 && t.parcelaAtual < t.totalParcelas);
@@ -547,14 +581,14 @@ export const PageRenderers = {
 
         const spendable = calculateSpendableAmount({
             currentBalance: Database.getTotals().saldo,
-            futureIncome: db.receitasFuturas,
-            pendingExpenses: (db.agendamentos || []).filter(item => item.status === 'pendente' && item.tipo !== 'receita'),
+            futureIncome: receitas,
+            pendingExpenses: contas,
             budgets: budget.orcamentos,
             spentByCategory: budget.gastosPorCat,
         });
         const dueDate = item => new Date(`${item.dataVencimento}T12:00:00`);
-        const upcoming = (db.agendamentos || [])
-            .filter(item => item.status === 'pendente' && item.tipo !== 'receita' && item.dataVencimento)
+        const upcoming = contas
+            .filter(item => item.dataVencimento)
             .filter(item => !Number.isNaN(dueDate(item).getTime()))
             .sort((a, b) => dueDate(a) - dueDate(b))
             .slice(0, 5);
@@ -613,6 +647,24 @@ export const PageRenderers = {
         }
 
         UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, db.reservas, db.agendamentos));
+    },
+
+    Investimentos: (appState) => {
+        const investments = Array.isArray(db.investimentos) ? db.investimentos : [];
+        const total = investments.reduce((sum, item) => sum + (Number(item.valorAtual) || 0), 0);
+        const contribution = investments.reduce((sum, item) => sum + (Number(item.aporte) || 0), 0);
+        const allocation = investments.length ? Math.round((contribution / Math.max(total, 1)) * 100) : 0;
+        const rows = investments.map(item => `<article class="nv-investment-row">
+            <span class="nv-investment-icon"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></span>
+            <div class="nv-investment-copy"><strong>${Utils.escapeHTML(item.nome || 'Investimento')}</strong><small>${Utils.escapeHTML(item.classe || 'Carteira')}${item.instituicao ? ` · ${Utils.escapeHTML(item.instituicao)}` : ''}</small></div>
+            <div class="nv-investment-value"><strong>${Utils.formatMoney(Number(item.valorAtual) || 0)}</strong><small>${item.aporte ? `Aporte ${Utils.formatMoney(Number(item.aporte) || 0)}` : 'Valor atual informado'}</small></div>
+            <button type="button" data-action="delete" data-col="investimentos" data-id="${Utils.escapeHTML(String(item.id))}" class="nv-investment-delete" aria-label="Excluir ${Utils.escapeHTML(item.nome || 'investimento')}" title="Excluir"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
+        </article>`).join('');
+        UIRenderer.updateDOM('main-content', `
+            ${renderPageHeader({ eyebrow: 'Patrimônio', title: 'Investimentos', subtitle: 'Acompanhe a carteira e seus aportes sem misturar patrimônio com saldo disponível.', className: 'nv-investments-header', actions: [{ label: 'Novo investimento', icon: 'fa-plus', action: 'openModal', variant: 'primary', attributes: { 'data-modal': 'modal-investimento' } }] })}
+            <section class="nv-investments-metrics" aria-label="Resumo dos investimentos"><article><span>Total investido</span><strong>${Utils.formatMoney(total)}</strong><small>Valor atual da carteira</small></article><article><span>Aportes registrados</span><strong>${Utils.formatMoney(contribution)}</strong><small>Entradas informadas manualmente</small></article><article><span>Posições ativas</span><strong>${investments.length}</strong><small>${allocation ? `${allocation}% do valor atual em aportes` : 'Cadastre uma posição para acompanhar'}</small></article></section>
+            <section class="nv-investments-panel" aria-labelledby="nv-investments-title"><header><div><p class="nv-investments-eyebrow">Carteira</p><h2 id="nv-investments-title">Ativos cadastrados</h2><p>Os valores são informativos e não movimentam as contas automaticamente.</p></div><span class="nv-investments-count">${investments.length} ${investments.length === 1 ? 'posição' : 'posições'}</span></header>${rows || `<div class="nv-investments-empty"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><strong>Nenhum investimento cadastrado</strong><p>Adicione uma posição para acompanhar seu patrimônio e revisar aportes.</p><button type="button" data-action="openModal" data-modal="modal-investimento">Adicionar investimento</button></div>`}</section>
+        `);
     },
 
     Metas: (appState) => {
@@ -715,7 +767,7 @@ export const PageRenderers = {
 
     Configuracoes: (appState) => {
         UIRenderer.updateDOM('main-content', `
-            ${renderPageHeader({ eyebrow: 'Sistema', title: 'Configurações', subtitle: 'Gerencie seu perfil, preferências e recursos de dados locais.', className: 'nv-standard-page-header nv-standard-page-header--settings' })}
+            ${renderPageHeader({ eyebrow: 'Sistema', title: 'Configurações', subtitle: 'Preferências, notificações e ferramentas de dados.', className: 'nv-standard-page-header nv-standard-page-header--settings nv-mockup-settings-header' })}
             ${Components.settingsPage(db, settingsGroups)}
         `);
     },
