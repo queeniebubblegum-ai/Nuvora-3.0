@@ -6,20 +6,20 @@ export const Notifications = {
     ...NotifEngine,
     ...NotifUI,
 
-    markRead: async (id) => {
-        await Database.markNotificationRead(id);
+    markRead: (id) => {
+        Database.markNotificationRead(id);
         Notifications.updateBadge();
         Notifications.renderList();
     },
 
-    markAllRead: async () => {
-        await Database.markAllNotificationsRead();
+    markAllRead: () => {
+        Database.markAllNotificationsRead();
         Notifications.updateBadge();
         Notifications.renderList();
     },
 
-    delete: async (id) => {
-        await Database.remove('notificacoes', id);
+    delete: (id) => {
+        Database.remove('notificacoes', id);
         Notifications.updateBadge();
         Notifications.renderList();
     }

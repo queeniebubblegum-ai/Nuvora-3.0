@@ -98,8 +98,7 @@ export const planCardInvoiceSchedules = ({
             const reconciliation = calculateReconciliation(
                 invoiceTransactions,
                 reconciliationRecord?.valorFaturaReal,
-                reconciliationRecord?.ajustes || [],
-                reconciliationRecord
+                reconciliationRecord?.ajustes || []
             );
             const hasRealAmount = reconciliation.realInvoiceAmount !== null;
             const rawTotal = hasRealAmount ? reconciliation.realInvoiceAmount : reconciliation.explainedTotal;

@@ -67,32 +67,32 @@ describe('mockup fields write into the existing financial model', () => {
         expect(Utils.showToast).toHaveBeenCalledWith('quota excedida', 'error');
     });
 
-    it('stores account kind and card last digits without requesting the complete card number', async () => {
-        await ContasController.submitBanco(eventFor(`
+    it('stores account kind and card last digits without requesting the complete card number', () => {
+        ContasController.submitBanco(eventFor(`
             <input id="banco-nome" value="Carteira"><input id="banco-saldo" value="50.25">
             <select id="banco-tipo"><option value="carteira">Carteira</option></select>`));
         expect(db.bancos[0]).toMatchObject({ nome: 'Carteira', tipo: 'carteira', saldo: 50.25 });
-        await ContasController.submitCartao(eventFor(`
+        ContasController.submitCartao(eventFor(`
             <select id="cartao-bancoId"><option value="bank-demo">Conta</option></select>
             <input id="cartao-nome" value="Cartão"><input id="cartao-limite" value="2000">
             <input id="cartao-dia-fech" value="28"><input id="cartao-dia-venc" value="5">
             <input id="cartao-final" value="0042">`));
         expect(db.cartoes[0]).toMatchObject({ bancoId: 'bank-demo', final: '0042' });
         document.getElementById('cartao-final').value = '12345';
-        await ContasController.submitCartao({ preventDefault() {} });
+        ContasController.submitCartao({ preventDefault() {} });
         expect(db.cartoes).toHaveLength(1);
     });
 
-    it('persists and edits distinct category keywords while keeping existing category identity', async () => {
+    it('persists and edits distinct category keywords while keeping existing category identity', () => {
         const submit = eventFor(`
             <input id="nova-categoria-id" value=""><input id="nova-categoria-nome" value="Pets">
             <input id="nova-categoria-palavras" value="Petshop, Ração; petshop">
             <select id="nova-categoria-tipo"><option value="despesa">Despesa</option></select>`);
-        await ContasController.submitCategoria(submit);
+        ContasController.submitCategoria(submit);
         expect(db.categorias[0].palavrasChave).toEqual(['petshop', 'ração']);
         document.getElementById('nova-categoria-id').value = db.categorias[0].id;
         document.getElementById('nova-categoria-palavras').value = 'Veterinário';
-        await ContasController.submitCategoria(submit);
+        ContasController.submitCategoria(submit);
         expect(db.categorias).toHaveLength(1);
         expect(db.categorias[0].palavrasChave).toEqual(['veterinário']);
     });

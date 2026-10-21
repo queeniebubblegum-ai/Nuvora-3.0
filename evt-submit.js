@@ -1,4 +1,3 @@
-import { Utils } from './utils.js';
 import { Controllers } from './controllers.js';
 import { SubmitGuard } from './submit-guard.js';
 
@@ -35,9 +34,7 @@ export const SubmitEvents = {
                 // Lock once at the delegated submit boundary. Controllers that
                 // schedule callback-based work call SubmitGuard.hold() after
                 // validation and release when that work completes.
-                const result = SubmitGuard.run(form, () => submitMap[action](e));
-                if (result?.catch) result.catch(error => Utils.showToast(error.message || 'Não foi possível salvar. Revise os dados e tente novamente.', 'error'));
-                if (!result) {
+                if (!SubmitGuard.run(form, () => submitMap[action](e))) {
                     e.preventDefault();
                 }
             }

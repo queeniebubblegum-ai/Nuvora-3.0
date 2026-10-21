@@ -1,4 +1,3 @@
-import { toCents, fromCents } from './money-math.js';
 import { db } from './db.js';
 import { Utils } from './utils.js';
 import { SubmitFeedback } from './submit-feedback.js';
@@ -101,8 +100,6 @@ export const UI = {
 
         const m = document.getElementById(id);
         if (m) {
-            m.querySelectorAll('input[type="date"]').forEach(field => { if (!field.value && !field.disabled) field.value = Utils.localISODate(); });
-            if (id === 'modal-cartao') { const title = m.querySelector('h2,h3'); if (title) title.textContent = 'Novo cartão'; }
             ModalDesign.enhance(m);
             const active = document.activeElement;
             UI.modalReturnFocus[id] = active && active !== document.body ? active : null;
@@ -253,22 +250,6 @@ export const UI = {
         const txId = t.codigoRef || `TX-${t.id.toString(36).substring(0,6).toUpperCase()}`;
         document.getElementById('edit-codigo-ref').innerText = `#${txId}`;
         
-        const purchaseOptions = document.getElementById('edit-purchase-options');
-        if (purchaseOptions) {
-            purchaseOptions.hidden = !(t.isCartao && t.totalParcelas > 1);
-            document.getElementById('edit-purchase-scope').value = 'one';
-            const remaining = db.transacoes.filter(row => row.isCartao && String(row.grupoId) === String(t.grupoId) && Number(row.parcelaAtual) >= Number(t.parcelaAtual));
-            document.getElementById('edit-purchase-total').value = fromCents(remaining.reduce((sum,row) => sum + toCents(row.valor), 0)).toFixed(2);
-            document.getElementById('edit-purchase-explanation').textContent = `A partir da parcela ${t.parcelaAtual}: ${remaining.length} parcela(s). A redistribuição muda apenas o valor dessas parcelas; datas, parcelas anteriores e valor original da compra são preservados.`;
-        }
-        let history = document.getElementById('transaction-change-history');
-        if (!history) {
-            history = document.createElement('details'); history.id = 'transaction-change-history';
-            document.querySelector('#modal-editar-transacao form')?.prepend(history);
-        }
-        const entries = (db.historicoAlteracoes || []).filter(change => change.collection === 'transacoes' && change.entityId === String(t.id));
-        history.innerHTML = `<summary>Histórico de alterações (${entries.length})</summary><p>Registrado localmente. Retido até a limpeza dos dados ou substituição por backup.</p>${entries.map(change => `<p>${Utils.escapeHTML(new Date(change.at).toLocaleString('pt-BR'))} · ${change.before ? `${Utils.formatMoney(change.before.valor)} → ${Utils.formatMoney(change.after?.valor || 0)}` : 'Lançamento criado'} · ${Utils.escapeHTML(change.before?.desc || '')} → ${Utils.escapeHTML(change.after?.desc || 'Excluído')}</p>`).join('')}`;
-        if (t.isCartao && t.totalParcelas > 1) history.insertAdjacentHTML('afterbegin', `<p>Por padrão, esta edição altera somente a parcela ${Number(t.parcelaAtual)} de ${Number(t.totalParcelas)}. Valor original da compra: ${Utils.formatMoney(t.valorOriginal ?? 0)}. As demais parcelas serão preservadas.</p>`);
         UI.openModal('modal-editar-transacao');
     },
 

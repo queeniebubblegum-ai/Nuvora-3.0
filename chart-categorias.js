@@ -4,7 +4,6 @@ import { parseLocalDate } from './util-date.js';
 
 export const ChartCategorias = {
     renderReportChart: (instances) => {
-        if (typeof globalThis.Chart !== 'function') return;
         const ctxCat = document.getElementById('reportsCatChart');
         if (!ctxCat) return;
 
@@ -21,7 +20,7 @@ export const ChartCategorias = {
         const bgColors = ['#CDBCF2', '#D8C8F8', '#E5DAFB', '#E6E8EF', '#D9D9E3', '#B8A6D9', '#6C3BB6', '#1F0F42'];
         
         if (instances.reportsCategoria) instances.reportsCategoria.destroy();
-        instances.reportsCategoria = new globalThis.Chart(ctxCat, {
+        instances.reportsCategoria = new Chart(ctxCat, {
             type: 'doughnut',
             data: { labels: labels, datasets: [{ data: data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#FFFFFF', hoverOffset: 4 }] },
             options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } }
@@ -29,7 +28,6 @@ export const ChartCategorias = {
     },
 
     renderPageChart: (db) => {
-        if (typeof globalThis.Chart !== 'function') return;
         const ctx = document.getElementById('categoriasPageChart');
         if (!ctx) return;
         
@@ -71,7 +69,7 @@ export const ChartCategorias = {
 
         const isDark = document.documentElement.classList.contains('dark');
 
-        window.categoriasPageChartInstance = new globalThis.Chart(ctx, {
+        window.categoriasPageChartInstance = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: labels,

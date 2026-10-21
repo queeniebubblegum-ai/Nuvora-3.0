@@ -13,7 +13,6 @@ const formatAxisMoney = value => {
 
 export const ChartCompare = {
     render: (state, instances) => {
-        if (typeof globalThis.Chart !== 'function') return;
         const ctxComp = document.getElementById('reportsCompChart');
         if (!ctxComp) return;
 
@@ -32,7 +31,7 @@ export const ChartCompare = {
         if (instances.reportsCompare) instances.reportsCompare.destroy();
         const text = cssToken('--c-text-secondary', '#65716B');
         const border = cssToken('--c-border', '#DCE2DB');
-        instances.reportsCompare = new globalThis.Chart(ctxComp, {
+        instances.reportsCompare = new Chart(ctxComp, {
             type: 'bar',
             data: { labels: months, datasets: [
                 { label: 'Receitas', data: incomes, backgroundColor: cssToken('--c-success', '#4E8065'), borderRadius: 4 },

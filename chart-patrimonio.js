@@ -10,7 +10,6 @@ const formatAxisMoney = value => {
 
 export const ChartPatrimonio = {
     render: (state, dbData, instances) => {
-        if (typeof globalThis.Chart !== 'function') return;
         const ctxPatr = document.getElementById('reportsPatrimonioChart');
         if (!ctxPatr) return;
         const periodPatr = state.reportPeriod || 6;
@@ -31,7 +30,7 @@ export const ChartPatrimonio = {
         const border = cssToken('--c-border', '#DCE2DB');
         const brand = cssToken('--c-brand-medium', '#8170B5');
         const info = cssToken('--c-info', '#5F7F9B');
-        instances.reportsPatrimonio = new globalThis.Chart(ctxPatr, {
+        instances.reportsPatrimonio = new Chart(ctxPatr, {
             type: 'line',
             data: { labels: months, datasets: [
                 { label: 'Saldo Bancário', data: sBancario, borderColor: info, backgroundColor: `${info}22`, fill: true, tension: 0.3 },

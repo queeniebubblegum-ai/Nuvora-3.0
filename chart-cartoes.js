@@ -12,7 +12,6 @@ const formatAxisMoney = value => {
 
 export const ChartCartoes = {
     render: (state, instances) => {
-        if (typeof globalThis.Chart !== 'function') return;
         const ctxCart = document.getElementById('reportsCartoesChart');
         if (!ctxCart) return;
         const periodCart = state.reportPeriod || 6;
@@ -27,7 +26,7 @@ export const ChartCartoes = {
         if (instances.reportsCartoes) instances.reportsCartoes.destroy();
         const text = cssToken('--c-text-secondary', '#65716B');
         const border = cssToken('--c-border', '#DCE2DB');
-        instances.reportsCartoes = new globalThis.Chart(ctxCart, {
+        instances.reportsCartoes = new Chart(ctxCart, {
             type: 'bar',
             data: { labels: months, datasets: [{ label: 'Faturas', data, backgroundColor: cssToken('--c-warning', '#B97835'), barThickness: 40, borderRadius: 4 }] },
             options: {

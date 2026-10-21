@@ -82,8 +82,8 @@ describe('financial workspace integration', () => {
         const database = { cartoes: [{ id: 'c', nome: 'Cartão', fechamento: 20 }], transacoes: [{ id: 'outside', bancoId: 'c', isCartao: true, valor: 900, data: '2026-10-25' }, { id: 'inside', bancoId: 'c', isCartao: true, valor: 100, data: '2026-09-25' }], conciliacoesFaturas: [{ chave: 'c:2026-10', valorFaturaReal: 100, ajustes: [] }] };
         const result = getReconciliationWorkspaceData(database, { workspaceReconciliationMonth: 9, workspaceReconciliationYear: 2026 });
         expect(result.selected.transactions.map(item => item.id)).toEqual(['inside']);
-        expect(result.selected.status).toBe('aguardando conferência');
-        expect(result.reconciledCount).toBe(0);
+        expect(result.selected.status).toBe('conciliada');
+        expect(result.reconciledCount).toBe(1);
         expect(renderReconciliationWorkspace(database, { workspaceReconciliationMonth: 9, workspaceReconciliationYear: 2026 })).not.toContain('conciliado auto');
     });
 

@@ -1,17 +1,11 @@
-import { validateReferenceLink, pendingReferenceRows } from './reference-matching.js';
-import { bankBalanceAtDate, bankConferenceFingerprint } from './conferencing-model.js';
 import { CATEGORIAS_PADRAO, getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
-import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment, getInvoicePeriod } from './reconciliation.js';
+import { calculateReconciliation, invoiceReconciliationKey, listInvoiceTransactions, normalizeAdjustment } from './reconciliation.js';
 import { calculatePeriodTotals, isIncome, isInvoicePayment, isTransfer } from './financial-ledger.js';
 import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
 import { createTransfer, isValidTransferDate } from './financial-transfers.js';
 import { parseLocalDate } from './util-date.js';
 import { auditDatabase, reconcileBalances } from './financial-integrity.js';
 import { CURRENT_SCHEMA_VERSION, migrateDatabaseSnapshot } from './schema-migrations.js';
-import { buildInvoicePaymentTransaction, isValidInvoicePaymentDate } from './invoice-payment.js';
-import { cardInvoiceDueDate } from './invoice-provisioning.js';
-import { invoiceCycleForDate, invoicePaymentKey, invoiceModel } from './invoice-model.js';
-import { reconciliationFingerprint, transactionFingerprint } from './reconciliation.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -29,14 +23,12 @@ const initialDB = {
     cartoes: [],
     // Conferência é independente de agendamentos/status de pagamento.
     conciliacoesFaturas: [],
-    historicoAlteracoes: [],
-    conferencias: [],
     metas: [],
     reservas: [],
     orcamentos: [],
     notificacoes: [],
     agendamentos: [], 
-    categorias: CATEGORIAS_PADRAO.map(c => ({ ...c, paiId: c.paiId || null, tipo: c.grupo === 'Renda' ? 'receita' : c.tipo })),
+    categorias: CATEGORIAS_PADRAO,
     configNotificacoes: {
         contasAtivo: true, contasDias: 3,
         orcamentoAtivo: true, orcamentoPct: 80,
@@ -63,61 +55,23 @@ let Cache = {
 
 const IDB_NAME = 'NuvoraDB';
 const IDB_STORE = 'keyval';
-// New writes require the revision protocol; an old v2 tab must close before
-// it can coexist with this schema. Otherwise its legacy writes bypass CAS.
-const IDB_VERSION = 3;
-let databaseLoaded = false;
-let persistedRevision = 0;
-const revisionChannel = typeof indexedDB !== 'undefined' && typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('avenera:database-revision') : null;
-if (revisionChannel) revisionChannel.onmessage = event => {
-    if (Number(event.data) > persistedRevision) document.dispatchEvent(new Event('avenera:data-conflict'));
-};
-
-export class DataConflictError extends Error {
-    constructor() {
-        super('Os dados mudaram em outra aba. Sua alteração não foi salva. Atualize os dados e revise o formulário ou rascunho antes de tentar novamente.');
-        this.name = 'DataConflictError';
-    }
-}
+const IDB_VERSION = 2;
 
 const IDB = {
     _db: null,
-    _memoryStore: {},
-    snapshot: () => new Promise((resolve, reject) => {
-        if (typeof indexedDB === 'undefined') return resolve(structuredClone(IDB._memoryStore));
-        const tx = IDB._db.transaction(IDB_STORE, 'readonly');
-        const result = {};
-        collections.forEach(key => {
-            const req = tx.objectStore(IDB_STORE).get(key);
-            req.onsuccess = () => { if (req.result !== undefined) result[key] = req.result; };
-        });
-        tx.oncomplete = () => resolve(result);
-        tx.onerror = () => reject(tx.error);
-        tx.onabort = () => reject(tx.error || new Error('Não foi possível ler os dados.'));
-    }),
+    _memoryStore: {}, 
     init: () => new Promise((resolve, reject) => {
         if (typeof indexedDB === 'undefined') return resolve(); 
         if (IDB._db) return resolve();
         
         const req = indexedDB.open(IDB_NAME, IDB_VERSION);
-        let blocked = false;
-        req.onblocked = () => {
-            blocked = true;
-            reject(new Error('Feche as outras abas antigas da Avenera e recarregue esta página para concluir a atualização com segurança. Seus dados foram mantidos.'));
-        };
         req.onupgradeneeded = (e) => {
             if (!e.target.result.objectStoreNames.contains(IDB_STORE)) {
                 e.target.result.createObjectStore(IDB_STORE);
             }
         };
         req.onsuccess = (e) => {
-            if (blocked) { e.target.result.close(); return; }
             IDB._db = e.target.result;
-            IDB._db.onversionchange = () => {
-                IDB._db.close();
-                IDB._db = null;
-                document.dispatchEvent(new Event('avenera:data-conflict'));
-            };
             resolve();
         };
         req.onerror = () => reject(req.error);
@@ -136,14 +90,13 @@ const IDB = {
         }
         const tx = IDB._db.transaction(IDB_STORE, 'readwrite');
         const req = tx.objectStore(IDB_STORE).put(value, key);
-        tx.oncomplete = () => resolve();
-        tx.onabort = () => reject(tx.error || new Error('Salvamento interrompido.'));
+        req.onsuccess = () => resolve();
         req.onerror = () => reject(req.error);
     }),
-    setMany: (entries, expectedRevision = databaseLoaded ? persistedRevision : null, clearStore = false) => new Promise((resolve, reject) => {
+    setMany: entries => new Promise((resolve, reject) => {
         if (typeof indexedDB === 'undefined') {
             try {
-                const nextStore = clearStore ? {} : { ...IDB._memoryStore };
+                const nextStore = { ...IDB._memoryStore };
                 entries.forEach(([key, value]) => { nextStore[key] = value; });
                 IDB._memoryStore = nextStore;
                 resolve();
@@ -154,36 +107,11 @@ const IDB = {
         }
         const tx = IDB._db.transaction(IDB_STORE, 'readwrite');
         const store = tx.objectStore(IDB_STORE);
-        let conflict = false;
-        let nextRevision;
-        tx.oncomplete = () => {
-            if (nextRevision !== undefined) {
-                persistedRevision = nextRevision;
-                db.metadados = { ...db.metadados, revision: nextRevision };
-            }
-            resolve();
-        };
+        tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error || new Error('Falha ao salvar transferência.'));
-        tx.onabort = () => reject(conflict ? new DataConflictError() : tx.error || new Error('Transação interrompida ao salvar.'));
+        tx.onabort = () => reject(tx.error || new Error('Transação interrompida ao salvar transferência.'));
         try {
-            // The revision comparison and all writes share ONE read/write
-            // transaction. Two tabs cannot both commit the same revision.
-            const request = store.get('metadados');
-            request.onsuccess = () => {
-                const currentRevision = Number(request.result?.revision || 0);
-                if (expectedRevision !== null && currentRevision !== expectedRevision) {
-                    conflict = true;
-                    tx.abort();
-                    return;
-                }
-                nextRevision = currentRevision + 1;
-                try {
-                    if (clearStore) store.clear();
-                    entries.filter(([key]) => key !== 'metadados').forEach(([key, value]) => store.put(value, key));
-                    const metadata = entries.find(([key]) => key === 'metadados')?.[1] || request.result || {};
-                    store.put({ ...metadata, revision: nextRevision }, 'metadados');
-                } catch (error) { tx.abort(); reject(error); }
-            };
+            entries.forEach(([key, value]) => store.put(value, key));
         } catch (error) {
             try { tx.abort(); } catch (_) {}
             reject(error);
@@ -245,12 +173,9 @@ const tagLegacyGoalReserveTransfers = () => {
 
 const loadData = async () => {
     await IDB.init();
-    const storedSnapshot = await IDB.snapshot();
-    const migratedKeys = [];
-    persistedRevision = Number(storedSnapshot.metadados?.revision || 0);
 
     for (const col of collections) {
-        let data = storedSnapshot[col];
+        let data = await IDB.get(col);
 
         if (!data) {
             let stored = null;
@@ -261,15 +186,15 @@ const loadData = async () => {
             if (stored) {
                 try {
                     data = JSON.parse(stored);
-
-                    if (typeof localStorage !== 'undefined') migratedKeys.push(DB_PREFIX + col);
+                    await IDB.set(col, data); 
+                    if (typeof localStorage !== 'undefined') localStorage.removeItem(DB_PREFIX + col); 
                 } catch (error) {
                     data = initialDB[col];
-
+                    await IDB.set(col, data); 
                 }
             } else {
                 data = initialDB[col];
-
+                await IDB.set(col, data); 
             }
         }
         
@@ -290,7 +215,7 @@ const loadData = async () => {
         collections.forEach(col => {
             if (migrated.database[col] !== undefined) db[col] = migrated.database[col];
         });
-
+        await IDB.setMany(collections.map(col => [col, db[col]]));
     }
 
     let goalsChanged = false;
@@ -317,14 +242,14 @@ const loadData = async () => {
     });
     const legacyGoalTransfersChanged = tagLegacyGoalReserveTransfers();
     if (goalsChanged || reservesChanged) {
-
+        await IDB.setMany([['metas', db.metas], ['reservas', db.reservas], ...(legacyGoalTransfersChanged ? [['transacoes', db.transacoes]] : [])]);
     } else if (legacyGoalTransfersChanged) {
-
+        await IDB.set('transacoes', db.transacoes);
     }
 
     if (db.categorias.length === 0) {
         db.categorias = CATEGORIAS_PADRAO.map(c => ({ ...c }));
-
+        await IDB.set('categorias', db.categorias);
     }
 
     if (db.categorias.length > 0) {
@@ -355,7 +280,7 @@ const loadData = async () => {
             };
             return { ...merged, icone: getCategoriaIcon(merged) };
         }).filter(Boolean);
-
+        await IDB.set('categorias', db.categorias);
     }
 
     let oldCardExpensesStr = null;
@@ -394,30 +319,24 @@ const loadData = async () => {
                     (parseLocalDate(b.data || b.id)?.getTime() ?? -Infinity) -
                     (parseLocalDate(a.data || a.id)?.getTime() ?? -Infinity)
                 );
-
+                IDB.set('transacoes', db.transacoes).catch(console.error);
             }
             if (typeof localStorage !== 'undefined') {
-                migratedKeys.push(DB_PREFIX + 'comprasCartao');
+                localStorage.removeItem(DB_PREFIX + 'comprasCartao');
             }
         } catch(e) {
             console.error('Erro na normalização de cartões:', e);
         }
     }
-    if (db.usuario?.fotoUrl === 'assets/perfil.png') db.usuario.fotoUrl = 'assets/perfil.svg';
-    if (JSON.stringify(storedSnapshot) !== JSON.stringify(Object.fromEntries(collections.map(col => [col, db[col]])))) {
-        await IDB.setMany(collections.map(col => [col, db[col]]), persistedRevision);
-    }
-    migratedKeys.forEach(key => localStorage.removeItem(key));
-    databaseLoaded = true;
 };
 
-for (let attempt = 0; ; attempt++) {
-    try { await loadData(); break; }
-    catch (error) { if (!(error instanceof DataConflictError) || attempt >= 2) throw error; }
-}
+await loadData();
 
 // Migra o caminho antigo do avatar para o asset atual.
-
+if (db.usuario && db.usuario.fotoUrl === 'assets/perfil.png') {
+    db.usuario.fotoUrl = 'assets/perfil.svg';
+    IDB.set('usuario', db.usuario).catch(console.error);
+}
 
 Object.defineProperty(db, 'comprasCartao', {
     get: function() {
@@ -437,10 +356,20 @@ Object.defineProperty(db, 'comprasCartao', {
     }
 });
 
-let capturingLegacyMutation = false;
-const persist = col => {
-    if (capturingLegacyMutation) return;
-    return enqueueTransactionMutation(() => persistAtomically(col ? [col] : collections));
+const persist = (col) => {
+    // This timestamp is written only from mutation paths, never from render.
+    // It therefore remains a trustworthy freshness signal across reloads.
+    db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
+    IDB.set('metadados', db.metadados).catch(console.error);
+    if (col && db[col] !== undefined) {
+        IDB.set(col, db[col]).catch(console.error);
+    } else {
+        collections.forEach(c => IDB.set(c, db[c]).catch(console.error));
+    }
+    clearCache();
+    if (typeof document !== 'undefined') {
+        document.dispatchEvent(new Event('db-updated'));
+    }
 };
 
 const persistAtomically = async (cols, writer = entries => IDB.setMany(entries)) => {
@@ -454,7 +383,6 @@ const persistAtomically = async (cols, writer = entries => IDB.setMany(entries))
         throw error;
     }
     clearCache();
-    revisionChannel?.postMessage(persistedRevision);
     if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
 };
 
@@ -463,7 +391,9 @@ const NO_TRANSACTION_MUTATION = Symbol('no-transaction-mutation');
 let transactionPersistenceWriter = entries => IDB.setMany(entries);
 let transactionMutationQueue = Promise.resolve();
 
-const cloneCollectionForRollback = value => value === undefined ? undefined : structuredClone(value);
+const cloneCollectionForRollback = value => Array.isArray(value)
+    ? value.map(item => item && typeof item === 'object' ? { ...item } : item)
+    : value && typeof value === 'object' ? { ...value } : value;
 
 const snapshotTransactionState = (cols = TRANSACTION_PERSIST_COLLECTIONS) => Object.fromEntries(
     [...new Set([...TRANSACTION_PERSIST_COLLECTIONS, ...cols, 'metadados'])].map(col => [col, cloneCollectionForRollback(db[col])])
@@ -483,57 +413,12 @@ const enqueueTransactionMutation = run => {
     return operation;
 };
 
-const recordFinancialChanges = snapshot => {
-    // A local change journal shares the financial commit and rollback.
-    const changes = [];
-    for (const col of ['transacoes', 'bancos', 'cartoes', 'conciliacoesFaturas', 'conferencias']) {
-        const before = new Map((snapshot[col] || []).map(item => [String(item.id ?? item.chave), item]));
-        const after = new Map((db[col] || []).map(item => [String(item.id ?? item.chave), item]));
-        for (const id of new Set([...before.keys(), ...after.keys()])) {
-            if (JSON.stringify(before.get(id)) !== JSON.stringify(after.get(id))) changes.push({
-                id: globalThis.crypto?.randomUUID?.() || `change-${Date.now()}-${Math.random()}`,
-                collection: col, entityId: id, at: new Date().toISOString(),
-                before: before.get(id) || null, after: after.get(id) || null
-            });
-        }
-    }
-    const changedTransactionIds = new Set(changes.filter(c => c.collection === 'transacoes').map(c => c.entityId));
-    if (changedTransactionIds.size) {
-        for (const record of [...(db.conferencias || []), ...(db.conciliacoesFaturas || [])]) {
-            for (const field of ['decisions', 'verificacoes']) {
-                if (Object.keys(record[field] || {}).some(id => changedTransactionIds.has(id))) {
-                    record[field] = Object.fromEntries(Object.entries(record[field]).filter(([id]) => !changedTransactionIds.has(id)));
-                    record.confirmedAt = null;
-                    record.reopenedAt = new Date().toISOString();
-                }
-            }
-        }
-    }
-    if (changes.some(change => change.collection === 'transacoes' || change.collection === 'bancos')) {
-        db.conferencias = (db.conferencias || []).map(record => {
-            if (!record.confirmedAt) return record;
-            const bank = db.bancos.find(b => String(b.id) === String(record.bankId));
-            const items = db.transacoes.filter(t => !t.isCartao && String(t.bancoId) === String(record.bankId) && t.data?.startsWith(record.period) && t.data <= record.asOf);
-            const balance = bankBalanceAtDate(db, bank, record.asOf, new Date().toLocaleDateString('en-CA'));
-            return balance !== null && record.confirmedFingerprint === bankConferenceFingerprint(items, balance, record.reference, record.asOf)
-                ? record : { ...record, confirmedAt: null, reopenedAt: new Date().toISOString() };
-        });
-    }
-    const removedIds = new Set(changes.filter(c => c.collection === 'transacoes' && !c.after).map(c => c.entityId));
-    if (removedIds.size) for (const record of db.conciliacoesFaturas || []) {
-        record.ajustes = (record.ajustes || []).map(adjustment => removedIds.has(String(adjustment.transactionId))
-            ? { ...adjustment, transactionId: null, lancamentoCriado: false, unpostedAt: new Date().toISOString() } : adjustment);
-    }
-    if (changes.length) db.historicoAlteracoes = [...changes, ...(db.historicoAlteracoes || [])];
-};
-
 const commitTransactionMutation = (mutate, cols = TRANSACTION_PERSIST_COLLECTIONS) => enqueueTransactionMutation(async () => {
-    const snapshot = snapshotTransactionState(collections);
+    const snapshot = snapshotTransactionState(cols);
     try {
         const result = mutate();
         if (result === NO_TRANSACTION_MUTATION) return false;
-        recordFinancialChanges(snapshot);
-        await persistAtomically([...cols, 'historicoAlteracoes', 'conferencias', 'conciliacoesFaturas'], transactionPersistenceWriter);
+        await persistAtomically(cols, transactionPersistenceWriter);
         return result;
     } catch (error) {
         restoreTransactionState(snapshot);
@@ -547,8 +432,22 @@ export const __setTransactionPersistenceWriterForTests = writer => {
     transactionPersistenceWriter = typeof writer === 'function' ? writer : entries => IDB.setMany(entries);
 };
 
-const transferStateSnapshot = () => snapshotTransactionState(collections);
-const restoreTransferState = snapshot => restoreTransactionState(snapshot);
+const transferStateSnapshot = () => ({
+    transacoes: db.transacoes.map(item => ({ ...item })),
+    bancos: db.bancos.map(item => ({ ...item })),
+    reservas: (db.reservas || []).map(item => ({ ...item })),
+    metas: db.metas.map(item => ({ ...item })),
+    metadados: { ...(db.metadados || {}) }
+});
+
+const restoreTransferState = snapshot => {
+    db.transacoes = snapshot.transacoes;
+    db.bancos = snapshot.bancos;
+    db.reservas = snapshot.reservas;
+    db.metas = snapshot.metas;
+    db.metadados = snapshot.metadados;
+    clearCache();
+};
 
 const applyBalanceDelta = (t, isReverse = false, shouldPersist = true) => {
     // A confirmed statement balance is an absolute anchor that already includes
@@ -584,7 +483,7 @@ const resolveTransferAccount = id => ({
 
 const isUnpairedTransfer = item => isTransfer(item) && !isInvoicePayment(item) && !item?.transferenciaId;
 
-const TRANSFER_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas', 'historicoAlteracoes', 'conferencias', 'conciliacoesFaturas'];
+const TRANSFER_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas'];
 
 const isValidTransferPair = legs => {
     if (!Array.isArray(legs) || legs.length !== 2) return false;
@@ -617,7 +516,7 @@ const isValidTransferPair = legs => {
 };
 
 export const TransferRepo = {
-    add: ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null, transferId } = {}) => enqueueTransactionMutation(async () => {
+    add: ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null } = {}) => enqueueTransactionMutation(async () => {
         const source = resolveTransferAccount(sourceAccountId);
         const destination = resolveTransferAccount(destinationAccountId);
         if ((!source.bank && !source.reserve) || (!destination.bank && !destination.reserve)) {
@@ -631,7 +530,7 @@ export const TransferRepo = {
         }
         if (goalId != null) throw new Error('Aporte em meta deve ser registrado como alocação virtual.');
 
-        const legs = createTransfer({ sourceAccountId, destinationAccountId, amount, date, description, transferId });
+        const legs = createTransfer({ sourceAccountId, destinationAccountId, amount, date, description });
         if (!isValidTransferPair(legs) || db.transacoes.some(item => String(item.transferenciaId) === String(legs[0].transferenciaId)) || legs.some(leg => db.transacoes.some(item => String(item.id) === String(leg.id)))) {
             throw new Error('Não foi possível criar um par de transferência íntegro.');
         }
@@ -642,7 +541,6 @@ export const TransferRepo = {
                 applyBalanceDelta(leg, false, false);
                 applyGoalReserveDelta(leg, 1);
             });
-            recordFinancialChanges(snapshot);
             await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
             return { ok: true, transferId: legs[0].transferenciaId, transactions: legs };
         } catch (error) {
@@ -683,7 +581,6 @@ export const TransferRepo = {
                 applyBalanceDelta(leg, false, false);
                 applyGoalReserveDelta(leg, 1);
             });
-            recordFinancialChanges(snapshot);
             await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
             return true;
         } catch (error) {
@@ -713,7 +610,6 @@ export const TransferRepo = {
                 applyGoalReserveDelta(leg, -1);
             });
             db.transacoes = db.transacoes.filter(item => !selected.has(String(item.id)) && !(item.transferenciaId && transferIds.has(String(item.transferenciaId))));
-            recordFinancialChanges(snapshot);
             await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
             return removed;
         } catch (error) {
@@ -742,7 +638,6 @@ export const TransferRepo = {
                 applyBalanceDelta(item, false, false);
                 applyGoalReserveDelta(item, 1);
             });
-            recordFinancialChanges(snapshot);
             await persistAtomically(TRANSFER_PERSIST_COLLECTIONS);
             return candidates.length;
         } catch (error) {
@@ -776,7 +671,6 @@ export const MentoriaRepo = {
 export const BankRepo = {
     add: (item) => { 
         if (!item || typeof item !== 'object' || !String(item.nome || '').trim()) return false;
-        if (item.id == null || db.bancos.some(bank => String(bank.id) === String(item.id))) throw new Error('Esta conta já existe ou tem um identificador inválido.');
         if (!Number.isFinite(Number(item.saldo))) return false;
         const novoBanco = {
             ...item,
@@ -792,16 +686,15 @@ export const BankRepo = {
     remove: (id) => { 
         const hasTransactions = db.transacoes.some(t => !t.isCartao && String(t.bancoId) === String(id));
         const hasCards = db.cartoes.some(c => String(c.bancoId) === String(id));
-        const hasForecasts = [...(db.agendamentos || []), ...(db.receitasFuturas || [])].some(item => String(item.bancoId) === String(id));
         const hasGoalAllocationHistory = (db.reservas || []).some(reserve =>
             (reserve.movimentos || []).some(movement => String(movement?.contaId) === String(id))
         );
-        if (hasTransactions || hasCards || hasGoalAllocationHistory || hasForecasts) return false;
+        if (hasTransactions || hasCards || hasGoalAllocationHistory) return false;
         db.bancos = db.bancos.filter(i => i.id.toString() !== id.toString()); 
         persist('bancos'); 
         return true;
     },
-    recalculateAll: () => commitTransactionMutation(() => {
+    recalculateAll: async () => {
         const changed = [];
         db.bancos = db.bancos.map(bank => {
             const opening = Number(bank?.saldoInicial);
@@ -820,8 +713,9 @@ export const BankRepo = {
             if (next !== bank.saldo) changed.push({ id: bank.id, before: bank.saldo, after: next });
             return { ...bank, saldo: next };
         });
+        if (changed.length) await persistAtomically(['bancos']);
         return changed;
-    }, ['bancos'])
+    }
 };
 
 export const TransactionsRepo = {
@@ -856,10 +750,6 @@ export const TransactionsRepo = {
                 bank.saldo = fromCents(toCents(balance));
             }
             const added = incoming.map(item => {
-                if (item.id == null || db.transacoes.some(t => String(t.id) === String(item.id))) {
-                    throw new Error('Este identificador de lançamento já existe. Nenhuma duplicata foi salva.');
-                }
-                if (!Number.isFinite(Number(item.valor)) || !Number.isSafeInteger(toCents(item.valor)) || toCents(item.valor) < 0 || (item.data && !isValidInvoicePaymentDate(item.data))) throw new Error('Confira o valor e a data dos lançamentos.');
                 const transaction = { ...item };
                 if (!transaction.codigoRef) transaction.codigoRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
                 db.transacoes.unshift(transaction);
@@ -901,8 +791,6 @@ export const TransactionsRepo = {
     },
 
     addCardExpense: purchase => {
-        const card = db.cartoes.find(c => String(c.id) === String(purchase.cartaoId));
-        if (!card) return Promise.reject(new Error('Cartão não encontrado.'));
         const quantity = Math.max(1, Number.parseInt(purchase.parcelas, 10) || 1);
         const installmentValues = splitInstallments(purchase.total, quantity);
         const originalDate = new Date(purchase.data + 'T12:00:00');
@@ -916,7 +804,7 @@ export const TransactionsRepo = {
             installmentDate.setMonth(originalDate.getMonth() + i);
             if (installmentDate.getDate() !== originalDay) installmentDate.setDate(0);
             rows.push({
-                id: purchase.id ? `${purchase.id}-${i + 1}` : groupId + i,
+                id: groupId + i,
                 desc: purchase.desc,
                 valor: installmentValues[i],
                 tipo: 'despesa',
@@ -925,9 +813,6 @@ export const TransactionsRepo = {
                 isCartao: true,
                 formaPagamento: 'Cartão de Crédito',
                 data: installmentDate.toISOString().split('T')[0],
-                dataCompra: purchase.data,
-                valorOriginal: fromCents(toCents(purchase.total)),
-                faturaChave: invoiceCycleForDate(card, installmentDate.toISOString().split('T')[0]),
                 parcelaAtual: i + 1,
                 totalParcelas: quantity,
                 recorrente: quantity > 1,
@@ -940,49 +825,16 @@ export const TransactionsRepo = {
     },
 
     update: (id, newData) => {
-        if (!newData || typeof newData !== 'object' || Array.isArray(newData)) return Promise.resolve(false);
         const current = db.transacoes.find(item => String(item.id) === String(id));
-        if (current?.transferenciaId) {
-            const { scope, purchaseTotal, ...transferData } = newData;
-            if (scope && scope !== 'one') return Promise.resolve(false);
-            return TransferRepo.update(id, transferData);
-        }
+        if (current?.transferenciaId) return TransferRepo.update(id, newData);
         if (current && isUnpairedTransfer(current)) return Promise.resolve(false);
         if (newData && (newData.transferenciaId || newData.transferenciaInterna === true || newData.tipo === 'transferencia' || newData.tipoTransferencia === 'interna')) return Promise.resolve(false);
         return commitTransactionMutation(() => {
             const index = db.transacoes.findIndex(item => String(item.id) === String(id));
             if (index < 0 || db.transacoes[index].transferenciaId || isUnpairedTransfer(db.transacoes[index])) return NO_TRANSACTION_MUTATION;
             const oldTransaction = db.transacoes[index];
-            const { scope = 'one', purchaseTotal, ...changes } = newData;
-            newData = changes;
-            if (scope === 'remaining') {
-                if (!oldTransaction.isCartao || !oldTransaction.grupoId) throw new Error('Este lançamento não pertence a uma compra parcelada.');
-                const card = db.cartoes.find(c => String(c.id) === String(oldTransaction.bancoId));
-                const selected = db.transacoes.filter(t => String(t.grupoId) === String(oldTransaction.grupoId) && t.isCartao && String(t.bancoId) === String(oldTransaction.bancoId) && Number(t.parcelaAtual) >= Number(oldTransaction.parcelaAtual))
-                    .sort((a,b) => Number(a.parcelaAtual) - Number(b.parcelaAtual));
-                if (!card || !selected.length || !Number.isFinite(Number(purchaseTotal)) || toCents(purchaseTotal) < selected.length || !Number.isSafeInteger(toCents(purchaseTotal))) throw new Error('Informe um total válido para as parcelas selecionadas.');
-                if (newData.data && newData.data !== oldTransaction.data) throw new Error('Para corrigir a data, selecione somente esta parcela. A redistribuição preserva as datas de cada fatura.');
-                if (selected.some(tx => {
-                    const key = tx.faturaChave || invoiceCycleForDate(card, tx.data);
-                    const [year,month] = key.slice(key.lastIndexOf(':') + 1).split('-').map(Number);
-                    return invoiceModel(db, card, year, month - 1).paid > 0 || db.agendamentos.some(s => s.status === 'pago' && invoicePaymentKey({ invoicePaymentAgendamentoId: s.id }, card, db.agendamentos) === key);
-                })) throw new Error('Há pagamento em uma das faturas selecionadas. Revise a parcela individualmente para preservar o histórico de pagamentos.');
-                const values = splitInstallments(purchaseTotal, selected.length);
-                const byId = new Map(selected.map((tx,i) => [String(tx.id), { ...tx, desc: newData.desc ?? tx.desc, categoria: newData.categoria ?? tx.categoria, contatoId: newData.contatoId ?? tx.contatoId, valor: values[i] }]));
-                db.transacoes = db.transacoes.map(tx => byId.get(String(tx.id)) || tx);
-                return true;
-            }
-            if (scope !== 'one') throw new Error('Selecione um escopo de alteração válido.');
-            if (oldTransaction.isCartao && newData.data && newData.data !== oldTransaction.data) {
-                const card = db.cartoes.find(c => String(c.id) === String(oldTransaction.bancoId));
-                if (card) newData = { ...newData, faturaChave: invoiceCycleForDate(card, newData.data) };
-            }
             applyBalanceDelta(oldTransaction, true, false);
             db.transacoes[index] = { ...oldTransaction, ...newData };
-            if (oldTransaction.isCartao && oldTransaction.reconciliationAdjustmentId) {
-                for (const record of db.conciliacoesFaturas || []) record.ajustes = (record.ajustes || []).map(a => String(a.id) === String(oldTransaction.reconciliationAdjustmentId)
-                    ? { ...a, amount: db.transacoes[index].valor, description: db.transacoes[index].desc } : a);
-            }
             applyBalanceDelta(db.transacoes[index], false, false);
             return true;
         });
@@ -1035,7 +887,6 @@ export const TransactionsRepo = {
 // behind when one of the scheduled records cannot be persisted.
 const addRecurringTransactionAtomically = (transaction, schedules = []) => commitTransactionMutation(() => {
     if (!transaction || typeof transaction !== 'object') return NO_TRANSACTION_MUTATION;
-    if (db.transacoes.some(t => String(t.id) === String(transaction.id))) throw new Error('Esta ocorrência já foi registrada. Nenhum débito foi repetido.');
     const normalizedSchedules = (Array.isArray(schedules) ? schedules : []).filter(item => item && typeof item === 'object');
     db.transacoes.unshift({ ...transaction });
     applyBalanceDelta(transaction, false, false);
@@ -1044,28 +895,10 @@ const addRecurringTransactionAtomically = (transaction, schedules = []) => commi
 }, ['transacoes', 'bancos', 'reservas', 'metas', 'agendamentos']);
 
 export const CardRepo = {
-    add: (item) => {
-        if (item.id == null || db.cartoes.some(c => String(c.id) === String(item.id))) throw new Error('Este cartão já existe.');
-        db.cartoes.unshift(item); persist('cartoes'); return true;
-    },
-    update: (id, data) => commitTransactionMutation(() => {
-        const card = db.cartoes.find(c => String(c.id) === String(id));
-        if (!card || !db.bancos.some(b => String(b.id) === String(data.bancoId))) throw new Error('Cartão ou conta vinculada não encontrado.');
-        const hasHistory = db.transacoes.some(t => t.isCartao && String(t.bancoId) === String(id));
-        const closing = Number(data.fechamento ?? card.fechamento), due = Number(data.vencimento ?? card.vencimento);
-        if (!Number.isInteger(closing) || closing < 1 || closing > 31 || !Number.isInteger(due) || due < 1 || due > 31) throw new Error('Informe fechamento e vencimento entre 1 e 31.');
-        if (hasHistory && (due !== Number(card.vencimento) || (due <= closing) !== (Number(card.vencimento) <= Number(card.fechamento)))) {
-            throw new Error('Esta mudança altera o mês de vencimento de faturas existentes. Ela exige revisão dos ciclos históricos e foi bloqueada para preservar suas obrigações.');
-        }
-        // Pin existing cycles before changing the rules used by NEW purchases.
-        db.transacoes = db.transacoes.map(t => t.isCartao && String(t.bancoId) === String(id) && !t.faturaChave ? { ...t, faturaChave: invoiceCycleForDate(card, t.data) } : t);
-        Object.assign(card, data, { id: card.id });
-        return true;
-    }, ['cartoes', 'transacoes']),
+    add: (item) => { db.cartoes.unshift(item); persist('cartoes'); return true; },
     remove: (id) => {
         const hasTransactions = db.transacoes.some(t => t.isCartao && String(t.bancoId) === String(id));
-        const hasInvoiceHistory = (db.agendamentos || []).some(s => String(s.cartaoId) === String(id)) || (db.conciliacoesFaturas || []).some(r => String(r.cardId) === String(id));
-        if (hasTransactions || hasInvoiceHistory) return false;
+        if (hasTransactions) return false;
         db.cartoes = db.cartoes.filter(i => i.id.toString() !== id.toString());
         persist('cartoes');
         return true;
@@ -1079,86 +912,68 @@ export const ReconciliationRepo = {
         if (!Array.isArray(db.conciliacoesFaturas)) db.conciliacoesFaturas = [];
         const chave = invoiceReconciliationKey(cardId, year, month);
         const index = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
-        const current = index >= 0 ? db.conciliacoesFaturas[index] : { id: chave, chave, cardId, ano: year, mes: month };
+        const current = index >= 0 ? db.conciliacoesFaturas[index] : { chave, cardId, ano: year, mes: month };
         const ajustes = Array.isArray(current.ajustes) ? [...current.ajustes] : [];
         const normalized = normalizeAdjustment({ ...input, id: input.id || `aj-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, createdAt: input.createdAt || new Date().toISOString() });
         const adjustmentIndex = ajustes.findIndex(a => String(a.id) === String(normalized.id));
-        if (adjustmentIndex >= 0 && ajustes[adjustmentIndex].transactionId &&
-            (toCents(ajustes[adjustmentIndex].amount) !== toCents(normalized.amount) || ajustes[adjustmentIndex].effect !== normalized.effect || ajustes[adjustmentIndex].description !== normalized.description)) throw new Error('Este ajuste já possui lançamento vinculado. Revise o lançamento antes de substituir o ajuste.');
         if (adjustmentIndex >= 0) ajustes[adjustmentIndex] = { ...ajustes[adjustmentIndex], ...normalized };
         else ajustes.push(normalized);
-        const value = { ...current, id: current.id || chave, ajustes, atualizadoEm: new Date().toISOString() };
+        const value = { ...current, ajustes, atualizadoEm: new Date().toISOString() };
         if (index >= 0) db.conciliacoesFaturas[index] = value; else db.conciliacoesFaturas.unshift(value);
         persist('conciliacoesFaturas'); return normalized;
     },
-    /** Post an obligation adjustment, never an immediate bank movement. */
-    createAdjustmentTransaction: (cardId, year, month, adjustmentId) => commitTransactionMutation(() => {
+    /** Post an explicit invoice adjustment as one idempotent history transaction. */
+    createAdjustmentTransaction: async (cardId, year, month, adjustmentId) => {
+        const chave = invoiceReconciliationKey(cardId, year, month);
         const record = ReconciliationRepo.get(cardId, year, month);
-        const adjustment = record?.ajustes?.find(a => String(a.id) === String(adjustmentId));
+        const ajustes = record?.ajustes || [];
+        const index = ajustes.findIndex(a => String(a.id) === String(adjustmentId));
+        if (index < 0) return { ok: false, reason: 'adjustment-not-found' };
+        const adjustment = normalizeAdjustment(ajustes[index]);
+        if (adjustment.transactionId) {
+            const linked = db.transacoes.find(t => String(t.id) === String(adjustment.transactionId));
+            if (linked) return { ok: true, transaction: linked, alreadyExists: true };
+        }
+        const linked = db.transacoes.find(t => String(t.reconciliationAdjustmentId) === String(adjustment.id) && String(t.invoiceReconciliationKey) === chave);
+        if (linked) {
+            ajustes[index] = { ...ajustes[index], transactionId: String(linked.id), postedAt: ajustes[index].postedAt || new Date().toISOString(), lancamentoCriado: true };
+            persist('conciliacoesFaturas');
+            return { ok: true, transaction: linked, alreadyExists: true };
+        }
         const card = db.cartoes.find(c => String(c.id) === String(cardId));
-        if (!adjustment || !card) throw new Error('Ajuste ou cartão não encontrado.');
-        const existing = db.transacoes.find(t => String(t.reconciliationAdjustmentId) === String(adjustmentId) && t.invoiceReconciliationKey === record.chave);
-        if (existing) return { ok: true, transaction: existing, alreadyExists: true };
-        const dueDate = cardInvoiceDueDate(card, year, month);
-        const date = dueDate ? `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-${String(dueDate.getDate()).padStart(2, '0')}` : `${year}-${String(month + 1).padStart(2, '0')}-01`;
-        const transaction = {
-            id: `invoice-adjustment-${encodeURIComponent(record.chave)}-${encodeURIComponent(String(adjustment.id))}`,
-            desc: adjustment.description, valor: adjustment.amount,
-            tipo: adjustment.effect === 'credit' ? 'estorno-cartao' : 'despesa',
-            categoria: adjustment.effect === 'credit' ? 'Estorno' : 'Encargos financeiros',
-            isCartao: true, bancoId: card.id, data: date, faturaChave: record.chave,
-            invoiceReconciliationKey: record.chave, reconciliationAdjustmentId: adjustment.id,
-            origem: 'conciliacao_fatura', formaPagamento: 'Ajuste da obrigação do cartão',
-            parcelaAtual: 1, totalParcelas: 1
-        };
-        if (db.transacoes.some(t => String(t.id) === transaction.id)) throw new Error('Este identificador já existe. Revise o ajuste.');
-        db.transacoes.unshift(transaction);
-        record.ajustes = record.ajustes.map(a => a === adjustment ? { ...a, transactionId: transaction.id, postedAt: new Date().toISOString(), lancamentoCriado: true } : a);
-        record.atualizadoEm = new Date().toISOString();
+        const dueDay = Number(card?.vencimento || card?.diaVencimento || 0);
+        const dueDate = dueDay > 0 ? new Date(Number(year), Number(month), dueDay, 12) : null;
+        const periodEnd = new Date(Number(year), Number(month), Math.max(1, Math.min(31, Number(card?.fechamento || card?.diaFechamento || 31))), 12);
+        const date = (dueDate && !Number.isNaN(dueDate.getTime()) ? dueDate : periodEnd).toISOString().split('T')[0];
+        const isCredit = adjustment.effect === 'credit';
+        const categoryNames = adjustment.type === 'interest' ? ['Juros', 'Encargos financeiros'] : adjustment.type === 'fine' ? ['Multas', 'Multa'] : adjustment.type === 'fees' ? ['Taxas', 'Tarifas'] : adjustment.type === 'iof' ? ['IOF', 'Impostos'] : ['Outras despesas', 'Outros'];
+        const category = categoryNames.find(name => (db.categorias || []).some(c => String(c?.nome || c) === name)) || categoryNames[categoryNames.length - 1];
+        let txId = `tx-conciliacao-${encodeURIComponent(chave)}-${encodeURIComponent(String(adjustment.id))}`;
+        if (db.transacoes.some(t => String(t.id) === txId)) txId = `${txId}-${Date.now()}`;
+        const transaction = { id: String(txId), desc: adjustment.description || 'Ajuste de fatura', valor: adjustment.amount, tipo: isCredit ? 'receita' : 'despesa', categoria: isCredit ? 'Reembolso / estorno' : category, bancoId: card?.bancoId ?? null, isCartao: false, formaPagamento: 'Ajuste de fatura', data: date, parcelaAtual: 1, totalParcelas: 1, recorrente: false, invoiceReconciliationKey: chave, reconciliationAdjustmentId: String(adjustment.id), origem: 'conciliacao_fatura' };
+        const saved = await TransactionsRepo.add(transaction);
+        if (!saved) return { ok: false, reason: 'transaction-not-saved' };
+        ajustes[index] = { ...ajustes[index], transactionId: String(transaction.id), postedAt: new Date().toISOString(), lancamentoCriado: true };
+        const updated = { ...record, ajustes, atualizadoEm: new Date().toISOString() };
+        const recordIndex = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
+        db.conciliacoesFaturas[recordIndex] = updated;
+        persist('conciliacoesFaturas');
         return { ok: true, transaction, alreadyExists: false };
-    }, ['transacoes', 'conciliacoesFaturas']),
-    checkItem: (cardId, year, month, transactionId, checked = true, referenceId = null) => commitTransactionMutation(() => {
-        const record = ReconciliationRepo.get(cardId, year, month);
-        const tx = db.transacoes.find(t => String(t.id) === String(transactionId));
-        if (!record || record.valorFaturaReal == null || !tx) throw new Error('Informe primeiro o total de referência da fatura.');
-        const card = db.cartoes.find(c => String(c.id) === String(cardId));
-        if (!card || !listInvoiceTransactions(db.transacoes, card, year, month).some(t => String(t.id) === String(transactionId))) throw new Error('Este lançamento não pertence à fatura selecionada.');
-        const linkedReference = checked ? validateReferenceLink(record, tx, referenceId, record.verificacoes) : null;
-        record.verificacoes = { ...record.verificacoes, [String(tx.id)]: checked ? { referenceId: linkedReference, fingerprint: transactionFingerprint(tx), at: new Date().toISOString(), source: 'conferência manual da fatura' } : null };
-        record.confirmedAt = null;
-        return true;
-    }, ['conciliacoesFaturas']),
-    confirm: (cardId, year, month, confirmEmpty = false) => commitTransactionMutation(() => {
-        const card = db.cartoes.find(c => String(c.id) === String(cardId));
-        const record = ReconciliationRepo.get(cardId, year, month);
-        if (!card || !record) throw new Error('Informe o total de referência antes de concluir.');
-        const items = listInvoiceTransactions(db.transacoes, card, year, month);
-        const result = calculateReconciliation(items, record.valorFaturaReal, record.ajustes || [], record);
-        if (!result.totalMatches) throw new Error('Resolva a diferença de valores antes de concluir.');
-        if (pendingReferenceRows(record, record.verificacoes).length) throw new Error('Há linhas da referência ainda sem correspondência. Revise-as antes de concluir.');
-        if (items.some(t => record.verificacoes?.[String(t.id)]?.fingerprint !== transactionFingerprint(t))) throw new Error('Confira individualmente todos os lançamentos antes de concluir.');
-        if (!items.length && !confirmEmpty) throw new Error('Confirme que a fatura de referência não contém lançamentos.');
-        record.confirmedAt = new Date().toISOString();
-        record.confirmedFingerprint = reconciliationFingerprint(items, record.valorFaturaReal, record.ajustes || []);
-        return true;
-    }, ['conciliacoesFaturas']),
+    },
     deleteAdjustment: (cardId, year, month, id) => {
         const record = ReconciliationRepo.get(cardId, year, month); if (!record) return false;
-        if (record.ajustes?.find(a => String(a.id) === String(id))?.transactionId) throw new Error('O ajuste possui um lançamento vinculado. Revise esse lançamento para preservar o histórico.');
         record.ajustes = (record.ajustes || []).filter(a => String(a.id) !== String(id));
         record.atualizadoEm = new Date().toISOString(); persist('conciliacoesFaturas'); return true;
     },
-    saveAmount: (cardId, year, month, realInvoiceAmount, source = 'Fatura informada manualmente') => {
+    saveAmount: (cardId, year, month, realInvoiceAmount) => {
         if (!Array.isArray(db.conciliacoesFaturas)) db.conciliacoesFaturas = [];
         const chave = invoiceReconciliationKey(cardId, year, month);
         const numeric = realInvoiceAmount === '' || realInvoiceAmount === null ? null : Number(realInvoiceAmount);
-        if (numeric !== null && (!Number.isFinite(numeric) || numeric < 0 || !Number.isSafeInteger(toCents(numeric)))) throw new Error('Informe um total de fatura válido, maior ou igual a zero.');
         const validAmount = Number.isFinite(numeric);
         const normalizedAmount = validAmount ? fromCents(toCents(numeric)) : null;
         const index = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
-        const current = index >= 0 ? db.conciliacoesFaturas[index] : { id: chave, chave, cardId, ano: year, mes: month };
-        const referenceChanged = current.valorFaturaReal !== normalizedAmount || (current.source && current.source !== source);
-        const value = { ...current, id: current.id || chave, cardId, ano: year, mes: month, source, verificacoes: referenceChanged ? {} : current.verificacoes, confirmedAt: null, valorFaturaReal: normalizedAmount, statusConciliacao: validAmount ? 'aguardando conferência' : 'em aberto', atualizadoEm: new Date().toISOString() };
+        const current = index >= 0 ? db.conciliacoesFaturas[index] : { chave, cardId, ano: year, mes: month };
+        const value = { ...current, valorFaturaReal: normalizedAmount, statusConciliacao: validAmount ? 'aguardando conferência' : 'em aberto', atualizadoEm: new Date().toISOString() };
         if (index >= 0) db.conciliacoesFaturas[index] = value;
         else db.conciliacoesFaturas.unshift(value);
         persist('conciliacoesFaturas');
@@ -1167,7 +982,7 @@ export const ReconciliationRepo = {
     calculate: (transactions, card, year, month) => {
         const items = listInvoiceTransactions(transactions, card, year, month);
         const record = ReconciliationRepo.get(card.id, year, month);
-        return { ...calculateReconciliation(items, record?.valorFaturaReal, record?.ajustes || [], record), transacoes: items, ajustes: record?.ajustes || [] };
+        return { ...calculateReconciliation(items, record?.valorFaturaReal, record?.ajustes), transacoes: items, ajustes: record?.ajustes || [] };
     }
 };
 
@@ -1474,34 +1289,6 @@ const saveContactAtomically = (id, data) => commitTransactionMutation(() => {
     return saved;
 }, ['contatos']);
 
-const recordInvoicePayment = ({ scheduleId, bankId, paymentDate, amount, operationId } = {}) => commitTransactionMutation(() => {
-    const schedule = db.agendamentos.find(s => String(s.id) === String(scheduleId));
-    const bank = db.bancos.find(b => String(b.id) === String(bankId));
-    const txId = operationId || `invoice-payment-${encodeURIComponent(String(scheduleId))}`;
-    const existing = db.transacoes.find(t => String(t.id) === String(txId));
-    if (existing) {
-        if (String(existing.invoicePaymentAgendamentoId) !== String(scheduleId) || String(existing.bancoId) !== String(bankId) || existing.data !== paymentDate || (amount != null && toCents(existing.valor) !== toCents(amount))) throw new Error('O identificador deste pagamento já foi utilizado com outros dados.');
-        return { alreadyExists: true, transaction: existing };
-    }
-    if (!schedule || schedule.categoria !== 'Fatura Cartão' || schedule.status !== 'pendente' || !bank || !isValidInvoicePaymentDate(paymentDate)) throw new Error('Confira a fatura pendente, conta e data do pagamento.');
-    const card = db.cartoes.find(c => String(c.id) === String(schedule.cartaoId));
-    const paid = db.transacoes.filter(t => String(t.invoicePaymentAgendamentoId ?? '') === String(scheduleId)).reduce((sum, t) => sum + toCents(t.valor), 0);
-    const total = toCents(schedule.valor);
-    const remaining = Math.max(0, total - paid);
-    const value = amount == null ? remaining : toCents(amount);
-    if (value <= 0 || value > remaining) throw new Error('Informe um pagamento maior que zero e até o saldo devedor da fatura.');
-    const transaction = buildInvoicePaymentTransaction({ schedule: { ...schedule, valor: fromCents(value) }, bankId: bank.id, paymentDate, transactionId: txId });
-    transaction.invoiceReconciliationKey = card ? invoicePaymentKey(transaction, card, db.agendamentos) : null;
-    db.transacoes.unshift(transaction);
-    applyBalanceDelta(transaction, false, false);
-    schedule.valorPago = fromCents(paid + value);
-    schedule.saldoDevedor = fromCents(remaining - value);
-    schedule.status = remaining === value ? 'pago' : 'pendente';
-    schedule.bancoId = bank.id;
-    schedule.dataPagamento = paymentDate;
-    return { alreadyExists: false, transaction, remaining: schedule.saldoDevedor };
-});
-
 const financialMonthKey = (year, month) => {
     if (!Number.isInteger(year) || year < 1900 || year > 9999 || !Number.isInteger(month) || month < 0 || month > 11) throw new Error('Selecione um mês e ano válidos.');
     return `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -1700,103 +1487,7 @@ export const InvestmentRepo = {
     remove: (id) => { db.investimentos = db.investimentos.filter(i => String(i.id) !== String(id)); persist('investimentos'); return true; }
 };
 
-export const BankConferenceRepo = {
-    save: ({ bankId, period, asOf, reference, source }) => commitTransactionMutation(() => {
-        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period || '') || !isValidInvoicePaymentDate(asOf) || !String(source || '').trim() || reference === '' || reference == null || !Number.isFinite(Number(reference))) throw new Error('Informe período, data, saldo de referência e sua origem.');
-        const bank = db.bancos.find(b => String(b.id) === String(bankId));
-        const today = new Date().toLocaleDateString('en-CA');
-        if (!bank || asOf > today || !asOf.startsWith(period)) throw new Error('Escolha uma conta e uma data válida dentro do período, até hoje.');
-        const id = `bank:${bankId}:${period}`;
-        const index = db.conferencias.findIndex(r => r.id === id);
-        const current = db.conferencias[index];
-        const referenceChanged = current && (current.reference !== fromCents(toCents(reference)) || current.asOf !== asOf || current.source !== String(source).trim());
-        const record = { ...current, id, bankId: bank.id, period, asOf, reference: fromCents(toCents(reference)), source: String(source).trim(), sourceType: 'manual', confirmedAt: null, updatedAt: new Date().toISOString(), decisions: referenceChanged ? {} : current?.decisions || {} };
-        if (index >= 0) db.conferencias[index] = record; else db.conferencias.unshift(record);
-        return record;
-    }, ['conferencias']),
-    decide: ({ id, transactionId, status, reason = '', referenceId = null }) => commitTransactionMutation(() => {
-        const record = db.conferencias.find(r => r.id === id);
-        const tx = db.transacoes.find(t => String(t.id) === String(transactionId));
-        if (!record || !tx || tx.isCartao || String(tx.bancoId) !== String(record.bankId) || !tx.data?.startsWith(record.period) || tx.data > record.asOf) throw new Error('Referência ou lançamento inválido.');
-        if (!['conferido', 'divergente', 'ignorado', 'nao-conferido'].includes(status) || (status === 'ignorado' && !reason.trim())) throw new Error('Informe uma justificativa para ignorar.');
-        const linkedReference = status === 'conferido' ? validateReferenceLink(record, tx, referenceId, record.decisions) : null;
-        record.decisions = { ...record.decisions, [String(tx.id)]: { status, referenceId: linkedReference, reason: reason.trim(), fingerprint: transactionFingerprint(tx), at: new Date().toISOString() } };
-        record.confirmedAt = null;
-        return true;
-    }, ['conferencias']),
-    complete: (id, confirmEmpty = false) => commitTransactionMutation(() => {
-        const record = db.conferencias.find(r => r.id === id);
-        const bank = db.bancos.find(b => String(b.id) === String(record?.bankId));
-        if (!record || !bank) throw new Error('Salve uma referência antes de concluir.');
-        const balance = bankBalanceAtDate(db, bank, record.asOf, new Date().toLocaleDateString('en-CA'));
-        if (balance === null || toCents(balance) !== toCents(record.reference)) throw new Error('Resolva a diferença do saldo antes de concluir.');
-        const items = db.transacoes.filter(t => !t.isCartao && String(t.bancoId) === String(bank.id) && t.data?.startsWith(record.period) && t.data <= record.asOf);
-        if (pendingReferenceRows(record, record.decisions).length) throw new Error('Há linhas da referência ainda sem correspondência.');
-        if ((!items.length && !confirmEmpty) || items.some(t => !['conferido','ignorado'].includes(record.decisions?.[String(t.id)]?.status) || record.decisions[String(t.id)].fingerprint !== transactionFingerprint(t))) throw new Error('Confira os lançamentos pendentes antes de concluir.');
-        record.confirmedAt = new Date().toISOString();
-        record.confirmedFingerprint = bankConferenceFingerprint(items, balance, record.reference, record.asOf);
-        return true;
-    }, ['conferencias'])
-};
-
-const updateConferenceReference = ({ recordId, cardId, year, month, rows, ignoreId, reason, fileName }) => commitTransactionMutation(() => {
-    const record = recordId ? db.conferencias.find(r => r.id === recordId) : ReconciliationRepo.get(cardId, year, month);
-    if (!record) throw new Error('Salve a referência antes de anexar ou revisar um extrato.');
-    if (rows) {
-        if (!Array.isArray(rows) || !rows.length || rows.length > 20000 || rows.some(r => !isValidInvoicePaymentDate(r.data) || !Number.isFinite(Number(r.valor)) || toCents(r.valor) <= 0 || !['receita','despesa'].includes(r.tipo))) throw new Error('O arquivo contém linhas inválidas. Revise datas, valores e direção.');
-        const originalCount = rows.length;
-        if (recordId) rows = rows.filter(r => r.data.startsWith(record.period) && r.data <= record.asOf);
-        else {
-            const card = db.cartoes.find(c => String(c.id) === String(cardId));
-            if (!card) throw new Error('Cartão não encontrado.');
-            const { start, end } = getInvoicePeriod(card, year, month);
-            rows = rows.filter(r => { const d = new Date(`${r.data}T12:00:00`); return d >= start && d <= end; });
-        }
-        if (!rows.length) throw new Error('O arquivo não contém lançamentos no período desta conferência.');
-        record.referenceFile = { name: String(fileName || '').slice(0, 120), at: new Date().toISOString(), outsidePeriod: originalCount - rows.length };
-        record.referenceRows = rows.map((r,index) => ({ id: `reference-${index + 1}`, data: r.data, valor: fromCents(toCents(r.valor)), tipo: r.tipo, desc: String(r.desc || ''), identificador: String(r.identificador || '') }));
-        record.ignoredReferences = {};
-        record.decisions = {};
-        record.verificacoes = {};
-    } else {
-        if (!record.referenceRows?.some(r => r.id === ignoreId) || !String(reason || '').trim()) throw new Error('Informe uma justificativa para ignorar a linha da referência.');
-        record.ignoredReferences = { ...record.ignoredReferences, [ignoreId]: { reason: reason.trim(), at: new Date().toISOString() } };
-    }
-    record.confirmedAt = null;
-    return true;
-}, ['conferencias', 'conciliacoesFaturas']);
-
-// Adapt the remaining synchronous validators/mutators to the same durable
-// boundary. UI callers must await them; a rejected commit never reports success.
-const durableLegacy = (repo, methods) => methods.forEach(method => {
-    const mutate = repo[method];
-    repo[method] = (...args) => commitTransactionMutation(() => {
-        capturingLegacyMutation = true;
-        try {
-            const result = mutate(...args);
-            return result === false ? NO_TRANSACTION_MUTATION : (result ?? true);
-        } finally { capturingLegacyMutation = false; }
-    }, collections);
-});
-durableLegacy(UserRepo, ['update']);
-durableLegacy(MentoriaRepo, ['saveSnapshot']);
-durableLegacy(BankRepo, ['add', 'remove']);
-durableLegacy(CardRepo, ['add', 'remove']);
-durableLegacy(ReconciliationRepo, ['saveAmount', 'saveAdjustment', 'deleteAdjustment']);
-durableLegacy(GoalRepo, ['add', 'remove']);
-durableLegacy(BudgetRepo, ['add', 'remove', 'updateLimit']);
-durableLegacy(CategoryRepo, ['add', 'rename', 'update', 'archive', 'restore', 'remove']);
-durableLegacy(ContactRepo, ['add', 'update', 'remove']);
-durableLegacy(NotificationRepo, ['add', 'remove', 'markRead', 'markAllRead', 'updateConfig']);
-durableLegacy(ScheduleRepo, ['add', 'update', 'remove']);
-durableLegacy(FutureIncomeRepo, ['add', 'update', 'remove']);
-durableLegacy(SubscriptionRepo, ['add', 'update', 'remove']);
-durableLegacy(InvestmentRepo, ['add', 'update', 'remove']);
-
 export const Database = {
-    recordInvoicePayment,
-    updateConferenceReference,
-    updateCard: CardRepo.update,
     getTransacoesPorMes: TransactionsRepo.getByMonth,
     getComprasCartaoPorMes: TransactionsRepo.getCardExpensesByMonth,
     save: persist,
@@ -1804,7 +1495,7 @@ export const Database = {
     auditIntegrity: (options = {}) => auditDatabase(db, options),
     reconcileBalances: () => reconcileBalances(db),
     getSchemaVersion: () => Number(db.metadados?.schemaVersion || 0),
-    replaceAll: (data, options = {}) => enqueueTransactionMutation(async () => {
+    replaceAll: async (data, options = {}) => {
         if (!data || typeof data !== 'object') throw new Error('Backup inválido');
 
         const exact = options?.mode === 'exact';
@@ -1886,36 +1577,36 @@ export const Database = {
             db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
             await IDB.setMany(collections.map(col => [col, db[col]]));
             clearCache();
-            revisionChannel?.postMessage(persistedRevision);
-    if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+            if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
             return true;
         } catch (error) {
             collections.forEach(col => { db[col] = snapshot[col]; });
             clearCache();
             throw error;
         }
-    }),
-    clearAll: () => enqueueTransactionMutation(async () => {
+    },
+    clearAll: async () => {
         const snapshot = Object.fromEntries(collections.map(col => [col, cloneCollectionForRollback(db[col])]));
         try {
-            // Replacing every collection in one commit is atomic; never clear first.
+            await IDB.clear();
+            if (typeof localStorage !== 'undefined') {
+                collections.forEach(col => localStorage.removeItem(DB_PREFIX + col));
+            }
             collections.forEach(col => {
                 db[col] = cloneCollectionForRollback(initialDB[col]);
             });
             db.metadados = { ultimaAtualizacao: new Date().toISOString() };
-            await IDB.setMany(collections.map(col => [col, db[col]]), persistedRevision, true);
-            if (typeof localStorage !== 'undefined') collections.forEach(col => localStorage.removeItem(DB_PREFIX + col));
+            await IDB.setMany(collections.map(col => [col, db[col]]));
             clearCache();
-            revisionChannel?.postMessage(persistedRevision);
-    if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+            if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
             return true;
         } catch (error) {
             collections.forEach(col => { db[col] = snapshot[col]; });
-
+            try { await IDB.setMany(collections.map(col => [col, db[col]])); } catch (_) {}
             clearCache();
             throw error;
         }
-    }),
+    },
     saveMentoriaSnapshot: MentoriaRepo.saveSnapshot,
     add: (col, item) => {
         switch(col) {

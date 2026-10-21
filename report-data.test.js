@@ -15,10 +15,10 @@ describe('modelo do relatório de Fluxo de Caixa', () => {
         ] }, 1, referenceDate);
 
         expect(model.entradas).toBe(1000);
-        expect(model.saidas).toBe(420);
-        expect(model.movements).toHaveLength(4);
-        expect(model.activeBuckets).toHaveLength(4);
-        expect(model.buckets.at(-1).acumulado).toBe(580);
+        expect(model.saidas).toBe(250);
+        expect(model.movements).toHaveLength(2);
+        expect(model.activeBuckets).toHaveLength(2);
+        expect(model.buckets.at(-1).acumulado).toBe(750);
     });
 
     it('agrega períodos longos por mês e mantém meses sem movimento honestos', () => {

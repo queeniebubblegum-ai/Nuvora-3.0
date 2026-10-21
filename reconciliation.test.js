@@ -17,7 +17,7 @@ describe('Conciliação de faturas (fase 1)', () => {
     const tx = [{ valor: 10 }, { valor: 20.005 }];
     expect(calculateReconciliation(tx)).toMatchObject({ totalRecorded: 30.01, realInvoiceAmount: null, difference: null, status: RECONCILIATION_STATUS.PENDING });
     expect(calculateReconciliation(tx, 31)).toMatchObject({ difference: 0.99, status: RECONCILIATION_STATUS.DIFFERENCE });
-    expect(calculateReconciliation(tx, 30.01).status).toBe(RECONCILIATION_STATUS.PENDING);
+    expect(calculateReconciliation(tx, 30.01).status).toBe(RECONCILIATION_STATUS.RECONCILED);
     expect(calculateReconciliation([], null).status).toBe(RECONCILIATION_STATUS.OPEN);
   });
   it('soma compras e ajustes em centavos inteiros sem ruído decimal', () => {
@@ -25,7 +25,7 @@ describe('Conciliação de faturas (fase 1)', () => {
       totalRecorded: 0.3,
       explainedTotal: 0.3,
       difference: 0,
-      status: RECONCILIATION_STATUS.PENDING
+      status: RECONCILIATION_STATUS.RECONCILED
     });
     expect(calculateAdjustmentTotal([
       { amount: 0.1, effect: 'charge' },

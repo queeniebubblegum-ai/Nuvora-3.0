@@ -1,4 +1,4 @@
-import { calculatePeriodTotals, isExpense, isConsumptionExpense, consumptionExpense } from './financial-ledger.js';
+import { calculatePeriodTotals, isExpense } from './financial-ledger.js';
 
 const isDateInMonth = (date, year, month) => {
     if (!date) return false;
@@ -17,10 +17,10 @@ export const FinancialAnalytics = {
         };
     },
     categoryTotals: (transactions, year, month) => FinancialAnalytics.monthTransactions(transactions, year, month)
-        .filter(isConsumptionExpense)
+        .filter(isExpense)
         .reduce((result, t) => {
             const category = t.categoria || 'Sem categoria';
-            result[category] = (result[category] || 0) + consumptionExpense(t);
+            result[category] = (result[category] || 0) + (Number(t.valor) || 0);
             return result;
         }, {}),
     insights: (transactions, year, month) => {
@@ -53,8 +53,8 @@ export const FinancialAnalytics = {
         const days = new Date(year, month + 1, 0).getDate();
         const values = Array.from({ length: days }, (_, index) => ({ dia: index + 1, valor: 0 }));
         FinancialAnalytics.monthTransactions(transactions, year, month)
-            .filter(isConsumptionExpense)
-            .forEach(t => { const day = Number(String(t.data).slice(8, 10)); if (day >= 1 && day <= days) values[day - 1].valor += consumptionExpense(t); });
+            .filter(isExpense)
+            .forEach(t => { const day = Number(String(t.data).slice(8, 10)); if (day >= 1 && day <= days) values[day - 1].valor += Number(t.valor) || 0; });
         return values;
     }
 };

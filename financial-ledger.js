@@ -20,15 +20,6 @@ export const isIncome = tx =>
 export const isExpense = tx =>
     !isTransfer(tx) && !isInvoicePayment(tx) && tx?.tipo === 'despesa';
 
-export const isConsumptionExpense = tx => isExpense(tx) || isCardRefund(tx);
-export const consumptionExpense = tx => fromCents(isCardRefund(tx) ? -toCents(tx.valor) : isExpense(tx) ? toCents(tx.valor) : 0);
-export const isCardRefund = tx => tx?.isCartao === true && tx?.tipo === 'estorno-cartao';
-export const invoiceItemCents = tx => toCents(tx?.valor) * (isCardRefund(tx) ? -1 : 1);
-export const isCashflowMovement = tx => !tx?.isCartao &&
-    !tx?.alocacaoMetaVirtual && (isIncome(tx) || isExpense(tx) || isInvoicePayment(tx));
-export const isCashInflow = tx => isTransfer(tx) && !isInvoicePayment(tx)
-    ? tx.transferenciaEntrada === true : isIncome(tx);
-
 export const calculatePeriodTotals = transactions => {
     const items = Array.isArray(transactions) ? transactions : [];
     const cents = items.reduce((result, tx) => {
@@ -36,7 +27,6 @@ export const calculatePeriodTotals = transactions => {
 
         if (isIncome(tx)) result.income += value;
         if (isExpense(tx)) result.expense += value;
-        if (isCardRefund(tx)) result.expense -= value;
         if (isTransfer(tx)) result.transfers += value;
         if (isInvoicePayment(tx)) result.invoicePayments += value;
 

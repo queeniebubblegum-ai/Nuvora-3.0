@@ -25,7 +25,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         db.bancos = [
             { id: 1, nome: 'Conta Principal', saldo: 1000, saldoInicial: 1000, cor: 'blue' }
         ];
-        db.cartoes = [{ id: 99, bancoId: 1, fechamento: 20, vencimento: 5 }];
+        db.cartoes = [];
         db.orcamentos = [];
         db.metas = [];
         db.reservas = [];
@@ -43,13 +43,13 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(Database.getTotals()).toMatchObject({ receitas: 1000, despesas: 200, saldo: 1000 });
     });
 
-    it('Deve manter limites de orçamento separados por mês', async () => {
-        await BudgetRepo.updateLimit('Alimentação', 800, 2026, 7);
-        await BudgetRepo.updateLimit('Alimentação', 1000, 2026, 8);
+    it('Deve manter limites de orçamento separados por mês', () => {
+        BudgetRepo.updateLimit('Alimentação', 800, 2026, 7);
+        BudgetRepo.updateLimit('Alimentação', 1000, 2026, 8);
         expect(db.orcamentos).toHaveLength(2);
         expect(db.orcamentos.find(o => o.mes === 7).limite).toBe(800);
         expect(db.orcamentos.find(o => o.mes === 8).limite).toBe(1000);
-        await BudgetRepo.updateLimit('Serviços', 0.1 + 0.2, 2026, 8);
+        BudgetRepo.updateLimit('Serviços', 0.1 + 0.2, 2026, 8);
         expect(toCents(db.orcamentos.find(o => o.categoria === 'Serviços').limite)).toBe(30);
     });
 
@@ -169,7 +169,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
 
     it('registra aporte como reserva virtual sem transferir nem reduzir o saldo bancário', async () => {
         db.bancos[0].saldo = 1000;
-        await GoalRepo.add({ id: 'goal-cents', nome: 'Reserva', atual: 0, alvo: 2.345 });
+        GoalRepo.add({ id: 'goal-cents', nome: 'Reserva', atual: 0, alvo: 2.345 });
         const beforeTotals = Database.getTotals();
         await GoalRepo.deposit('goal-cents', 1, 0.2, '2026-09-23');
 
@@ -188,7 +188,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
 
     it('recusa aporte acima do disponível sem alterar saldo ou reserva', async () => {
         db.bancos[0].saldo = 100;
-        await GoalRepo.add({ id: 'goal-cap', nome: 'Reserva limitada', atual: 0, alvo: 100 });
+        GoalRepo.add({ id: 'goal-cap', nome: 'Reserva limitada', atual: 0, alvo: 100 });
         await GoalRepo.deposit('goal-cap', 1, 80, '2026-09-23');
         await expect(GoalRepo.deposit('goal-cap', 1, 21, '2026-09-24')).rejects.toThrow('saldo disponível');
         expect(db.bancos[0].saldo).toBe(100);
@@ -197,7 +197,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
     });
 
     it('resgata a alocação sem movimentar saldo bancário e preserva o histórico da meta', async () => {
-        await GoalRepo.add({ id: 'goal-history', nome: 'Meta com histórico', atual: 0, alvo: 100 });
+        GoalRepo.add({ id: 'goal-history', nome: 'Meta com histórico', atual: 0, alvo: 100 });
         await GoalRepo.deposit('goal-history', 1, 25, '2026-09-23');
         await GoalRepo.release('goal-history', 25, '2026-09-24');
         const goal = db.metas.find(item => item.id === 'goal-history');
@@ -206,9 +206,9 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(toCents(reserve.saldo)).toBe(0);
         expect(toCents(db.bancos[0].saldo)).toBe(100000);
         expect(reserve.movimentos.map(item => item.tipo)).toEqual(['aporte', 'resgate']);
-        expect(await GoalRepo.remove('goal-history')).toBe(false);
+        expect(GoalRepo.remove('goal-history')).toBe(false);
         expect(db.reservas.some(item => item.id === goal.reservaId)).toBe(true);
-        expect(await BankRepo.remove(1)).toBe(false);
+        expect(BankRepo.remove(1)).toBe(false);
     });
 
     it('mantém o saldo conciliado intacto ao editar, excluir e restaurar aportes antigos', async () => {
@@ -357,20 +357,20 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(Database.getTotals()).toMatchObject({ saldoBancario: 4200, saldoReservado: 1500, saldoDisponivel: 2700, saldoTotal: 4200 });
     });
 
-    it('não deve excluir conta bancária que possui dados vinculados', async () => {
+    it('não deve excluir conta bancária que possui dados vinculados', () => {
         db.transacoes = [{ id: 10, bancoId: 1, isCartao: false, valor: 10, tipo: 'despesa' }];
-        expect(await BankRepo.remove(1)).toBe(false);
+        expect(BankRepo.remove(1)).toBe(false);
         expect(db.bancos).toHaveLength(1);
     });
 
-    it('não deve excluir cartão que possui compras vinculadas', async () => {
+    it('não deve excluir cartão que possui compras vinculadas', () => {
         db.transacoes = [{ id: 11, bancoId: 99, isCartao: true, valor: 10, tipo: 'despesa' }];
-        expect(await CardRepo.remove(99)).toBe(false);
+        expect(CardRepo.remove(99)).toBe(false);
     });
 
-    it('não deve excluir categoria usada por uma transação', async () => {
+    it('não deve excluir categoria usada por uma transação', () => {
         db.transacoes = [{ id: 12, categoria: 'Alimentação', valor: 10, tipo: 'despesa' }];
-        expect(await CategoryRepo.remove('cat_1')).toBe(false);
+        expect(CategoryRepo.remove('cat_1')).toBe(false);
     });
 
 });

@@ -10,10 +10,10 @@ describe('valores monetários de orçamento', () => {
     });
 
     it('normaliza os limites e agrega orçamento/gastos em centavos inteiros', async () => {
-        await Database.add('orcamentos', {
+        Database.add('orcamentos', {
             id: 'budget-1', categoria: 'Compras', limite: 0.1 + 0.2, ano: 2026, mes: 8
         });
-        await Database.add('orcamentos', {
+        Database.add('orcamentos', {
             id: 'budget-2', categoria: 'Transporte', limite: 0.3, ano: 2026, mes: 8
         });
         await Database.add('transacoes', {

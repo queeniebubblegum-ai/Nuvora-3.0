@@ -11,10 +11,6 @@ export default defineConfig({
     reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
     use: {
         baseURL: 'http://127.0.0.1:4173',
-        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
-            ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH }
-            : {},
-        ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH ? { browserName: 'chromium' } : {}),
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure'
     },

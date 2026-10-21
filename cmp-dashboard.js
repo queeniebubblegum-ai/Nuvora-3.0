@@ -1,9 +1,7 @@
-import { getReviewState, reviewLabels } from './conferencing-model.js';
-import { cardCreditUsed } from './invoice-model.js';
 import { Utils } from './utils.js';
 import { CoreComponents } from './cmp-core.js';
 import { financialValueClass } from './financial-refinements.js';
-import { isExpense, isIncome, isCardRefund, isCashflowMovement, isCashInflow, isTransfer as isTransferTransaction } from './financial-ledger.js';
+import { isExpense, isIncome, isTransfer as isTransferTransaction } from './financial-ledger.js';
 import { PRIORITY_KEYS, resolvePriority } from './priority.js';
 
 /**
@@ -39,7 +37,7 @@ export const DashboardComponents = {
         const despesas = Number(atual.despesas) || 0;
         const economia = receitas > 0 ? Math.round(((receitas - despesas) / receitas) * 100) : null;
         const card = (label, value, note, tone = '') => `<article class="nv-mockup-kpi"><span>${label}</span><strong class="${tone}">${value}</strong><small>${note}</small></article>`;
-        return `<section class="nv-mockup-kpis" aria-label="Resumo financeiro"><div class="nv-mockup-kpis__title"><p class="nv-dashboard-eyebrow">Visão do período</p><h3>Panorama financeiro</h3><p>Uma leitura rápida do que aconteceu com seu dinheiro.</p></div><div class="nv-mockup-kpis__grid">${card('Saldo registrado', Utils.formatMoney(atual.saldo), 'Registros locais · confira com sua instituição')} ${card('Receitas no período', Utils.formatMoney(receitas), 'Entradas realizadas', 'is-positive')} ${card('Despesas no período', Utils.formatMoney(despesas), 'Consumo registrado · inclui cartão', 'is-negative')} ${card('Taxa de economia', economia == null ? '—' : `${economia}%`, economia == null ? 'Sem dados suficientes' : 'Resultado sobre receitas', economia != null && economia >= 0 ? 'is-positive' : 'is-negative')}</div></section>`;
+        return `<section class="nv-mockup-kpis" aria-label="Resumo financeiro"><div class="nv-mockup-kpis__title"><p class="nv-dashboard-eyebrow">Visão do período</p><h3>Panorama financeiro</h3><p>Uma leitura rápida do que aconteceu com seu dinheiro.</p></div><div class="nv-mockup-kpis__grid">${card('Patrimônio consolidado', Utils.formatMoney(atual.saldo), 'Saldo global das contas')} ${card('Receitas no período', Utils.formatMoney(receitas), 'Entradas realizadas', 'is-positive')} ${card('Despesas no período', Utils.formatMoney(despesas), 'Saídas realizadas', 'is-negative')} ${card('Taxa de economia', economia == null ? '—' : `${economia}%`, economia == null ? 'Sem dados suficientes' : 'Resultado sobre receitas', economia != null && economia >= 0 ? 'is-positive' : 'is-negative')}</div></section>`;
     },
     dashboardCards: (atual = {}, anterior = {}) => {
         const calcTrend = calculateDashboardTrend;
@@ -436,8 +434,8 @@ export const DashboardComponents = {
             if(Number.isNaN(date.getTime()) || isTransferTransaction(transaction)) return;
             const month = months.find(item => item.date.getFullYear() === date.getFullYear() && item.date.getMonth() === date.getMonth());
             if(!month) return;
-            if(isCashflowMovement(transaction) && isCashInflow(transaction)) month.income += Number(transaction.valor) || 0;
-            if(isCashflowMovement(transaction) && !isCashInflow(transaction)) month.expense += Number(transaction.valor) || 0;
+            if(isIncome(transaction)) month.income += Number(transaction.valor) || 0;
+            if(isExpense(transaction)) month.expense += Number(transaction.valor) || 0;
         });
         const max = Math.max(...months.flatMap(item => [item.income,item.expense]),1);
         const hasData = months.some(item => item.income || item.expense);
@@ -450,16 +448,12 @@ export const DashboardComponents = {
         return `<section class="nv-mockup-flow nv-dashboard-card" aria-label="Fluxo de caixa"><header class="nv-mockup-flow__header"><div><h3>Fluxo de caixa · 6 meses</h3><p>Receitas e despesas realizadas</p></div><div class="nv-mockup-flow__legend"><span><i class="is-income"></i>Receitas</span><span><i class="is-expense"></i>Despesas</span></div></header><div class="nv-mockup-flow__chart">${chart}</div></section>`;
     },
 
-    dashboardMockupAccounts: (bancos = [], cartoes = [], compras = [], database = null) => {
+    dashboardMockupAccounts: (bancos = [], cartoes = [], compras = []) => {
         const logo = (name, color) => `<span class="nv-mockup-account-icon" style="--account-color:${color || 'var(--mock-action)'}">${Utils.escapeHTML(String(name || 'C').slice(0, 1).toUpperCase())}</span>`;
-        const rows = bancos.map(account => {
-            const conference = (database?.conferencias || []).filter(r => String(r.bankId) === String(account.id) && r.confirmedAt).sort((a,b) => String(b.asOf).localeCompare(String(a.asOf)))[0];
-            const review = conference ? `Conferência em ${Utils.formatToBR(conference.asOf)}` : 'Não conferida';
-            return `<div class="nv-mockup-account-row">${logo(account.instituicao || account.nome, account.cor)}<div><strong>${Utils.escapeHTML(account.nome || account.instituicao || 'Conta')}</strong><small>${Utils.escapeHTML(account.instituicao || 'Conta corrente')} · ${Utils.escapeHTML(review)}</small></div><b>${Utils.formatMoney(account.saldo || 0)}</b></div>`;
-        }).join('');
+        const rows = bancos.map(account => `<div class="nv-mockup-account-row">${logo(account.instituicao || account.nome, account.cor)}<div><strong>${Utils.escapeHTML(account.nome || account.instituicao || 'Conta')}</strong><small>${Utils.escapeHTML(account.instituicao || 'Conta corrente')} · Conciliada</small></div><b>${Utils.formatMoney(account.saldo || 0)}</b></div>`).join('');
         const cardRows = cartoes.map(card => {
             const limit = Number(card.limite || card.limiteTotal || 0);
-            const used = cardCreditUsed(database || { transacoes: compras }, card);
+            const used = compras.filter(item => String(item.cartaoId ?? item.bancoId) === String(card.id)).reduce((total, item) => total + Math.abs(Number(item.valor) || 0), 0);
             const available = Math.max(limit - used, 0);
             const percentage = limit > 0 ? Math.min(Math.round((used / limit) * 100), 100) : 0;
             return `<div class="nv-mockup-account-row"><span class="nv-mockup-account-icon" style="--account-color:var(--mock-action)"><i class="fa-regular fa-credit-card" aria-hidden="true"></i></span><div><strong>${Utils.escapeHTML(card.nome || 'Cartão')}</strong><small>${percentage}% utilizado · limite ${Utils.formatMoney(limit)}</small></div><b>${Utils.formatMoney(available)}</b></div>`;
@@ -468,20 +462,20 @@ export const DashboardComponents = {
         return `<div class="nv-dashboard-accounts-grid nv-mockup-accounts-grid" aria-label="Contas e cartões"><section class="nv-mockup-accounts nv-dashboard-card" aria-label="Contas"><header><div><p class="nv-dashboard-eyebrow">Patrimônio</p><h3>Contas</h3><p>Saldos das contas e investimentos.</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Contas">Gerenciar →</button></header><div class="nv-mockup-account-list">${rows || empty('fa-wallet', 'conta', 'openModal', 'modal-banco')}</div></section><section class="nv-mockup-accounts nv-dashboard-card" aria-label="Cartões"><header><div><p class="nv-dashboard-eyebrow">Crédito</p><h3>Cartões</h3><p>Limite disponível e utilização.</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Contas">Gerenciar →</button></header><div class="nv-mockup-account-list">${cardRows || empty('fa-credit-card', 'cartão', 'navigate', '', 'Contas')}</div></section></div>`;
     },
 
-    dashboardMockupRecent: (transacoes = [], selectedTab = 'recent', database = {}) => {
-        const isPending = transaction => !['conciliado', 'ignorado'].includes(getReviewState(database, transaction));
+    dashboardMockupRecent: (transacoes = [], selectedTab = 'recent') => {
+        const isPending = transaction => ['pendente', 'pending', 'em aberto'].includes(String(transaction?.status || '').trim().toLocaleLowerCase('pt-BR')) || transaction?.pendente === true;
         const pending = transacoes.filter(isPending);
         const source = selectedTab === 'pending' ? pending : transacoes;
         const recent = [...source].sort((a, b) => String(b.data || '').localeCompare(String(a.data || ''))).slice(0, 4);
         const rows = recent.map(transaction => {
             const category = CoreComponents._getCategoryConfig(transaction.categoria);
-            const income = isIncome(transaction) || isCardRefund(transaction);
+            const income = isIncome(transaction);
             const date = transaction.data ? new Date(`${String(transaction.data).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—';
-            const status = isPending(transaction) ? 'Pendente' : reviewLabels[getReviewState(database, transaction)];
+            const status = isPending(transaction) ? 'Pendente' : (income ? 'Conciliado' : (transaction.status || 'Conciliado'));
             const safeStatus = Utils.escapeHTML(status);
             return `<div class="nv-mockup-transaction-row"><span class="nv-mockup-transaction-icon" style="--category-color:${category.cor}"><i class="fa-solid ${category.icone}" aria-hidden="true"></i></span><div class="nv-mockup-transaction-copy"><strong>${Utils.escapeHTML(transaction.desc || 'Lançamento')}</strong><small>${date} · ${Utils.escapeHTML(transaction.categoria || 'Sem categoria')}</small></div><span class="nv-mockup-transaction-status ${status === 'Pendente' ? 'is-pending' : (income ? 'is-success' : 'is-neutral')}" aria-label="Status: ${safeStatus}">${safeStatus}</span><b class="${income ? 'is-positive' : 'is-negative'}">${income ? '+' : '−'}${Utils.formatMoney(Math.abs(Number(transaction.valor) || 0))}</b></div>`;
         }).join('');
-        return `<section class="nv-mockup-recent nv-dashboard-card" aria-label="Transações recentes"><header><div><h3>Transações recentes</h3><p>Últimos registros do período</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Transacoes">Ver todas →</button></header><div class="nv-mockup-recent-tabs" role="tablist" aria-label="Filtro de transações"><button class="${selectedTab !== 'pending' ? 'is-active' : ''}" type="button" data-action="setDashboardRecentTab" data-payload="recent" role="tab" aria-selected="${selectedTab !== 'pending'}">Recentes</button><button class="${selectedTab === 'pending' ? 'is-active' : ''}" type="button" data-action="setDashboardRecentTab" data-payload="pending" role="tab" aria-selected="${selectedTab === 'pending'}">A conferir${pending.length ? ` (${pending.length})` : ''}</button></div><div class="nv-mockup-transaction-list">${rows || `<div class="nv-mockup-recent-empty"><i class="fa-solid fa-receipt" aria-hidden="true"></i><p>${selectedTab === 'pending' ? 'Nenhuma pendência de conferência no período.' : 'Nenhuma transação no período.'}</p><button type="button" data-action="openModal" data-modal="modal-transacao">Adicionar lançamento</button></div>`}</div></section>`;
+        return `<section class="nv-mockup-recent nv-dashboard-card" aria-label="Transações recentes"><header><div><h3>Transações recentes</h3><p>Últimos registros do período</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Transacoes">Ver todas →</button></header><div class="nv-mockup-recent-tabs" role="tablist" aria-label="Filtro de transações"><button class="${selectedTab !== 'pending' ? 'is-active' : ''}" type="button" data-action="setDashboardRecentTab" data-payload="recent" role="tab" aria-selected="${selectedTab !== 'pending'}">Recentes</button><button class="${selectedTab === 'pending' ? 'is-active' : ''}" type="button" data-action="setDashboardRecentTab" data-payload="pending" role="tab" aria-selected="${selectedTab === 'pending'}">Pendentes${pending.length ? ` (${pending.length})` : ''}</button></div><div class="nv-mockup-transaction-list">${rows || `<div class="nv-mockup-recent-empty"><i class="fa-solid fa-receipt" aria-hidden="true"></i><p>${selectedTab === 'pending' ? 'Nenhuma pendência no período.' : 'Nenhuma transação no período.'}</p><button type="button" data-action="openModal" data-modal="modal-transacao">Adicionar lançamento</button></div>`}</div></section>`;
     },
 
     dashboardMockupAgenda: (agendamentos = [], receitas = [], state = {}) => {
@@ -550,7 +544,7 @@ export const DashboardComponents = {
             const label = `${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${lista.length ? `, ${lista.length} ${lista.length === 1 ? 'item' : 'itens'}` : ''}`;
             cells.push(`<button type="button" data-action="showAgendaDay" data-payload="${dateKey}" class="calendar-day agenda-day ${states}" aria-label="${Utils.escapeHTML(label)}" aria-current="${isToday ? 'date' : 'false'}" aria-pressed="${isSelected ? 'true' : 'false'}"><span class="calendar-day-number">${date.getDate()}</span>${dots ? `<span class="calendar-day-dots" aria-label="Indicadores do dia">${dots}</span>` : '<span class="calendar-day-dots" aria-hidden="true"></span>'}</button>`);
         }
-        return `<section class="nv-dashboard-card nv-dashboard-agenda agenda-calendar" aria-label="Agenda financeira"><header class="calendar-header"><div><p class="calendar-eyebrow">Planejamento</p><h3 class="calendar-title">Agenda financeira</h3><p class="calendar-subtitle">${nomes[mes]} de ${ano} · selecione um dia para ver os detalhes</p></div><div class="calendar-controls"><button type="button" data-action="resetAgendaToday" class="calendar-today" aria-label="Ir para hoje">Hoje</button><div class="calendar-nav" role="group" aria-label="Navegação da agenda"><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="calendar-nav-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="calendar-nav-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div></header><div class="calendar-weekdays agenda-weekdays" aria-hidden="true">${diasSemana.map(dia => `<span>${dia}</span>`).join('')}</div><div class="calendar-grid agenda-grid" role="group" aria-label="${nomes[mes]} de ${ano}">${cells.join('')}</div><footer class="calendar-legend" aria-label="Legenda da agenda"><span><i class="calendar-legend-dot calendar-legend-dot--commitment" aria-hidden="true"></i>Compromisso</span><span><i class="calendar-legend-dot calendar-legend-dot--due-date" aria-hidden="true"></i>Vencimento</span><span><i class="calendar-legend-dot calendar-legend-dot--completed" aria-hidden="true"></i>Concluído</span></footer></section>`;
+        return `<section class="nv-dashboard-card nv-dashboard-agenda agenda-calendar" aria-label="Agenda financeira"><header class="calendar-header"><div><p class="calendar-eyebrow">Planejamento</p><h3 class="calendar-title">Agenda financeira</h3><p class="calendar-subtitle">${nomes[mes]} de ${ano} · selecione um dia para ver os detalhes</p></div><div class="calendar-controls"><button type="button" data-action="resetAgendaToday" class="calendar-today" aria-label="Ir para hoje">Hoje</button><div class="calendar-nav" role="group" aria-label="Navegação da agenda"><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="calendar-nav-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="calendar-nav-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div></header><div class="calendar-weekdays agenda-weekdays" aria-hidden="true">${diasSemana.map(dia => `<span>${dia}</span>`).join('')}</div><div class="calendar-grid agenda-grid" role="grid" aria-label="${nomes[mes]} de ${ano}">${cells.join('')}</div><footer class="calendar-legend" aria-label="Legenda da agenda"><span><i class="calendar-legend-dot calendar-legend-dot--commitment" aria-hidden="true"></i>Compromisso</span><span><i class="calendar-legend-dot calendar-legend-dot--due-date" aria-hidden="true"></i>Vencimento</span><span><i class="calendar-legend-dot calendar-legend-dot--completed" aria-hidden="true"></i>Concluído</span></footer></section>`;
     },
 
     dashboardCategories: (transacoesPeriodoAtual, periodLabel = 'Este ano') => {

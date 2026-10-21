@@ -36,7 +36,7 @@ const addDays = (date, days) => {
 };
 const daysBetween = (from, to) => Math.round((Date.UTC(to.getFullYear(), to.getMonth(), to.getDate()) - Date.UTC(from.getFullYear(), from.getMonth(), from.getDate())) / 86400000);
 const isOpen = item => !completedStatuses.has(String(item?.status || '').trim().toLowerCase());
-const amountCents = item => Math.abs(toCents(item?.saldoDevedor ?? item?.valor ?? item?.value));
+const amountCents = item => Math.abs(toCents(item?.valor ?? item?.value));
 const isInternalMovement = item => Boolean(item?.transferenciaId) || isTransfer(item) || isInvoicePayment(item);
 const pendingDate = item => item?.dataVencimento || item?.data || item?.dueDate;
 const forecastDate = item => item?.data || item?.dataVencimento || item?.date;

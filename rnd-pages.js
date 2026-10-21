@@ -1,5 +1,3 @@
-import { filterTransactions } from './transaction-filters.js';
-import { getReviewState } from './conferencing-model.js';
 import { Utils } from './utils.js';
 import { parseLocalDate } from './util-date.js';
 import { db, Database } from './db.js';
@@ -245,7 +243,7 @@ export const PageRenderers = {
         // Keep this metric's established semantics: only pending expenses due today
         // through month-end contribute to the summary; overdue accounts stay visible
         // in the attention strip and Agenda instead.
-        const contasPendentesMes = proximosVencimentos.reduce((acc, curr) => acc + (Number(curr.saldoDevedor ?? curr.valor) || 0), 0);
+        const contasPendentesMes = proximosVencimentos.reduce((acc, curr) => acc + (Number(curr.valor) || 0), 0);
         const orcamentoDashboard = Components.budgetSummary(db.orcamentos || [], db.transacoes || [], {
             budgetYear: hojeObj.getFullYear(),
             budgetMonth: hojeObj.getMonth()
@@ -270,8 +268,7 @@ export const PageRenderers = {
             projecaoFimMes,
             contasPendentes: contasPendentesMes,
             contasAtrasadas,
-            proximosVencimentos,
-            pendingReview: transacoesPeriodoAtual.filter(t => !['conciliado','ignorado'].includes(getReviewState(db, t))).length
+            proximosVencimentos
         };
         const priorityContext = {
             saldoGlobal: saldoAtualGlobal,
@@ -337,7 +334,6 @@ export const PageRenderers = {
             ${filterHtml}
             <!-- Contexto legado preservado: Visão de ${escapedDashboardPeriodLabel} · Saldo atual: ${Utils.escapeHTML(Utils.formatMoney(saldoAtualGlobal))}. O mockup reorganiza esses dados nos KPIs. -->
             ${Components.dashboardMockupKpis(atual)}
-            <section class="av-draft-banner" aria-label="Próxima ação financeira"><p><strong>Não basta registrar. A Avenera ajuda você a conferir.</strong><br>${atual.pendingReview} lançamento(s) do período ainda precisam de conferência. Compare com seu extrato ou fatura antes de concluir.</p><button type="button" data-action="navigate" data-payload="Conciliacao">Conferir agora</button><details><summary>Como interpretar os valores</summary><p>Saldo registrado é a soma das contas locais, sem limite de crédito. Consumo inclui compras no cartão; a saída de caixa ocorre no pagamento da fatura. As previsões do Planejamento são estimativas baseadas nos compromissos cadastrados.</p></details></section>
 
             <!-- Components.dashboardCards / Resultado financeiro remain part of the compatibility contract while the mockup KPI renderer owns this layout. -->
             <details class="nv-dashboard-context"><summary>Revisão do período e próximos passos</summary>${Components.nextDecisionBlock(atual, priorityContext)}
@@ -351,7 +347,7 @@ export const PageRenderers = {
             })}</details>
             <div class="nv-mockup-dashboard-grid">
                 ${Components.dashboardMockupFlow(db.transacoes || [])}
-                ${Components.dashboardMockupAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [], db)}
+                ${Components.dashboardMockupAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
             </div>
             <!-- Components.dashboardAccounts remains available as the full legacy account renderer; the mockup uses Components.dashboardMockupAccounts for this composition. -->
             ${renderMockupDashboardTriple({ budget: orcamentoDashboard, cartoes: db.cartoes || [], compras: db.comprasCartao || [], mentoria: resultadoMentoria })}
@@ -359,7 +355,7 @@ export const PageRenderers = {
 
             <!-- Components.dashboardAgenda remains available for the full calendar route; the mockup uses compact agenda + recent transactions here. -->
             <div class="nv-mockup-bottom-grid">
-                ${Components.dashboardMockupRecent(transacoesPeriodoAtual, appState.dashboardRecentTab, db)}
+                ${Components.dashboardMockupRecent(transacoesPeriodoAtual, appState.dashboardRecentTab)}
                 ${Components.dashboardMockupAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
             </div>
 
@@ -396,8 +392,28 @@ export const PageRenderers = {
     Transacoes: (appState) => {
         const bancoPadraoId = db.bancos.length > 0 ? db.bancos[0].id : '';
         const f = appState.filters;
-        let filtered = filterTransactions(db.transacoes, f, db);
+        let filtered = [...db.transacoes];
+
+        if (f.desc) {
+            const termoBusca = String(f.desc).toLowerCase();
+            filtered = filtered.filter(t => {
+                const descricao = String(t.desc || '').toLowerCase();
+                const textoRef = t.codigoRef ? String(t.codigoRef).toLowerCase() : `tx-${String(t.id).substring(0, 8)}`;
+                return descricao.includes(termoBusca) || textoRef.includes(termoBusca);
+            });
+        }
+        if (f.categoria) filtered = filtered.filter(t => t.categoria === f.categoria);
         const isUncategorized = t => !String(t?.categoria || '').trim() || String(t.categoria).trim().toLocaleLowerCase('pt-BR') === 'sem categoria';
+        if (f.tipo === 'transferencia') filtered = filtered.filter(isTransfer);
+        else if (f.tipo) filtered = filtered.filter(t => t.tipo === f.tipo);
+        if (f.dataInicio) filtered = filtered.filter(t => String(t.data || '') >= f.dataInicio);
+        if (f.dataFim) filtered = filtered.filter(t => String(t.data || '') <= f.dataFim);
+        if (f.mes !== '') filtered = filtered.filter(t => parseLocalDate(t.data || t.id)?.getMonth() === parseInt(f.mes, 10));
+        if (f.bancoId) {
+            const [type, id] = f.bancoId.split('_');
+            if (type === 'banco') filtered = filtered.filter(t => !t.isCartao && t.bancoId == id);
+            if (type === 'cartao') filtered = filtered.filter(t => t.isCartao && t.bancoId == id);
+        }
         const uncategorizedCount = filtered.filter(isUncategorized).length;
         if (appState.uncategorizedOnly) filtered = filtered.filter(isUncategorized);
         filtered.sort((a, b) => (parseLocalDate(b.data || b.id)?.getTime() ?? -Infinity) - (parseLocalDate(a.data || a.id)?.getTime() ?? -Infinity));
@@ -542,7 +558,7 @@ export const PageRenderers = {
         }).join('');
         const projectionReason = Utils.escapeHTML(dailyProjection.reason);
         const projectionUnavailable = `<div class="nv-report-empty" role="status"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><div><strong>Projeção indisponível</strong><span>${projectionReason}</span></div></div>`;
-        const projectionSummary = dailyProjection.available ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5"><div class="nv-report-metric is-income"><p>Entradas previstas ${estimatedBadge('Receitas ainda não recebidas no horizonte de 30 dias.')}</p><h3 class="${financialValueClass(dailyProjection.expectedIncome)}">${money(dailyProjection.expectedIncome)}</h3></div><div class="nv-report-metric is-expense"><p>Saídas previstas ${estimatedBadge('Contas pendentes e assinaturas com data no horizonte de 30 dias.')}</p><h3 class="${financialValueClass(-dailyProjection.pendingExpenses)}">${money(dailyProjection.pendingExpenses)}</h3></div><div class="nv-report-metric is-net"><p>Saldo estimado em 30 dias ${estimatedBadge('Projeção diária; não representa um saldo realizado.')}</p><h3 class="${financialValueClass(dailyProjection.endingBalance)}">${money(dailyProjection.endingBalance)}</h3></div></div><p class="text-xs text-text-secondary mb-4">Menor saldo diário estimado: <strong class="${financialValueClass(dailyProjection.minimumClosingBalance)}">${money(dailyProjection.minimumClosingBalance)}</strong> em ${Utils.escapeHTML(Utils.formatToBR(dailyProjection.minimumDate))}. ${dailyProjection.firstNegativeDate ? `<strong class="is-expense">Projeção abaixo de zero em ${Utils.escapeHTML(Utils.formatToBR(dailyProjection.firstNegativeDate))}.</strong>` : 'Nenhum fechamento diário abaixo de zero neste horizonte.'}</p><div class="overflow-x-auto" tabindex="0" role="region" aria-label="Detalhes financeiros"><div class="min-w-[560px]"><div class="nv-report-table-header"><div>Data prevista</div><div>Entradas</div><div>Saídas</div><div>Saldo no fim do dia</div></div><div class="nv-report-table-body">${projectionRows}</div></div></div>` : projectionUnavailable;
+        const projectionSummary = dailyProjection.available ? `<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5"><div class="nv-report-metric is-income"><p>Entradas previstas ${estimatedBadge('Receitas ainda não recebidas no horizonte de 30 dias.')}</p><h3 class="${financialValueClass(dailyProjection.expectedIncome)}">${money(dailyProjection.expectedIncome)}</h3></div><div class="nv-report-metric is-expense"><p>Saídas previstas ${estimatedBadge('Contas pendentes e assinaturas com data no horizonte de 30 dias.')}</p><h3 class="${financialValueClass(-dailyProjection.pendingExpenses)}">${money(dailyProjection.pendingExpenses)}</h3></div><div class="nv-report-metric is-net"><p>Saldo estimado em 30 dias ${estimatedBadge('Projeção diária; não representa um saldo realizado.')}</p><h3 class="${financialValueClass(dailyProjection.endingBalance)}">${money(dailyProjection.endingBalance)}</h3></div></div><p class="text-xs text-text-secondary mb-4">Menor saldo diário estimado: <strong class="${financialValueClass(dailyProjection.minimumClosingBalance)}">${money(dailyProjection.minimumClosingBalance)}</strong> em ${Utils.escapeHTML(Utils.formatToBR(dailyProjection.minimumDate))}. ${dailyProjection.firstNegativeDate ? `<strong class="is-expense">Projeção abaixo de zero em ${Utils.escapeHTML(Utils.formatToBR(dailyProjection.firstNegativeDate))}.</strong>` : 'Nenhum fechamento diário abaixo de zero neste horizonte.'}</p><div class="overflow-x-auto"><div class="min-w-[560px]"><div class="nv-report-table-header"><div>Data prevista</div><div>Entradas</div><div>Saídas</div><div>Saldo no fim do dia</div></div><div class="nv-report-table-body">${projectionRows}</div></div></div>` : projectionUnavailable;
         const dailyProjectionHtml = `<section class="nv-report-panel mb-6" aria-labelledby="nv-daily-projection-title"><div class="nv-report-panel-heading"><div><h4 id="nv-daily-projection-title">Projeção diária de caixa ${estimatedBadge('Estimativa baseada apenas em previsões pendentes com data.')}</h4><p>Próximos 30 dias · somente movimentos futuros ainda não realizados.</p></div></div>${projectionSummary}</section>`;
 
         UIRenderer.updateDOM('main-content', `<div class="nv-planning-page">
