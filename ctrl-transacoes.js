@@ -150,38 +150,38 @@ export const TransacoesController = {
         if (!valorRaw) { Utils.showToast('Introduza um valor válido.', 'error'); return; }
         
         const valor = Math.abs(parseFloat(valorRaw));
-        if (valor === 0) { Utils.showToast('O valor da transação deve ser maior que zero.', 'warning'); return; }
+        if (!Number.isFinite(valor) || valor === 0) { Utils.showToast('O valor da transação deve ser maior que zero.', 'warning'); return; }
 
         const desc = document.getElementById('input-desc').value;
         const data = document.getElementById('input-data-trans').value;
         const categoria = document.getElementById('input-categoria').value;
         
-        const bancoIdSelect = document.getElementById('input-banco-trans').value;
-        const bancoId = parseInt(bancoIdSelect);
-        if (!bancoId) { Utils.showToast('Selecione uma conta bancária.', 'error'); return; }
+        const bancoId = String(document.getElementById('input-banco-trans').value || '').trim();
+        if (!bancoId || !db.bancos.some(bank => String(bank.id) === bancoId)) { Utils.showToast('Selecione uma conta bancária.', 'error'); return; }
         
         const formaPagamento = document.getElementById('input-forma-pagamento').value;
         const isCartao = formaPagamento === 'Cartão de Crédito';
         
         const contatoIdRaw = document.getElementById('input-contato').value;
-        const contatoId = contatoIdRaw ? parseInt(contatoIdRaw) : null;
+        const contatoId = contatoIdRaw ? String(contatoIdRaw) : null;
 
         const isRecorrente = document.getElementById('input-recorrente').checked;
         const parcelasRecorrentes = Math.abs(parseInt(document.getElementById('input-meses-recorrente').value)) || 1;
 
         if (isCartao) {
             const cartaoIdSelect = document.getElementById('input-cartao-trans').value;
-            const cartaoId = parseInt(cartaoIdSelect);
-            if (!cartaoId) { Utils.showToast('Selecione um cartão de crédito válido.', 'error'); return; }
+            const cartaoId = String(cartaoIdSelect || '').trim();
+            if (!cartaoId || !db.cartoes.some(card => String(card.id) === cartaoId)) { Utils.showToast('Selecione um cartão de crédito válido.', 'error'); return; }
         }
 
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Salvando...");
 
-        setTimeout(() => {
+        setTimeout(async () => {
+            try {
             if (isCartao) {
                 const cartaoIdSelect = document.getElementById('input-cartao-trans').value;
-                const cartaoId = parseInt(cartaoIdSelect);
+                const cartaoId = String(cartaoIdSelect || '').trim();
                 const parcelas = Math.abs(parseInt(document.getElementById('input-parcelas-trans').value)) || 1;
                 const jurosStr = document.getElementById('input-juros-trans').value;
                 const juros = jurosStr ? Math.abs(parseFloat(jurosStr)) : 0;
@@ -192,9 +192,10 @@ export const TransacoesController = {
                     valorTotal = valor * (taxa / (1 - Math.pow(1 + taxa, -parcelas))) * parcelas;
                 }
 
-                Database.addCardExpense({
+                const saved = await Database.addCardExpense({
                     desc, total: valorTotal, parcelas, cartaoId: cartaoId, categoria, data, contatoId
                 });
+                if (!saved) throw new Error('Não foi possível salvar a compra no cartão.');
                 showTransactionSavedToast(`Despesa lançada no cartão em ${parcelas}x!`);
             } else {
                 if (isRecorrente) {
@@ -214,17 +215,16 @@ export const TransacoesController = {
                         recorrente: true,
                         contatoId
                     };
-                    Database.add('transacoes', novaTransacao);
-
                     const dataOriginal = new Date(data + 'T12:00:00');
                     const diaOriginal = dataOriginal.getDate();
                     
+                    const agendamentos = [];
                     for (let i = 1; i < parcelasRecorrentes; i++) {
                         let dataParcela = new Date(dataOriginal);
                         dataParcela.setMonth(dataOriginal.getMonth() + i);
                         if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
 
-                        Database.add('agendamentos', {
+                        agendamentos.push({
                             id: Date.now() + i,
                             desc: desc + ` (${i + 1}/${parcelasRecorrentes})`,
                             valor: valorRecorrente,
@@ -235,9 +235,16 @@ export const TransacoesController = {
                             bancoId: bancoId
                         });
                     }
+                    // The first occurrence and all future commitments share one
+                    // persistence boundary. A failed write cannot leave a
+                    // partial recurring series behind.
+                    const atomicSaved = await Database.addRecurringTransactionAtomically(novaTransacao, agendamentos);
+                    if (!Array.isArray(atomicSaved) || atomicSaved.length !== agendamentos.length + 1) {
+                        throw new Error('Não foi possível salvar toda a série recorrente.');
+                    }
                     showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} registada e agendada para os próximos ${parcelasRecorrentes - 1} meses!`);
                 } else {
-                    Database.add('transacoes', {
+                    const saved = await Database.add('transacoes', {
                         id: Date.now(),
                         desc, valor, tipo, categoria, bancoId,
                         isCartao: false,
@@ -247,6 +254,7 @@ export const TransacoesController = {
                         recorrente: false,
                         contatoId
                     });
+                    if (!saved) throw new Error('Não foi possível salvar a transação.');
                     showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
                 }
             }
@@ -254,23 +262,30 @@ export const TransacoesController = {
             markSaved(form);
             trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_created' });
             App.closeModal();
-            SubmitGuard.release(form);
+            } catch (error) {
+                Utils.showToast(error?.message || 'Não foi possível salvar a transação; os dados anteriores foram mantidos.', 'error');
+                SubmitFeedback.set(form, 'idle');
+            } finally {
+                SubmitGuard.release(form);
+            }
         }, 350);
     },
 
     submitDespesaCartao: (e) => {
         e.preventDefault();
         const form = e.target;
-        const cartaoId = parseInt(document.getElementById('dc-cartao-id').value);
-        const desc = document.getElementById('dc-desc').value;
+        const cartaoId = String(document.getElementById('dc-cartao-id').value || '').trim();
+        const desc = document.getElementById('dc-desc').value.trim();
         
         const valorBase = Math.abs(parseFloat(document.getElementById('dc-valor').value));
-        if (valorBase === 0 || isNaN(valorBase)) { Utils.showToast('O valor deve ser maior que zero.', 'warning'); return; }
+        if (!cartaoId || !db.cartoes.some(card => String(card.id) === cartaoId)) { Utils.showToast('Selecione um cartão de crédito válido.', 'error'); return; }
+        if (!Number.isFinite(valorBase) || valorBase <= 0 || !desc) { Utils.showToast('Informe descrição e valor maiores que zero.', 'warning'); return; }
 
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Registrando...");
 
-        setTimeout(() => {
+        setTimeout(async () => {
+            try {
             const parcelaSelect = document.getElementById('dc-parcelas');
             const parcelasCustom = document.getElementById('dc-parcelas-custom');
             const parcelas = parcelaSelect?.value === 'custom'
@@ -288,14 +303,20 @@ export const TransacoesController = {
                 valorTotal = pmt * parcelas;
             }
 
-            Database.addCardExpense({
+            const saved = await Database.addCardExpense({
                 desc, total: valorTotal, parcelas, cartaoId, categoria, data, contatoId: null
             });
+            if (!saved) throw new Error('Não foi possível salvar a compra no cartão.');
             showTransactionSavedToast(`Compra lançada em ${parcelas}x!`);
             markSaved(form);
             trackUIEvent({ screen: 'Transacoes', source: 'transaction_form', action: 'transaction_created' });
             App.closeModal();
-            SubmitGuard.release(form);
+            } catch (error) {
+                Utils.showToast(error?.message || 'Não foi possível salvar a compra; os dados anteriores foram mantidos.', 'error');
+                SubmitFeedback.set(form, 'idle');
+            } finally {
+                SubmitGuard.release(form);
+            }
         }, 350);
     },
 
@@ -303,9 +324,9 @@ export const TransacoesController = {
         e.preventDefault();
         const form = e.target;
         const id = document.getElementById('edit-id').value;
-        const desc = document.getElementById('edit-desc').value;
+        const desc = document.getElementById('edit-desc').value.trim();
         const valor = Math.abs(parseFloat(document.getElementById('edit-valor').value));
-        if (valor === 0 || isNaN(valor)) { Utils.showToast('O valor deve ser maior que zero.', 'warning'); return; }
+        if (!desc || !Number.isFinite(valor) || valor <= 0) { Utils.showToast('Informe descrição e valor maiores que zero.', 'warning'); return; }
 
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Atualizando...");
@@ -315,7 +336,9 @@ export const TransacoesController = {
                 const data = document.getElementById('edit-data').value;
                 const categoria = document.getElementById('edit-categoria').value;
                 const contatoIdRaw = document.getElementById('edit-contato').value;
-                const contatoId = contatoIdRaw ? parseInt(contatoIdRaw) : null;
+                const contato = db.contatos.find(item => String(item.id) === String(contatoIdRaw));
+                if (contatoIdRaw && !contato) throw new Error('Selecione uma pessoa válida ou deixe o campo em branco.');
+                const contatoId = contato ? contato.id : null;
                 const updated = await Database.updateTransaction(id, { desc, valor, data, categoria, contatoId });
 
                 if (updated) {

@@ -34,7 +34,29 @@ export const ClickEvents = {
             };
 
             const actionsMap = {
-                'navigate': () => App.navigate(btn.getAttribute('data-payload')),
+                'navigate': () => {
+                    App.navigate(btn.getAttribute('data-payload'));
+                    const sidebar = document.getElementById('sidebar');
+                    const isMobile = typeof window.matchMedia === 'function'
+                        ? window.matchMedia('(max-width: 1023px)').matches
+                        : window.innerWidth < 1024;
+                    if (isMobile && sidebar && !sidebar.classList.contains('-translate-x-full')) {
+                        window.toggleSidebar?.();
+                    }
+                },
+                'openTypeSelector': () => App.openModal('modal-transacao'),
+                'openTransactionSearch': () => {
+                    App.navigate('Transacoes');
+                    // App.scheduleRender queues its renderer first; this following
+                    // animation frame focuses the real transactions filter input.
+                    requestAnimationFrame(() => {
+                        const search = document.getElementById('transactions-search');
+                        if (search) {
+                            search.focus({ preventScroll: true });
+                            search.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+                        }
+                    });
+                },
                 'askAnoraQuestion': () => {
                     const chat = btn.closest('[data-anora-chat]');
                     const input = chat?.querySelector('[data-anora-input]');
@@ -52,6 +74,8 @@ export const ClickEvents = {
                 'toggleTheme': () => App.toggleTheme(),
                 'chooseProfilePhoto': () => App.chooseProfilePhoto(),
                 'importBackupPicker': () => App.importBackupPicker(),
+                'clearAllData': () => App.clearAllData(),
+                'runIntegrityCheck': () => App.runIntegrityCheck(),
                 'openModal': () => {
                     const prerequisiteMessage = btn.getAttribute('data-prerequisite-message');
                     if (prerequisiteMessage) Utils.showToast(prerequisiteMessage, 'warning');
@@ -67,6 +91,9 @@ export const ClickEvents = {
                 'deleteCategory': () => App.deleteCategory(btn.getAttribute('data-id')),
                 'viewCategory': () => Utils.showToast('Categorias padrão são protegidas e somente para consulta.', 'info'),
                 'setCategoryStatus': () => App.setCategoryStatus(btn.getAttribute('data-payload') || 'active'),
+                'editContact': () => App.editContact(btn.getAttribute('data-id')),
+                'openContactProfile': () => App.openContatoPerfil(btn.getAttribute('data-id')),
+                'setAgendaView': () => App.setAgendaView(btn.getAttribute('data-payload')),
                 'editAgenda': () => App.editAgenda(btn.getAttribute('data-id'), btn.getAttribute('data-col')),
                 'acceptClassification': () => App.acceptClassification(),
                 'editClassification': () => App.editClassification(),
@@ -101,11 +128,12 @@ export const ClickEvents = {
                 'applyInvoiceClassification': () => App.applyInvoiceClassification(),
                 'openCardExpenseModal': () => App.openCardExpenseModal(btn.getAttribute('data-id'), btn.getAttribute('data-nome')),
                 'setDashboardPeriod': () => App.setDashboardPeriod(btn.getAttribute('data-payload')),
+                'setDashboardRecentTab': () => App.setDashboardRecentTab(btn.getAttribute('data-payload')),
                 'changeMonth': () => App.changeMonth(btn.getAttribute('data-type'), parseInt(btn.getAttribute('data-dir'))),
                 'changeAgendaMonth': () => App.changeAgendaMonth(parseInt(btn.getAttribute('data-dir'))),
                 'resetAgendaToday': () => App.resetAgendaToday(),
                 'showAgendaDay': () => App.showAgendaDay(btn.getAttribute('data-payload')),
-                'addAgendaOnDate': () => App.addAgendaOnDate(),
+                'addAgendaOnDate': () => App.addAgendaOnDate(btn.getAttribute('data-date')),
                 'setReportTab': () => App.setReportTab(btn.getAttribute('data-payload')),
                 'setCategoryType': () => App.setCategoryType(btn.getAttribute('data-payload') || 'all'),
                 'exportPDF': () => App.exportToPDF(),

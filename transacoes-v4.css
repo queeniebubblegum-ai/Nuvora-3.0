@@ -1,0 +1,55 @@
+/* ============================================================
+   Página de Transações v4 (Fase 4) — estilos
+   Colar dentro de @layer components { ... } do input.css.
+   ============================================================ */
+
+/* Tabela desktop */
+.data-table { @apply w-full text-sm; border-collapse: collapse; }
+.data-table thead th {
+  @apply text-left text-[11px] font-bold uppercase tracking-wide text-muted px-4 py-3 border-b border-border bg-surface-2/60;
+}
+.data-table tbody td { @apply px-4 py-3 border-b border-border/60; }
+.data-table tbody tr { @apply transition-colors hover:bg-surface-2/60 cursor-pointer; }
+.data-table .amount { @apply font-semibold; }
+
+/* Badges (categoria / status) */
+.badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold;
+}
+.badge.success { @apply bg-success-soft text-success; }
+.badge.warning { @apply bg-warning-soft text-warning; }
+.badge.danger  { @apply bg-danger-soft text-danger; }
+.badge.info    { @apply bg-info-soft text-info; }
+.badge.neutral { @apply bg-surface-2 text-muted; }
+
+/* Ícone de categoria (cor por tipo) */
+.category-icon { @apply w-9 h-9 rounded-[var(--radius-2)] shrink-0; }
+.category-icon.success { background: var(--success-soft); }
+.category-icon.info    { background: var(--info-soft); }
+.category-icon.neutral { background: var(--violet-soft); }
+
+/* Checkbox de seleção */
+.tx-check { @apply w-4 h-4 rounded border-border accent-[var(--action)] cursor-pointer; }
+
+/* Barra de ações em lote */
+#bulk-bar { box-shadow: var(--elevated); }
+
+/* Empty state */
+.empty-state { @apply flex flex-col items-center text-center py-14 px-6; }
+.empty-icon {
+  width: 56px; height: 56px; border-radius: var(--radius-4);
+  background: var(--violet-soft); margin-bottom: 1rem;
+  background-image: radial-gradient(circle at 30% 30%, var(--action) 0 3px, transparent 4px),
+                    radial-gradient(circle at 70% 60%, var(--violet) 0 2.5px, transparent 3.5px);
+  opacity: .7;
+}
+
+/* Rodapé "Mostrando X de Y" */
+.table-footer { @apply text-center text-xs text-muted px-4 py-3 border-t border-border; }
+
+/* Linha mobile (reaproveita .list-row da Fase 3) */
+.transaction-mobile .list-row { @apply cursor-pointer; }
+.transaction-mobile .badge { margin-top: 4px; }
+
+/* Responsividade: tabela com scroll horizontal em tablets pequenos */
+@media (max-width: 768px) { .data-table { display: none; } }

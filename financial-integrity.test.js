@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db, Database, TransactionsRepo } from './db.js';
+import { db, Database, TransactionsRepo, __setTransactionPersistenceWriterForTests } from './db.js';
 import { OFXManager } from './ofx.js';
 import { buildInvoicePaymentTransaction } from './invoice-payment.js';
 import { calculatePeriodTotals } from './financial-ledger.js';
@@ -9,6 +9,7 @@ const emptyDOM = () => { document.body.replaceChildren(); };
 
 beforeEach(() => {
     localStorage.clear();
+    __setTransactionPersistenceWriterForTests();
     db.transacoes = [];
     db.bancos = [
         { id: 'bank-main', nome: 'Conta principal', saldo: 1200, saldoInicial: 1200 },
@@ -41,7 +42,7 @@ describe('regressões de integridade financeira — Fase 7', () => {
             schedule, bankId: 'bank-payment', paymentDate: '2026-09-24'
         });
 
-        expect(Database.add('transacoes', payment)).toBe(true);
+        expect(await Database.add('transacoes', payment)).toBe(true);
         expect(db.bancos.map(bank => bank.saldo)).toEqual([1200, 725.75]);
         expect(calculatePeriodTotals(db.transacoes)).toMatchObject({
             income: 0, expense: 100, transfers: 74.25, invoicePayments: 74.25
@@ -74,13 +75,13 @@ describe('regressões de integridade financeira — Fase 7', () => {
                 identificador: 'OFX-ENTRY-1', selecionado: true
             }]
         };
-        OFXManager.salvarOFXAprovado(viewState, vi.fn(), vi.fn());
+        await OFXManager.salvarOFXAprovado(viewState, vi.fn(), vi.fn());
 
         expect(db.bancos[0].saldo).toBe(1400);
         expect(db.transacoes).toHaveLength(1);
         expect(db.transacoes[0]).toMatchObject({ saldoIncluidoNoSaldoDoExtrato: true, importadoOFX: true, bancoId: 1 });
 
-        Database.add('transacoes', {
+        await Database.add('transacoes', {
             id: 'post-ofx-income', desc: 'Movimento posterior', valor: 50,
             tipo: 'receita', bancoId: 1, data: '2026-09-24'
         });

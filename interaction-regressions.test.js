@@ -8,26 +8,25 @@ const cssContains = (css, fragment) => css.replace(/\s+/g, '').includes(String(f
 const cssCompact = css => css.replace(/\s+/g, ' ').replace(/\s*([{}:;])\s*/g, '$1').replace(/\s+\(/g, '(').trim();
 
 describe('redesigned account and transaction interactions', () => {
-    it('keeps the compact Anora header contract and separated controls', () => {
+    it('keeps the live V4 Anora menu and shell controls keyboard-accessible', () => {
         const index = source('index.html');
         const inputStyles = source('input.css');
         const generatedStyles = source('styles.css');
+        const shellStyles = source('input-v4.css');
 
-        expect(index).toContain('class="nv-header__anora-control flex items-center cursor-pointer group"');
-        expect(index).toContain('class="nv-header__anora-image w-8 h-8 rounded-full object-cover');
-        expect(index).toMatch(/class="[^"]*nv-header__control-divider[^"]*"/);
-        expect(index).toContain('aria-hidden="true"');
+        expect(index).toContain('class="nv-v4-topbar');
+        expect(index).toContain('role="button" tabindex="0" aria-haspopup="menu" aria-label="Abrir menu da Anora"');
+        expect(index).toContain('id="anora-menu"');
+        expect(index).toContain('id="anora-rigor-select"');
         expect(index).toContain('onclick="document.getElementById(\'anora-menu\').classList.toggle(\'hidden\')"');
         expect(index).toContain("if(event.key === 'Enter' || event.key === ' ')");
+        expect(index).toContain('data-action="openTransactionSearch"');
 
         const css = cssCompact(inputStyles);
         expect(css).toMatch(/\.nv-header__actions\{[^}]*flex:0 0 auto;[^}]*flex-wrap:nowrap;[^}]*gap:10px;/s);
-        expect(css).toMatch(/\.nv-header__anora\{[^}]*flex:0 0 auto;/s);
-        expect(css).toMatch(/\.nv-header__anora-control\{[^}]*gap:8px;[^}]*min-width:max-content;/s);
-        expect(css).toMatch(/\.nv-header__anora-image\{[^}]*height:32px;[^}]*width:32px;/s);
-        expect(css).toMatch(/\.nv-header__control-divider\{[^}]*flex:0 0 1px;/s);
         expect(css).toContain('@media(max-width:639px)');
-        expect(css).toMatch(/\.nv-header__actions\{[^}]*gap:4px;/s);
+        expect(shellStyles).toContain('.nv-v4-topbar');
+        expect(shellStyles).toContain('.nv-v4-search-button');
         expect(generatedStyles.length).toBeGreaterThan(0);
     });
 
@@ -60,8 +59,10 @@ describe('redesigned account and transaction interactions', () => {
         const expectedRule = '.nv-accounts-empty-action { background: var(--nv-accounts-action); border: 1px solid var(--nv-accounts-action); border-radius: 8px; color: #fff; cursor: pointer; font-size: 10px; font-weight: 750; margin-left: auto; min-height: 32px; padding: 0 11px; pointer-events: auto; position: relative; white-space: nowrap; z-index: 31; }';
         expect(cssContains(inputStyles, expectedRule)).toBe(true);
         expect(generatedStyles.length).toBeGreaterThan(0);
-        expect(index).toContain('style="z-index: 30;"');
+        expect(index).toContain('class="nv-v4-speed-dial flex flex-col items-end"');
+        expect(index).toContain('id="btn-flutuante-main"');
         expect(index).toContain('@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }');
+        expect(source('input-v4.css')).toMatch(/\.nv-v4-speed-dial\s*\{[^}]*z-index: 50;/s);
     });
 
     it('keeps transaction row actions canonical and preserves string IDs', () => {

@@ -8,9 +8,10 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        // Redesign v4: display face for headings/mentor voice, tabular
-        // numeric face for money, Public Sans as the body/default family.
-        primary: ['Fraunces', 'Georgia', 'serif'],
+        // One cross-screen typography contract: neutral body, restrained
+        // editorial headings, and tabular numeric values.
+        primary: ['Public Sans', 'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
+        display: ['Fraunces', 'Georgia', 'serif'],
         mentor: ['Fraunces', 'Georgia', 'serif'],
         mono: ['Sora', 'Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],
         sans: ['Public Sans', 'ui-sans-serif', 'system-ui', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'sans-serif'],

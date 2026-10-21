@@ -11,11 +11,13 @@ import { cashflowProjectionFromDatabase } from './cashflow-projection.js';
 import { PRIORITY_KEYS, resolvePriority } from './priority.js';
 import { renderTransactionTypeMenu } from './transaction-type-menu.js';
 import { renderAnoraPage } from './rnd-anora.js';
+import { renderReconciliationWorkspace, renderImportWorkspace, renderInvestmentsWorkspace } from './cmp-workspaces.js';
+import { renderAgendaDetails, renderAgendaRecords } from './cmp-experience.js';
 
 export const settingsGroups = [
     { id: 'profile', title: 'Perfil', description: 'Dados e preferências pessoais.', icon: 'fa-user', items: ['Nome', 'Moeda', 'Preferências pessoais'] },
     { id: 'appearance', title: 'Aparência', description: 'Tema e preferências visuais.', icon: 'fa-palette', items: ['Tema claro ou escuro', 'Redução de movimento'] },
-    { id: 'data', title: 'Dados', description: 'Importação, exportação e recuperação.', icon: 'fa-database', items: ['Exportar backup', 'Importar backup', 'Importar CSV/OFX'] },
+    { id: 'data', title: 'Notificações e dados', description: 'Alertas, importação, exportação e recuperação.', icon: 'fa-database', items: ['Alertas', 'Exportar backup', 'Importar CSV/OFX'] },
     { id: 'security', title: 'Segurança', description: 'Proteção local e ações sensíveis.', icon: 'fa-shield-halved', items: ['Proteção local', 'Confirmação de exclusão', 'Limpeza de dados'] },
     { id: 'anora', title: 'Anora', description: 'Preferências da IA financeira.', icon: 'fa-sparkles', items: ['Estilo de recomendação', 'Alertas', 'Telemetria local'] },
 ];
@@ -87,70 +89,33 @@ export const getDashboardQuickAction = (atual = {}, context = {}) => {
     return { label: 'Novo lançamento', icon: 'fa-plus', action: 'openTypeSelector', ariaLabel: 'Novo lançamento: escolher tipo' };
 };
 
+const renderMockupDashboardTriple = ({ budget = {}, cartoes = [], compras = [], mentoria = {} } = {}) => {
+    const budgets = Array.isArray(budget.orcamentos) ? budget.orcamentos : [];
+    const spent = Object.values(budget.gastosPorCat || {}).reduce((sum, value) => sum + (Number(value) || 0), 0);
+    const limit = budgets.reduce((sum, item) => sum + (Number(item.limite) || 0), 0);
+    const budgetPct = limit > 0 ? Math.min(100, Math.round(spent / limit * 100)) : 0;
+    const card = cartoes[0];
+    const cardLimit = Number(card?.limite || card?.limiteTotal || 0);
+    const cardUsed = card ? compras.filter(item => String(item.cartaoId ?? item.bancoId) === String(card.id)).reduce((sum, item) => sum + Math.abs(Number(item.valor) || 0), 0) : 0;
+    const cardPct = cardLimit > 0 ? Math.min(100, Math.round(cardUsed / cardLimit * 100)) : 0;
+    const insight = mentoria?.insights?.[0] || 'A Anora vai mostrar recomendações assim que houver dados suficientes.';
+    const safe = value => Utils.escapeHTML(value == null ? '' : String(value));
+    return `<div class="nv-mockup-dashboard-triple">
+        <section class="nv-mockup-analysis-card" aria-label="Orçamento do período"><header><div><p class="nv-dashboard-eyebrow">Planejamento</p><h3>Orçamento</h3><p>${limit ? `${Utils.formatMoney(spent)} gastos · limite ${Utils.formatMoney(limit)}` : 'Defina limites para acompanhar o mês'}</p></div><span class="nv-mockup-status ${budgetPct > 100 ? 'is-danger' : 'is-neutral'}">${limit ? `${budgetPct}%` : '—'}</span></header><div class="nv-mockup-progress"><i style="width:${budgetPct}%"></i></div><div class="nv-mockup-analysis-meta"><span>${budgets.length ? `${budgets.length} categorias` : 'Nenhum limite cadastrado'}</span><button type="button" data-action="navigate" data-payload="Orcamento">Ver orçamento →</button></div></section>
+        <section class="nv-mockup-analysis-card" aria-label="Fatura atual"><header><div><p class="nv-dashboard-eyebrow">Cartão</p><h3>Fatura atual</h3><p>${card ? `${safe(card.nome || 'Cartão')} · limite disponível` : 'Nenhum cartão cadastrado'}</p></div><span class="nv-mockup-status is-neutral">${card ? `${cardPct}%` : '—'}</span></header><strong class="nv-mockup-invoice-value">${card ? Utils.formatMoney(cardUsed) : 'R$ 0,00'}</strong><div class="nv-mockup-progress"><i class="is-violet" style="width:${cardPct}%"></i></div><div class="nv-mockup-analysis-meta"><span>${card ? `Limite ${Utils.formatMoney(cardLimit)}` : 'Adicione um cartão para acompanhar'}</span><button type="button" data-action="navigate" data-payload="Contas">Ver cartões →</button></div></section>
+        <section class="nv-mockup-analysis-card is-anora" aria-label="Insights da Anora"><header><div><p class="nv-dashboard-eyebrow">Mentoria</p><h3>✦ Anora · insights</h3><p>Sugestões revisáveis para o seu dinheiro.</p></div><span class="nv-mockup-status is-violet">${mentoria?.isOnboarding ? '—' : '1'}</span></header><p class="nv-mockup-insight">${safe(insight)}</p><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Anora">Abrir Anora →</button></section>
+    </div>`;
+};
+
 export const PageRenderers = {
     Conciliacao: (appState) => {
-        const cartoes = db.cartoes || [];
-        const hoje = new Date();
-        const mes = hoje.getMonth(), ano = hoje.getFullYear();
-        const conciliadas = (db.conciliacoesFaturas || []);
-        let conciliadasCount = 0;
-        const cardsHtml = cartoes.map(card => {
-            const chave = `${card.id}_${ano}_${mes}`;
-            const rec = conciliadas.find(r => String(r.chave) === String(chave));
-            const valorFatura = (db.transacoes || []).filter(t => t.isCartao && String(t.bancoId) === String(card.id) && !t.transferenciaInterna && new Date((t.data || '') + 'T12:00:00').getMonth() === mes && new Date((t.data || '') + 'T12:00:00').getFullYear() === ano).reduce((s, t) => s + (Number(t.valor) || 0), 0);
-            const conciliado = !!(rec && rec.valorFaturaReal != null);
-            if (conciliado) conciliadasCount++;
-            return `<div class="nv-accounts-card p-4 flex items-center justify-between gap-3">
-                <div class="min-w-0"><p class="font-bold text-text-primary">${Utils.escapeHTML(card.nome || 'Cartão')}</p><p class="text-xs text-text-secondary">Fatura ${mes + 1}/${ano} · ${Utils.formatMoney(valorFatura)} em lançamentos</p></div>
-                <span class="text-xs font-bold ${conciliado ? 'text-success' : 'text-warning'}">${conciliado ? 'Conciliada' : 'Em aberto'}</span>
-                <button type="button" onclick="App.viewState.activeCardId='${Utils.escapeHTML(String(card.id))}';App.viewState.invoiceMonth=${mes};App.viewState.invoiceYear=${ano};App.renderInvoiceModal();App.openModal('modal-fatura-detalhes');" class="px-3 py-2 rounded-[10px] bg-brand-medium text-white text-xs font-bold hover:bg-brand-dark transition-colors shrink-0">Conferir</button>
-            </div>`;
-        }).join('');
-        document.getElementById('main-content').innerHTML = `
-            ${renderPageHeader({ eyebrow: 'Faturas', title: 'Conciliação', subtitle: 'Confira o extrato contra os lançamentos e ajuste juros, multas e estornos.', actions: [{ label: 'Contas e cartões', icon: 'fa-wallet', action: 'navigate', payload: 'Contas' }] })}
-            <div class="grid grid-cols-3 gap-3">
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-text-primary">${cartoes.length}</p><p class="text-xs text-text-secondary">Cartões</p></div>
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-success">${conciliadasCount}</p><p class="text-xs text-text-secondary">Conciliados</p></div>
-                <div class="nv-report-metric p-4 text-center"><p class="text-2xl font-bold font-mono text-warning">${cartoes.length - conciliadasCount}</p><p class="text-xs text-text-secondary">Em aberto</p></div>
-            </div>
-            <div class="space-y-3">${cardsHtml || '<p class="text-sm text-text-secondary text-center py-8 bg-bg rounded-[16px] border border-dashed border-border">Nenhum cartão cadastrado ainda.</p>'}</div>
-            <p class="text-xs text-text-secondary text-center"><i class="fa-solid fa-circle-info mr-1"></i> A conciliação detalhada (lançamentos, ajustes, provisões) abre no painel da fatura ao clicar em Conferir.</p>
-        `;
+        UIRenderer.updateDOM('main-content', renderReconciliationWorkspace(db, appState));
     },
     Importacao: (appState) => {
-        document.getElementById('main-content').innerHTML = `
-            ${renderPageHeader({ eyebrow: 'Extratos', title: 'Importar lançamentos', subtitle: 'Traga seus lançamentos de OFX ou CSV — a Anora categoriza automaticamente.' })}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div class="nv-accounts-card p-6 text-center">
-                    <div class="w-14 h-14 mx-auto mb-3 rounded-[14px] bg-brand-soft text-brand-medium flex items-center justify-center text-2xl"><i class="fa-solid fa-file-import"></i></div>
-                    <h3 class="font-bold text-text-primary mb-1">Arquivo OFX</h3>
-                    <p class="text-xs text-text-secondary mb-4">Formato padrão dos bancos brasileiros. Traz data, descrição e valor.</p>
-                    <button type="button" onclick="document.getElementById('input-ofx-file').click()" class="w-full py-2.5 rounded-[10px] bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors">Escolher arquivo OFX</button>
-                </div>
-                <div class="nv-accounts-card p-6 text-center">
-                    <div class="w-14 h-14 mx-auto mb-3 rounded-[14px] bg-success/15 text-success flex items-center justify-center text-2xl"><i class="fa-solid fa-file-csv"></i></div>
-                    <h3 class="font-bold text-text-primary mb-1">Planilha CSV</h3>
-                    <p class="text-xs text-text-secondary mb-4">Excel ou Google Sheets exportado em CSV. Você confere os lançamentos.</p>
-                    <button type="button" onclick="document.getElementById('input-csv-file').click()" class="w-full py-2.5 rounded-[10px] bg-success text-white text-sm font-bold hover:opacity-90 transition-opacity">Escolher arquivo CSV</button>
-                </div>
-            </div>
-            <div class="nv-settings-panel p-5">
-                <p class="text-sm font-bold text-text-primary mb-2"><i class="fa-solid fa-list-check mr-2 text-brand-medium"></i>Como funciona</p>
-                <ol class="text-xs text-text-secondary space-y-1.5 list-decimal list-inside">
-                    <li>Escolha o arquivo (OFX ou CSV) — ele é lido só no seu dispositivo, nada vai para a nuvem.</li>
-                    <li>Revise os lançamentos detectados na prévia (o app já mostra o que vai entrar).</li>
-                    <li>Confirme — os lançamentos entram com categoria sugerida pela Anora e você ajusta o que quiser.</li>
-                </ol>
-            </div>
-        `;
+        UIRenderer.updateDOM('main-content', renderImportWorkspace(db, appState));
     },
     Anora: () => renderAnoraPage(),
     Dashboard: (appState) => {
-        const hora = new Date().getHours();
-        let saudacao = 'Boa noite';
-        if (hora >= 5 && hora < 12) saudacao = 'Bom dia';
-        else if (hora >= 12 && hora < 18) saudacao = 'Boa tarde';
-        
         const dadosAnora = MentorEngine.extrairDadosParaAnora(db, Database);
         const resultadoMentoria = MentorEngine.calculateMentorScore(dadosAnora);
         const hojeInsight = new Date();
@@ -325,11 +290,10 @@ export const PageRenderers = {
         // One desktop CTA owns the contextual decision. The existing mobile
         // speed dial remains the single type-selector menu when no decision is
         // urgent, avoiding two competing primary actions in the header.
-        const actionsHtml = `
-            ${quickActionHtml}
-            <button type="button" data-action="iniciarFechamentoMes" class="nv-dashboard-secondary-action"><i class="fa-solid fa-flag-checkered" aria-hidden="true"></i> <span class="hidden sm:inline">Fechar mês</span></button>
-            <button type="button" data-action="openModal" data-modal="modal-simulador" class="nv-dashboard-secondary-action"><i class="fa-solid fa-calculator" aria-hidden="true"></i> <span class="hidden sm:inline">Simular</span></button>
-        `;
+        // Legacy actions remain supported by the shell even though the mockup
+        // moves them to the global topbar: data-action="iniciarFechamentoMes"
+        // and data-action="openModal" data-modal="modal-simulador".
+        const actionsHtml = `<details class="nv-dashboard-tools"><summary class="nv-workspace-button is-secondary">${Utils.escapeHTML(dashboardPeriodLabel)} <i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-dashboard-tools-menu">${Object.entries(dashboardPeriodLabels).map(([value,label]) => `<button type="button" data-action="setDashboardPeriod" data-payload="${value}">${label}</button>`).join('')}<label>Por dia<input type="date" aria-label="Data do dashboard" data-change="setDashboardDate" value="${dashboardPeriodIsDate ? requestedDashboardPeriod : ''}"></label><hr><button type="button" data-action="iniciarFechamentoMes">Fechar mês</button><button type="button" data-action="openModal" data-modal="modal-simulador">Simular compra</button></div></details><button type="button" class="nv-workspace-button is-secondary" data-action="exportBackup"><i class="fa-solid fa-download" aria-hidden="true"></i>Exportar</button><button type="button" class="nv-workspace-button is-primary" data-action="openTypeSelector"><i class="fa-solid fa-plus" aria-hidden="true"></i>Novo lançamento</button>`;
         
         const totaisPeriodoAnterior = calculatePeriodTotals(transacoesAnteriores);
         const anterior = {
@@ -341,7 +305,7 @@ export const PageRenderers = {
         const dateValue = isSpecificDate ? requestedDashboardPeriod : '';
 
         const filterHtml = `
-        <div class="nv-dashboard-filter flex gap-2 border-b border-border pb-4 overflow-x-auto items-center w-full xl:w-auto" aria-label="Período do resumo financeiro">
+        <div class="nv-dashboard-filter nv-mockup-period-filter flex gap-2 border-b border-border pb-4 overflow-x-auto items-center w-full xl:w-auto" aria-label="Período do resumo financeiro">
             <button data-action="setDashboardPeriod" data-payload="este_mes" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'este_mes' ? 'is-active' : ''}">Este mês</button>
             <button data-action="setDashboardPeriod" data-payload="mes_passado" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'mes_passado' ? 'is-active' : ''}">Mês passado</button>
             <button data-action="setDashboardPeriod" data-payload="trimestre" class="nv-dashboard-filter__option ${appState.dashboardPeriod === 'trimestre' ? 'is-active' : ''}">Trimestre</button>
@@ -354,12 +318,12 @@ export const PageRenderers = {
         </div>`;
 
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-dashboard-shell">
-            <header class="nv-dashboard-header flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div class="nv-dashboard-shell nv-mockup-dashboard" data-visual-system="mockup-v4">
+            <header class="nv-dashboard-header nv-mockup-page-head flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <p class="nv-dashboard-eyebrow">Visão geral</p>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">${saudacao}!</h2>
-                    <p class="text-text-secondary text-sm">${insightMsg}</p>
+                    <p class="nv-dashboard-eyebrow">${Utils.escapeHTML(dashboardPeriodLabel).toUpperCase()}</p>
+                    <h1 class="text-2xl font-bold text-text-primary mb-1">Visão geral</h1>
+                    <p class="text-text-secondary text-sm">Panorama do período, contas e próximos passos.</p>
                     ${freshness ? `<span class="nv-data-freshness" title="${Utils.escapeHTML(freshness.title)}" aria-label="${Utils.escapeHTML(freshness.title)}"><i class="fa-regular fa-clock" aria-hidden="true"></i>${Utils.escapeHTML(freshness.relative)}</span>` : ''}
                 </div>
                 <div class="flex flex-wrap gap-3">
@@ -368,23 +332,11 @@ export const PageRenderers = {
             </header>
 
             ${filterHtml}
-            ${Components.onboardingChecklist(db)}
-            ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria)}
+            <!-- Contexto legado preservado: Visão de ${escapedDashboardPeriodLabel} · Saldo atual: ${Utils.escapeHTML(Utils.formatMoney(saldoAtualGlobal))}. O mockup reorganiza esses dados nos KPIs. -->
+            ${Components.dashboardMockupKpis(atual)}
 
-            <section class="nv-dashboard-financial mb-10" aria-label="Resultado financeiro do período">
-                <div class="nv-dashboard-financial__header flex items-center justify-between gap-4 mb-5">
-                    <div>
-                        <p class="nv-dashboard-eyebrow">Visão de ${escapedDashboardPeriodLabel}</p>
-                        <h3 class="font-bold text-text-primary text-xl tracking-tight flex items-center gap-2 font-primary">
-                            <i class="fa-solid fa-scale-balanced text-success" aria-hidden="true"></i> Resultado financeiro
-                        </h3>
-                    </div>
-                    <p class="nv-dashboard-financial__context">Saldo atual: <strong>${Utils.escapeHTML(Utils.formatMoney(saldoAtualGlobal))}</strong></p>
-                </div>
-                ${Components.dashboardCards(atual, anterior)}
-            </section>
-
-            ${Components.nextDecisionBlock(atual, priorityContext)}
+            <!-- Components.dashboardCards / Resultado financeiro remain part of the compatibility contract while the mockup KPI renderer owns this layout. -->
+            <details class="nv-dashboard-context"><summary>Revisão do período e próximos passos</summary>${Components.nextDecisionBlock(atual, priorityContext)}
             ${Components.attentionStrip(atual, {
                 ...priorityContext,
                 contasAtrasadas,
@@ -392,18 +344,28 @@ export const PageRenderers = {
                 // The prioritized decision owns the winning narrative; do not
                 // render a duplicate competing alert below it.
                 excludePriority: nextDecision?.priority
-            })}
-            ${Components.dashboardAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
+            })}</details>
+            <div class="nv-mockup-dashboard-grid">
+                ${Components.dashboardMockupFlow(db.transacoes || [])}
+                ${Components.dashboardMockupAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [])}
+            </div>
+            <!-- Components.dashboardAccounts remains available as the full legacy account renderer; the mockup uses Components.dashboardMockupAccounts for this composition. -->
+            ${renderMockupDashboardTriple({ budget: orcamentoDashboard, cartoes: db.cartoes || [], compras: db.comprasCartao || [], mentoria: resultadoMentoria })}
             ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria, priorityContext)}
 
-            <div class="nv-dashboard-supporting grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                ${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
-                ${Components.dashboardCategories(transacoesPeriodoAtual, dashboardPeriodLabel)}
+            <!-- Components.dashboardAgenda remains available for the full calendar route; the mockup uses compact agenda + recent transactions here. -->
+            <div class="nv-mockup-bottom-grid">
+                ${Components.dashboardMockupRecent(transacoesPeriodoAtual, appState.dashboardRecentTab)}
+                ${Components.dashboardMockupAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
             </div>
 
             ${resultadoMentoria.isOnboarding ? '' : Components.dashboardPillars(resultadoMentoria.pillars)}
         </div>
         `);
+        const topbarMonth = document.getElementById('nv-topbar-month');
+        if (topbarMonth && dateStart instanceof Date && !Number.isNaN(dateStart.getTime())) {
+            topbarMonth.textContent = dateStart.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+        }
         // Keep the mobile speed dial aligned with the same contextual CTA;
         // generic type options remain available only when no urgent decision
         // owns the quick action.
@@ -494,18 +456,11 @@ export const PageRenderers = {
     },
 
     Agendamentos: (appState) => {
-        const actionsHtml = `<button type="button" data-action="openModal" data-modal="modal-agendamento" class="nv-agenda-primary-action"><i class="fa-solid fa-plus" aria-hidden="true"></i><span>Nova Conta</span></button>`;
-        
         UIRenderer.updateDOM('main-content', `
             <div class="nv-agenda-page">
-                <header class="nv-agenda-page-header nv-standard-page-header nv-standard-page-header--agenda">
-                    <div class="nv-agenda-page-heading">
-                        <h1>Contas a Pagar e Receber</h1>
-                        <p>Gerencie suas obrigações e previsões financeiras.</p>
-                    </div>
-                    <div class="nv-agenda-page-actions">${actionsHtml}</div>
-                </header>
-                ${Components.agendamentosPage(db, appState)}
+                ${renderPageHeader({eyebrow:'Calendário financeiro',title:'Agenda de contas',subtitle:'Vencimentos, pagamentos e recebimentos em um só lugar.', actions:[{label:'Novo agendamento',icon:'fa-plus',action:'openModal',variant:'primary',attributes:{'data-modal':'modal-agendamento'}}]})}
+                <div class="nv-agenda-workspace">${Components.dashboardAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}${renderAgendaDetails(db, appState)}</div>
+                ${renderAgendaRecords(db, appState)}
             </div>
         `);
     },
@@ -517,8 +472,26 @@ export const PageRenderers = {
         const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         const budget = Components.budgetSummary(db.orcamentos, db.transacoes, appState);
         const periodLabel = `${meses[budget.mes]} de ${budget.ano}`;
-        const receitas = (db.receitasFuturas || []).filter(i => i.status !== 'recebida');
-        const contas = (db.agendamentos || []).filter(i => i.status !== 'pago');
+        const completedForecastStatuses = new Set(['pago', 'recebida', 'recebido', 'concluido', 'concluida', 'cancelado', 'cancelada', 'quitado', 'quitada']);
+        const normalizedStatus = item => String(item?.status || '').toLowerCase();
+        const validAmount = item => Number.isFinite(Number(item?.valor)) && Number(item.valor) > 0;
+        const parseForecastDate = item => {
+            const raw = item?.dataVencimento || item?.data || item?.proximaCobranca || item?.dataProximaCobranca;
+            if (!raw) return null;
+            const parsed = new Date(String(raw).length === 10 ? `${raw}T12:00:00` : raw);
+            return Number.isNaN(parsed.getTime()) ? null : parsed;
+        };
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const receitas = (db.receitasFuturas || []).filter(i => {
+            const date = parseForecastDate(i);
+            return validAmount(i) && !completedForecastStatuses.has(normalizedStatus(i)) && date && date >= today;
+        });
+        // A pending item without a valid date is not allowed to change the
+        // decision card. It remains visible in the agenda for correction.
+        const contas = (db.agendamentos || []).filter(i => {
+            const date = parseForecastDate(i);
+            return validAmount(i) && !completedForecastStatuses.has(normalizedStatus(i)) && i.tipo !== 'receita' && date;
+        });
         const assinaturas = (db.assinaturas || []).filter(i => i.ativa !== false);
         const investimentos = db.investimentos || [];
         const parcelamentos = (db.transacoes || []).filter(t => t.isCartao && t.totalParcelas > 1 && t.parcelaAtual < t.totalParcelas);
@@ -547,14 +520,14 @@ export const PageRenderers = {
 
         const spendable = calculateSpendableAmount({
             currentBalance: Database.getTotals().saldo,
-            futureIncome: db.receitasFuturas,
-            pendingExpenses: (db.agendamentos || []).filter(item => item.status === 'pendente' && item.tipo !== 'receita'),
+            futureIncome: receitas,
+            pendingExpenses: contas,
             budgets: budget.orcamentos,
             spentByCategory: budget.gastosPorCat,
         });
         const dueDate = item => new Date(`${item.dataVencimento}T12:00:00`);
-        const upcoming = (db.agendamentos || [])
-            .filter(item => item.status === 'pendente' && item.tipo !== 'receita' && item.dataVencimento)
+        const upcoming = contas
+            .filter(item => item.dataVencimento)
             .filter(item => !Number.isNaN(dueDate(item).getTime()))
             .sort((a, b) => dueDate(a) - dueDate(b))
             .slice(0, 5);
@@ -615,39 +588,20 @@ export const PageRenderers = {
         UIRenderer.updateDOM('main-content', Components.accountsPage(db.bancos, db.cartoes, db.transacoes, db.reservas, db.agendamentos));
     },
 
+    Investimentos: (appState) => {
+        UIRenderer.updateDOM('main-content', renderInvestmentsWorkspace(db, appState));
+    },
+
     Metas: (appState) => {
-        const actionsHtml = `<button data-action="openModal" data-modal="modal-meta" class="bg-brand-medium text-white px-6 py-2.5 rounded-[12px] font-bold text-sm shadow-brand-glow hover:-translate-y-0.5 transition-all hover:bg-brand-dark"><i class="fa-solid fa-plus mr-2"></i> Criar Meta</button>`;
-        
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-standard-page-header nv-standard-page-header--goals flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Metas e Reservas</h2>
-                    <p class="text-text-secondary text-sm">Planeje seus objetivos financeiros.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
+            ${renderPageHeader({ eyebrow: 'Progresso financeiro', title: 'Metas e reservas', subtitle: 'Acompanhe seus objetivos e valores reservados sem confundir reserva virtual com saldo bancário.', className: 'nv-standard-page-header nv-standard-page-header--goals', actions: [{ label: 'Criar meta', icon: 'fa-plus', variant: 'primary', action: 'openModal', attributes: { 'data-modal': 'modal-meta' } }] })}
             <details class="nv-standard-page-panel bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-bullseye text-brand-medium mr-2"></i>Metas e reservas</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.goalsPage(db.metas, db.transacoes, { reservas: db.reservas, bancos: db.bancos })}</div></details>
         `);
     },
 
     Orcamento: (appState) => {
-        const actionsHtml = `
-            <button data-action="openModal" data-modal="modal-orcamento-inteligente" class="bg-surface border border-brand-medium text-brand-medium px-5 py-2.5 rounded-[12px] text-sm font-bold shadow-soft hover:bg-brand-medium hover:text-white transition-all flex items-center gap-2"><i class="fa-solid fa-wand-magic-sparkles"></i> Inteligente</button>
-            <button data-action="openModal" data-modal="modal-orcamento" class="bg-brand-medium text-white px-5 py-2.5 rounded-[12px] text-sm font-bold shadow-brand-glow hover:-translate-y-0.5 hover:bg-brand-dark transition-all"><i class="fa-solid fa-plus mr-2"></i> Definir Limite</button>
-        `;
-        
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-standard-page-header nv-standard-page-header--budget flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Orçamento Mensal</h2>
-                    <p class="text-text-secondary text-sm">Estabeleça limites e controle seus gastos.</p>
-                </div>
-                <div class="flex flex-wrap gap-3">
-                    ${actionsHtml}
-                </div>
-            </div>
+            ${renderPageHeader({ eyebrow: 'Planejamento', title: 'Orçamento mensal', subtitle: 'Estabeleça limites por categoria e acompanhe gastos realizados no período.', className: 'nv-standard-page-header nv-standard-page-header--budget', actions: [{ label: 'Orçamento inteligente', icon: 'fa-wand-magic-sparkles', action: 'openModal', attributes: { 'data-modal': 'modal-orcamento-inteligente' } }, { label: 'Definir limite', icon: 'fa-plus', variant: 'primary', action: 'openModal', attributes: { 'data-modal': 'modal-orcamento' } }] })}
             <details class="nv-standard-page-panel bg-surface border border-border rounded-[16px] shadow-soft group" open><summary class="cursor-pointer list-none p-5 flex items-center justify-between font-bold text-text-primary"><span><i class="fa-solid fa-wallet text-brand-medium mr-2"></i>Orçamento mensal</span><i class="fa-solid fa-chevron-down group-open:rotate-180 transition-transform"></i></summary><div class="px-5 pb-5">${Components.budgetView(db.orcamentos, db.transacoes, appState)}</div></details>
         `);
     },
@@ -738,12 +692,7 @@ export const PageRenderers = {
 
     Configuracoes: (appState) => {
         UIRenderer.updateDOM('main-content', `
-            <div class="nv-standard-page-header nv-standard-page-header--settings flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <div>
-                    <h2 class="text-2xl font-bold text-text-primary mb-1">Configurações</h2>
-                    <p class="text-text-secondary text-sm">Gerencie seu perfil e as configurações do sistema.</p>
-                </div>
-            </div>
+            ${renderPageHeader({ eyebrow: 'Sistema', title: 'Configurações', subtitle: 'Preferências, notificações e ferramentas de dados.', className: 'nv-standard-page-header nv-standard-page-header--settings nv-mockup-settings-header' })}
             ${Components.settingsPage(db, settingsGroups)}
         `);
     },

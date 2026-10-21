@@ -10,7 +10,7 @@ describe('shared visual language across Avenera pages', () => {
         const css = read('input.css');
         const sharedLayer = css.slice(css.indexOf('/* Avenera shared visual language'));
 
-        for (const page of ['agenda', 'goals', 'budget', 'settings']) {
+        for (const page of ['goals', 'budget', 'settings']) {
             expect(pages).toContain(`nv-standard-page-header--${page}`);
         }
         expect(pages).toContain('nv-standard-page-panel');
@@ -60,7 +60,9 @@ describe('shared visual language across Avenera pages', () => {
             'totalPago += a.valor',
             'totalVencido += a.valor'
         ]) expect(components).toContain(hook);
-        expect(pages).toContain('Contas a Pagar e Receber');
+        expect(pages).toContain('Agenda de contas');
+        expect(pages).toContain('renderAgendaRecords(db, appState)');
+        expect(pages).toContain('renderAgendaDetails(db, appState)');
         expect(components).toContain('nv-agenda-period');
         expect(components).toContain('nv-agenda-summary-grid');
         expect(components).toContain('nv-agenda-list-card');
@@ -94,10 +96,11 @@ describe('shared visual language across Avenera pages', () => {
         const css = read('input.css');
 
         expect((html.match(/data-nav-group=/g) || []).length).toBe(3);
-        for (const route of ['Dashboard', 'Transacoes', 'Contas', 'Planejamento', 'Agendamentos', 'Metas', 'Orcamento', 'Relatorios', 'Categorias', 'Contatos', 'Configuracoes']) {
+        for (const route of ['Dashboard', 'Transacoes', 'Contas', 'Planejamento', 'Agendamentos', 'Metas', 'Orcamento', 'Relatorios', 'Categorias', 'Contatos', 'Configuracoes', 'Conciliacao', 'Importacao', 'Anora']) {
             expect(html).toContain(`id="nav-${route}"`);
         }
-        expect(renderer).toContain("group.open = [...group.querySelectorAll('.nav-item')].some");
+        expect(renderer).toContain("if (!group.dataset.initialized || [...group.querySelectorAll('.nav-item')].some(item => routeForItem(item) === currentPage)) group.open = true");
+        expect(renderer).toContain("el.classList.toggle('active', isActive)");
         expect(css).toContain('.nv-sidebar__group-chevron');
         expect(css).toContain('.nv-sidebar__group[open] { background: var(--nv-sidebar-hover); border-color: var(--nv-sidebar-border); }');
         expect(css).toContain('color: var(--nv-sidebar-active-text);');
@@ -141,7 +144,9 @@ describe('shared visual language across Avenera pages', () => {
         expect(compactCss).toContain('--nv-compact-card-padding:12px');
         expect(compactCss).toContain('--nv-ui-page-radius:16px');
         expect(index).toContain('styles.css?v=20260925-anora-restoration-2');
-        expect(worker).toContain("avenera-app-shell-v20");
+        expect(index).toContain('styles-v4.css?v=20260925-v4-shell-1');
+        expect(worker).toContain("avenera-app-shell-v25");
         expect(worker).toContain('./styles.css?v=20260925-anora-restoration-2');
+        expect(worker).toContain('./styles-v4.css?v=20260925-v4-shell-1');
     });
 });

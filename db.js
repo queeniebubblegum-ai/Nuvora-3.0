@@ -4,6 +4,8 @@ import { calculatePeriodTotals, isIncome, isInvoicePayment, isTransfer } from '.
 import { addMoney, fromCents, splitInstallments, toCents } from './money-math.js';
 import { createTransfer, isValidTransferDate } from './financial-transfers.js';
 import { parseLocalDate } from './util-date.js';
+import { auditDatabase, reconcileBalances } from './financial-integrity.js';
+import { CURRENT_SCHEMA_VERSION, migrateDatabaseSnapshot } from './schema-migrations.js';
 const DB_PREFIX = 'nexx_fin_v8_pro_';
 
 const initialDB = {
@@ -30,15 +32,18 @@ const initialDB = {
     configNotificacoes: {
         contasAtivo: true, contasDias: 3,
         orcamentoAtivo: true, orcamentoPct: 80,
-        metasAtivo: true
+        metasAtivo: true,
+        lembretesVencimentoAtivo: true,
+        sincronizacaoAutomaticaAtiva: true
     },
     contatos: [],
     historicoMentoria: [],
     receitasFuturas: [],
     assinaturas: [],
     investimentos: [],
+    fechamentosMes: [],
     // Persisted write timestamp; null means freshness is not trustworthy yet.
-    metadados: { ultimaAtualizacao: null }
+    metadados: { ultimaAtualizacao: null, schemaVersion: CURRENT_SCHEMA_VERSION }
 };
 
 export let db = {};
@@ -50,7 +55,7 @@ let Cache = {
 
 const IDB_NAME = 'NuvoraDB';
 const IDB_STORE = 'keyval';
-const IDB_VERSION = 1;
+const IDB_VERSION = 2;
 
 const IDB = {
     _db: null,
@@ -113,6 +118,22 @@ const IDB = {
         }
     })
 };
+
+// Remove all persisted collections in one IndexedDB transaction. Keeping this
+// operation in the data layer prevents UI recovery actions from clearing only
+// localStorage while the real application data remains in IndexedDB.
+IDB.clear = () => new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+        IDB._memoryStore = {};
+        resolve();
+        return;
+    }
+    const tx = IDB._db.transaction(IDB_STORE, 'readwrite');
+    const request = tx.objectStore(IDB_STORE).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || request.error || new Error('Falha ao limpar os dados persistidos.'));
+    tx.onabort = () => reject(tx.error || new Error('Limpeza de dados interrompida.'));
+});
 
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object || {}, key);
 
@@ -186,6 +207,16 @@ const loadData = async () => {
             db[col] = db[col].filter(item => item !== null && item !== undefined);
         }
     });
+
+    // Migrations are pure and deterministic. Persist the normalized snapshot
+    // once so legacy local data receives the same schema contract as new data.
+    const migrated = migrateDatabaseSnapshot(db, { defaults: initialDB });
+    if (migrated.changed) {
+        collections.forEach(col => {
+            if (migrated.database[col] !== undefined) db[col] = migrated.database[col];
+        });
+        await IDB.setMany(collections.map(col => [col, db[col]]));
+    }
 
     let goalsChanged = false;
     let reservesChanged = false;
@@ -341,18 +372,64 @@ const persist = (col) => {
     }
 };
 
-const persistAtomically = async cols => {
+const persistAtomically = async (cols, writer = entries => IDB.setMany(entries)) => {
     const uniqueCols = [...new Set([...(cols || []), 'metadados'])];
     const previousMetadata = db.metadados;
     db.metadados = { ...(db.metadados || {}), ultimaAtualizacao: new Date().toISOString() };
     try {
-        await IDB.setMany(uniqueCols.filter(col => db[col] !== undefined).map(col => [col, db[col]]));
+        await writer(uniqueCols.filter(col => db[col] !== undefined).map(col => [col, db[col]]));
     } catch (error) {
         db.metadados = previousMetadata;
         throw error;
     }
     clearCache();
     if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+};
+
+const TRANSACTION_PERSIST_COLLECTIONS = ['transacoes', 'bancos', 'reservas', 'metas', 'agendamentos'];
+const NO_TRANSACTION_MUTATION = Symbol('no-transaction-mutation');
+let transactionPersistenceWriter = entries => IDB.setMany(entries);
+let transactionMutationQueue = Promise.resolve();
+
+const cloneCollectionForRollback = value => Array.isArray(value)
+    ? value.map(item => item && typeof item === 'object' ? { ...item } : item)
+    : value && typeof value === 'object' ? { ...value } : value;
+
+const snapshotTransactionState = (cols = TRANSACTION_PERSIST_COLLECTIONS) => Object.fromEntries(
+    [...new Set([...TRANSACTION_PERSIST_COLLECTIONS, ...cols, 'metadados'])].map(col => [col, cloneCollectionForRollback(db[col])])
+);
+
+const restoreTransactionState = snapshot => {
+    Object.entries(snapshot).forEach(([col, value]) => { db[col] = value; });
+    clearCache();
+};
+
+// Serialize ordinary ledger mutations and commit their affected collections in
+// one IndexedDB transaction. A rejected write restores the in-memory snapshot
+// and reaches the caller instead of being swallowed by persist().
+const enqueueTransactionMutation = run => {
+    const operation = transactionMutationQueue.then(run, run);
+    transactionMutationQueue = operation.then(() => undefined, () => undefined);
+    return operation;
+};
+
+const commitTransactionMutation = (mutate, cols = TRANSACTION_PERSIST_COLLECTIONS) => enqueueTransactionMutation(async () => {
+    const snapshot = snapshotTransactionState(cols);
+    try {
+        const result = mutate();
+        if (result === NO_TRANSACTION_MUTATION) return false;
+        await persistAtomically(cols, transactionPersistenceWriter);
+        return result;
+    } catch (error) {
+        restoreTransactionState(snapshot);
+        throw error;
+    }
+});
+
+// Test seam for deterministic quota/IndexedDB failure coverage. Passing no
+// function restores the real IndexedDB writer.
+export const __setTransactionPersistenceWriterForTests = writer => {
+    transactionPersistenceWriter = typeof writer === 'function' ? writer : entries => IDB.setMany(entries);
 };
 
 const transferStateSnapshot = () => ({
@@ -439,7 +516,7 @@ const isValidTransferPair = legs => {
 };
 
 export const TransferRepo = {
-    add: async ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null } = {}) => {
+    add: ({ sourceAccountId, destinationAccountId, amount, date, description, goalId = null } = {}) => enqueueTransactionMutation(async () => {
         const source = resolveTransferAccount(sourceAccountId);
         const destination = resolveTransferAccount(destinationAccountId);
         if ((!source.bank && !source.reserve) || (!destination.bank && !destination.reserve)) {
@@ -470,9 +547,9 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    },
+    }),
 
-    update: async (transactionId, newData = {}) => {
+    update: (transactionId, newData = {}) => enqueueTransactionMutation(async () => {
         if (!newData || typeof newData !== 'object' || Array.isArray(newData)) return false;
         const target = db.transacoes.find(item => String(item.id) === String(transactionId));
         if (!target?.transferenciaId) return false;
@@ -510,9 +587,9 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    },
+    }),
 
-    deleteByIds: async ids => {
+    deleteByIds: ids => enqueueTransactionMutation(async () => {
         const selected = new Set((ids || []).map(String));
         const selectedTransfers = db.transacoes.filter(item => selected.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
         if (selectedTransfers.some(item => !item.transferenciaId)) {
@@ -539,9 +616,9 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    },
+    }),
 
-    restoreMany: async items => {
+    restoreMany: items => enqueueTransactionMutation(async () => {
         const candidates = (items || []).filter(item => !db.transacoes.some(current => String(current.id) === String(item.id)));
         if (candidates.some(item => isUnpairedTransfer(item))) {
             throw new Error('Não é possível restaurar uma transferência sem identificador vinculado.');
@@ -567,7 +644,7 @@ export const TransferRepo = {
             restoreTransferState(snapshot);
             throw error;
         }
-    }
+    })
 };
 
 export const UserRepo = {
@@ -593,9 +670,13 @@ export const MentoriaRepo = {
 
 export const BankRepo = {
     add: (item) => { 
+        if (!item || typeof item !== 'object' || !String(item.nome || '').trim()) return false;
+        if (!Number.isFinite(Number(item.saldo))) return false;
         const novoBanco = {
             ...item,
+            nome: String(item.nome).trim(),
             saldo: fromCents(toCents(item.saldo)),
+            saldoInicial: fromCents(toCents(item.saldoInicial ?? item.saldo)),
             dataCriacao: item.dataCriacao || new Date().toISOString().split('T')[0]
         };
         db.bancos.unshift(novoBanco); 
@@ -613,150 +694,205 @@ export const BankRepo = {
         persist('bancos'); 
         return true;
     },
-    recalculateAll: () => {}
+    recalculateAll: async () => {
+        const changed = [];
+        db.bancos = db.bancos.map(bank => {
+            const opening = Number(bank?.saldoInicial);
+            if (!Number.isFinite(opening)) return bank;
+            const balanceCents = db.transacoes
+                .filter(t => !t?.isCartao && t?.saldoIncluidoNoSaldoDoExtrato !== true && String(t?.bancoId) === String(bank.id))
+                .reduce((total, t) => {
+                    const value = toCents(t?.valor);
+                    if (!value) return total;
+                    const signed = isTransfer(t)
+                        ? (t.transferenciaEntrada ? value : -value)
+                        : (isIncome(t) ? value : -value);
+                    return total + signed;
+                }, toCents(opening));
+            const next = fromCents(balanceCents);
+            if (next !== bank.saldo) changed.push({ id: bank.id, before: bank.saldo, after: next });
+            return { ...bank, saldo: next };
+        });
+        if (changed.length) await persistAtomically(['bancos']);
+        return changed;
+    }
 };
 
 export const TransactionsRepo = {
     getAll: () => db.transacoes,
-    
+
     getByMonth: (ano, mes) => {
         if (!Cache.transacoesPorMes) buildMonthlyCache();
         return Cache.transacoesPorMes[`${ano}-${mes}`] || [];
     },
-    
+
     getCardExpensesByMonth: (ano, mes) => {
         return TransactionsRepo.getByMonth(ano, mes).filter(t => t.isCartao).map(t => ({
             id: t.id, cartaoId: t.bancoId, desc: t.desc, valor: t.valor, categoria: t.categoria,
             parcelaAtual: t.parcelaAtual, totalParcelas: t.totalParcelas, data: t.data, codigoRef: t.codigoRef, parentId: t.grupoId
         }));
     },
-    
-    add: (item) => {
-        if (item?.transferenciaId || isUnpairedTransfer(item)) return false;
-        const t = { ...item };
-        if (!t.codigoRef) t.codigoRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-        db.transacoes.unshift(t);
-        applyBalanceDelta(t);
-        persist('transacoes');
-        return true;
+
+    // A batch shares one IndexedDB transaction for ledger rows and affected
+    // balances. absoluteBalance is used only by confirmed statement imports.
+    addMany: (items, options = {}) => {
+        const incoming = Array.isArray(items) ? items.map(item => item && typeof item === 'object' ? { ...item } : item) : [];
+        const hasAbsoluteBalance = options.absoluteBalance !== undefined && options.absoluteBalance !== null;
+        if (!incoming.length && !hasAbsoluteBalance) return Promise.resolve([]);
+        return commitTransactionMutation(() => {
+            if (incoming.some(item => !item || typeof item !== 'object' || item.transferenciaId || isUnpairedTransfer(item))) {
+                return NO_TRANSACTION_MUTATION;
+            }
+            if (hasAbsoluteBalance) {
+                const bank = db.bancos.find(account => String(account.id) === String(options.bankId));
+                const balance = Number(options.absoluteBalance);
+                if (!bank || !Number.isFinite(balance)) return NO_TRANSACTION_MUTATION;
+                bank.saldo = fromCents(toCents(balance));
+            }
+            const added = incoming.map(item => {
+                const transaction = { ...item };
+                if (!transaction.codigoRef) transaction.codigoRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+                db.transacoes.unshift(transaction);
+                applyBalanceDelta(transaction, false, false);
+                return transaction;
+            });
+            return added;
+        });
     },
-    
-    addRecurrent: (t, parcelas) => {
-        if (t?.transferenciaId || isTransfer(t)) return false;
-        const dataOriginal = new Date(t.data + 'T12:00:00');
-        const diaOriginal = dataOriginal.getDate();
-        const grupoId = Date.now();
+
+    add: item => TransactionsRepo.addMany([item]).then(added => Array.isArray(added) && added.length === 1),
+
+    addRecurrent: (transaction, installments) => {
+        if (transaction?.transferenciaId || isTransfer(transaction)) return Promise.resolve(false);
+        const originalDate = new Date(transaction.data + 'T12:00:00');
+        const originalDay = originalDate.getDate();
+        const groupId = Date.now();
         const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-        const quantidade = Math.max(1, Number.parseInt(parcelas, 10) || 1);
-        const valorParcela = fromCents(toCents(t.valor));
+        const quantity = Math.max(1, Number.parseInt(installments, 10) || 1);
+        const valuePerOccurrence = fromCents(toCents(transaction.valor));
+        const rows = [];
 
-        for (let i = 0; i < quantidade; i++) {
-            let dataParcela = new Date(dataOriginal);
-            dataParcela.setMonth(dataOriginal.getMonth() + i);
-            if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
-
-            const newT = {
-                ...t,
-                id: grupoId + i,
-                valor: valorParcela,
-                data: dataParcela.toISOString().split('T')[0],
+        for (let i = 0; i < quantity; i++) {
+            const occurrenceDate = new Date(originalDate);
+            occurrenceDate.setMonth(originalDate.getMonth() + i);
+            if (occurrenceDate.getDate() !== originalDay) occurrenceDate.setDate(0);
+            rows.push({
+                ...transaction,
+                id: groupId + i,
+                valor: valuePerOccurrence,
+                data: occurrenceDate.toISOString().split('T')[0],
                 parcelaAtual: i + 1,
-                totalParcelas: quantidade,
-                grupoId: grupoId,
+                totalParcelas: quantity,
+                grupoId: groupId,
                 codigoRef: `${baseRef}-${i + 1}`
-            };
-            db.transacoes.unshift(newT);
-            applyBalanceDelta(newT);
-        }
-        persist('transacoes');
-    },
-    
-    addCardExpense: (compra) => {
-        const quantidade = Math.max(1, Number.parseInt(compra.parcelas, 10) || 1);
-        const valoresParcelas = splitInstallments(compra.total, quantidade);
-        const dataOriginal = new Date(compra.data + 'T12:00:00');
-        const diaOriginal = dataOriginal.getDate();
-        const grupoId = Date.now();
-        const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-        
-        for (let i = 0; i < quantidade; i++) {
-            let dataParcela = new Date(dataOriginal);
-            dataParcela.setMonth(dataOriginal.getMonth() + i);
-            if (dataParcela.getDate() !== diaOriginal) dataParcela.setDate(0); 
-            
-            db.transacoes.unshift({
-                id: grupoId + i,
-                desc: compra.desc,
-                valor: valoresParcelas[i],
-                tipo: 'despesa',
-                categoria: compra.categoria,
-                bancoId: compra.cartaoId,
-                isCartao: true,
-                formaPagamento: 'Cartão de Crédito',
-                data: dataParcela.toISOString().split('T')[0],
-                parcelaAtual: i + 1,
-                totalParcelas: quantidade,
-                recorrente: quantidade > 1,
-                grupoId: compra.id || grupoId,
-                codigoRef: quantidade > 1 ? `${baseRef}-${i + 1}` : baseRef,
-                contatoId: compra.contatoId || null
             });
         }
-        persist('transacoes');
-    },
-    
-    update: (id, newData) => {
-        const index = db.transacoes.findIndex(t => String(t.id) === String(id));
-        if (index >= 0 && db.transacoes[index].transferenciaId) return TransferRepo.update(id, newData);
-        if (index >= 0 && isUnpairedTransfer(db.transacoes[index])) return false;
-        if (newData && (newData.transferenciaId || newData.transferenciaInterna === true || newData.tipo === 'transferencia' || newData.tipoTransferencia === 'interna')) return false;
-        if (index !== -1) {
-            const oldT = db.transacoes[index];
-            applyBalanceDelta(oldT, true); 
-            db.transacoes[index] = { ...oldT, ...newData };
-            applyBalanceDelta(db.transacoes[index]); 
-            persist('transacoes');
-            return true;
-        }
-        return false;
+        return TransactionsRepo.addMany(rows);
     },
 
-    // Category-only bulk updates are persisted once and never touch balances/totals.
-    updateCategories: (idsArray, categoria) => {
+    addCardExpense: purchase => {
+        const quantity = Math.max(1, Number.parseInt(purchase.parcelas, 10) || 1);
+        const installmentValues = splitInstallments(purchase.total, quantity);
+        const originalDate = new Date(purchase.data + 'T12:00:00');
+        const originalDay = originalDate.getDate();
+        const groupId = Date.now();
+        const baseRef = `TX-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+        const rows = [];
+
+        for (let i = 0; i < quantity; i++) {
+            const installmentDate = new Date(originalDate);
+            installmentDate.setMonth(originalDate.getMonth() + i);
+            if (installmentDate.getDate() !== originalDay) installmentDate.setDate(0);
+            rows.push({
+                id: groupId + i,
+                desc: purchase.desc,
+                valor: installmentValues[i],
+                tipo: 'despesa',
+                categoria: purchase.categoria,
+                bancoId: purchase.cartaoId,
+                isCartao: true,
+                formaPagamento: 'Cartão de Crédito',
+                data: installmentDate.toISOString().split('T')[0],
+                parcelaAtual: i + 1,
+                totalParcelas: quantity,
+                recorrente: quantity > 1,
+                grupoId: purchase.id || groupId,
+                codigoRef: quantity > 1 ? `${baseRef}-${i + 1}` : baseRef,
+                contatoId: purchase.contatoId || null
+            });
+        }
+        return TransactionsRepo.addMany(rows).then(added => Array.isArray(added) && added.length === quantity);
+    },
+
+    update: (id, newData) => {
+        const current = db.transacoes.find(item => String(item.id) === String(id));
+        if (current?.transferenciaId) return TransferRepo.update(id, newData);
+        if (current && isUnpairedTransfer(current)) return Promise.resolve(false);
+        if (newData && (newData.transferenciaId || newData.transferenciaInterna === true || newData.tipo === 'transferencia' || newData.tipoTransferencia === 'interna')) return Promise.resolve(false);
+        return commitTransactionMutation(() => {
+            const index = db.transacoes.findIndex(item => String(item.id) === String(id));
+            if (index < 0 || db.transacoes[index].transferenciaId || isUnpairedTransfer(db.transacoes[index])) return NO_TRANSACTION_MUTATION;
+            const oldTransaction = db.transacoes[index];
+            applyBalanceDelta(oldTransaction, true, false);
+            db.transacoes[index] = { ...oldTransaction, ...newData };
+            applyBalanceDelta(db.transacoes[index], false, false);
+            return true;
+        });
+    },
+
+    updateCategories: (idsArray, categoria) => commitTransactionMutation(() => {
         const ids = new Set((idsArray || []).map(id => String(id)));
-        if (!ids.size || !categoria) return 0;
+        if (!ids.size || !categoria) return NO_TRANSACTION_MUTATION;
         const selectedTransfers = db.transacoes.filter(item => ids.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
-        if (selectedTransfers.some(item => !item.transferenciaId)) return 0;
+        if (selectedTransfers.some(item => !item.transferenciaId)) return NO_TRANSACTION_MUTATION;
         const transferIds = new Set(selectedTransfers.map(item => String(item.transferenciaId)));
         const selectedPairs = [...transferIds].map(id => db.transacoes.filter(item => String(item.transferenciaId) === id));
-        if (selectedPairs.some(legs => !isValidTransferPair(legs))) return 0;
+        if (selectedPairs.some(legs => !isValidTransferPair(legs))) return NO_TRANSACTION_MUTATION;
         const idsToUpdate = new Set(ids);
         db.transacoes.filter(item => item.transferenciaId && transferIds.has(String(item.transferenciaId))).forEach(item => idsToUpdate.add(String(item.id)));
         let changed = 0;
-        db.transacoes = db.transacoes.map(t => {
-            if (!idsToUpdate.has(String(t.id))) return t;
+        db.transacoes = db.transacoes.map(item => {
+            if (!idsToUpdate.has(String(item.id))) return item;
             changed += 1;
-            return { ...t, categoria };
+            return { ...item, categoria };
         });
-        if (changed) persist('transacoes');
-        return changed;
-    },
-    
+        return changed ? changed : NO_TRANSACTION_MUTATION;
+    }, ['transacoes']),
+
     delete: id => TransactionsRepo.deleteMultiple([id]),
 
-    deleteMultiple: idsArray => {
-        if (!idsArray || idsArray.length === 0) return;
-        const strIds = new Set(idsArray.map(String));
+    deleteMultiple: (idsArray, options = {}) => {
+        if ((!idsArray || idsArray.length === 0) && !options.reverseBalanceAdjustment) return Promise.resolve([]);
+        const strIds = new Set((idsArray || []).map(String));
         const includesTransfer = db.transacoes.some(item => strIds.has(String(item.id)) && (item.transferenciaId || isUnpairedTransfer(item)));
         if (includesTransfer) return TransferRepo.deleteByIds(idsArray);
-
-        const removed = db.transacoes.filter(item => strIds.has(String(item.id)));
-        db.transacoes = db.transacoes.filter(item => !strIds.has(String(item.id)));
-        removed.forEach(item => applyBalanceDelta(item, true));
-        persist('transacoes');
-        return removed;
+        return commitTransactionMutation(() => {
+            const removed = db.transacoes.filter(item => strIds.has(String(item.id)));
+            const adjustment = options.reverseBalanceAdjustment;
+            if (!removed.length && !adjustment) return NO_TRANSACTION_MUTATION;
+            if (adjustment) {
+                const bank = db.bancos.find(item => String(item.id) === String(adjustment.bankId));
+                if (!bank || !Number.isFinite(Number(adjustment.amount))) return NO_TRANSACTION_MUTATION;
+                bank.saldo = fromCents(toCents(bank.saldo) - toCents(adjustment.amount));
+            }
+            db.transacoes = db.transacoes.filter(item => !strIds.has(String(item.id)));
+            removed.forEach(item => applyBalanceDelta(item, true, false));
+            return removed;
+        });
     }
 };
+
+// Recurring ledger entries and their future commitments must be committed as
+// one mutation. This prevents a successful first occurrence from being left
+// behind when one of the scheduled records cannot be persisted.
+const addRecurringTransactionAtomically = (transaction, schedules = []) => commitTransactionMutation(() => {
+    if (!transaction || typeof transaction !== 'object') return NO_TRANSACTION_MUTATION;
+    const normalizedSchedules = (Array.isArray(schedules) ? schedules : []).filter(item => item && typeof item === 'object');
+    db.transacoes.unshift({ ...transaction });
+    applyBalanceDelta(transaction, false, false);
+    db.agendamentos = [...normalizedSchedules.map(item => ({ ...item })), ...db.agendamentos];
+    return [{ ...transaction }, ...normalizedSchedules.map(item => ({ ...item }))];
+}, ['transacoes', 'bancos', 'reservas', 'metas', 'agendamentos']);
 
 export const CardRepo = {
     add: (item) => { db.cartoes.unshift(item); persist('cartoes'); return true; },
@@ -787,7 +923,7 @@ export const ReconciliationRepo = {
         persist('conciliacoesFaturas'); return normalized;
     },
     /** Post an explicit invoice adjustment as one idempotent history transaction. */
-    createAdjustmentTransaction: (cardId, year, month, adjustmentId) => {
+    createAdjustmentTransaction: async (cardId, year, month, adjustmentId) => {
         const chave = invoiceReconciliationKey(cardId, year, month);
         const record = ReconciliationRepo.get(cardId, year, month);
         const ajustes = record?.ajustes || [];
@@ -815,7 +951,8 @@ export const ReconciliationRepo = {
         let txId = `tx-conciliacao-${encodeURIComponent(chave)}-${encodeURIComponent(String(adjustment.id))}`;
         if (db.transacoes.some(t => String(t.id) === txId)) txId = `${txId}-${Date.now()}`;
         const transaction = { id: String(txId), desc: adjustment.description || 'Ajuste de fatura', valor: adjustment.amount, tipo: isCredit ? 'receita' : 'despesa', categoria: isCredit ? 'Reembolso / estorno' : category, bancoId: card?.bancoId ?? null, isCartao: false, formaPagamento: 'Ajuste de fatura', data: date, parcelaAtual: 1, totalParcelas: 1, recorrente: false, invoiceReconciliationKey: chave, reconciliationAdjustmentId: String(adjustment.id), origem: 'conciliacao_fatura' };
-        TransactionsRepo.add(transaction);
+        const saved = await TransactionsRepo.add(transaction);
+        if (!saved) return { ok: false, reason: 'transaction-not-saved' };
         ajustes[index] = { ...ajustes[index], transactionId: String(transaction.id), postedAt: new Date().toISOString(), lancamentoCriado: true };
         const updated = { ...record, ajustes, atualizadoEm: new Date().toISOString() };
         const recordIndex = db.conciliacoesFaturas.findIndex(r => r.chave === chave);
@@ -849,7 +986,7 @@ export const ReconciliationRepo = {
     }
 };
 
-const applyGoalAllocation = async ({ goalId, accountId = null, amount, date, description = null, type }) => {
+const applyGoalAllocation = ({ goalId, accountId = null, amount, date, description = null, type }) => enqueueTransactionMutation(async () => {
     const goal = db.metas.find(item => String(item.id) === String(goalId));
     if (!goal) throw new Error('Meta não encontrada.');
     const reserve = (db.reservas || []).find(item => String(item.id) === String(goal.reservaId));
@@ -899,7 +1036,7 @@ const applyGoalAllocation = async ({ goalId, accountId = null, amount, date, des
         db.reservas = previous.reservas;
         throw error;
     }
-};
+});
 
 export const GoalRepo = {
     add: item => {
@@ -1079,6 +1216,8 @@ export const CategoryRepo = {
         categoria.paiId = paiId;
         if (data.icone) categoria.icone = data.icone;
         if (data.cor) categoria.cor = data.cor;
+        if (Array.isArray(data.palavrasChave)) categoria.palavrasChave = [...new Set(data.palavrasChave
+            .map(word => String(word).trim().toLocaleLowerCase('pt-BR')).filter(Boolean))];
         // ativo/arquivada/fixa are lifecycle/protection state, not editable form fields.
         if (eraPrincipal && antigo !== nome) db.categorias.forEach(c => { if (c !== categoria && c.grupo === antigo) c.grupo = nome; });
         if (antigo !== nome) CategoryRepo._references(antigo, nome);
@@ -1116,9 +1255,93 @@ export const CategoryRepo = {
 };
 
 export const ContactRepo = {
-    add: (item) => { db.contatos.unshift(item); persist('contatos'); return true; },
+    add: (item) => {
+        if (!item || !String(item.nome || '').trim() || db.contatos.some(contact => String(contact.id) === String(item.id))) return false;
+        db.contatos.unshift({ ...item, nome: String(item.nome).trim() });
+        persist('contatos'); return true;
+    },
+    update: (id, data) => {
+        const index = db.contatos.findIndex(item => String(item.id) === String(id));
+        if (index < 0 || !String(data?.nome || '').trim()) return false;
+        const current = db.contatos[index];
+        // Contact IDs are foreign keys on transactions and forecasts. Editing
+        // the profile must never replace the ID or recreate its financial history.
+        db.contatos[index] = { ...current, ...data, id: current.id, nome: String(data.nome).trim() };
+        persist('contatos'); return true;
+    },
     remove: (id) => { db.contatos = db.contatos.filter(i => i.id.toString() !== id.toString()); persist('contatos'); }
 };
+
+const saveContactAtomically = (id, data) => commitTransactionMutation(() => {
+    const nome = String(data?.nome || '').trim();
+    const email = String(data?.email || '').trim();
+    if (!nome || !['pf', 'pj'].includes(data?.tipo || 'pf') || (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))) throw new Error('Confira o nome, tipo e e-mail da pessoa.');
+    const index = id ? db.contatos.findIndex(contact => String(contact.id) === String(id)) : -1;
+    if (id && index < 0) throw new Error('Esta pessoa não existe mais.');
+    const current = index >= 0 ? db.contatos[index] : null;
+    const saved = { ...(current || {}), ...data, nome, email,
+        id: current?.id ?? data.id ?? globalThis.crypto?.randomUUID?.() ?? `contato-${Date.now()}-${Math.random().toString(36).slice(2, 10)}` };
+    if (index >= 0) db.contatos[index] = saved;
+    else {
+        if (db.contatos.some(contact => String(contact.id) === String(saved.id))) throw new Error('Esta pessoa já está cadastrada.');
+        db.contatos.unshift(saved);
+    }
+    return saved;
+}, ['contatos']);
+
+const financialMonthKey = (year, month) => {
+    if (!Number.isInteger(year) || year < 1900 || year > 9999 || !Number.isInteger(month) || month < 0 || month > 11) throw new Error('Selecione um mês e ano válidos.');
+    return `${year}-${String(month + 1).padStart(2, '0')}`;
+};
+
+// Closing is an auditable snapshot. The ledger remains editable until a future
+// centrally enforced period-lock feature is implemented; lock:true is rejected.
+const closeFinancialMonth = ({ year, month, lock = false } = {}) => commitTransactionMutation(() => {
+    const period = financialMonthKey(year, month);
+    if (lock) throw new Error('O bloqueio de lançamentos por mês ainda não está disponível. Use fechamento sem bloqueio.');
+    if (!Array.isArray(db.fechamentosMes)) db.fechamentosMes = [];
+    const index = db.fechamentosMes.findIndex(item => item.periodo === period);
+    const current = db.fechamentosMes[index];
+    if (current?.status === 'fechado') return current;
+    const transactions = db.transacoes.filter(transaction => {
+        const date = parseLocalDate(transaction.data);
+        return date && date.getFullYear() === year && date.getMonth() === month;
+    });
+    const totals = calculatePeriodTotals(transactions);
+    const capturedAt = new Date().toISOString();
+    const bankBalance = (db.bancos || []).reduce((total, bank) => addMoney(total, bank.saldo), 0);
+    const reserved = (db.reservas || []).reduce((total, reserve) => addMoney(total, reserve.saldo), 0);
+    const pending = [
+        ...(db.agendamentos || []).filter(item => !['pago', 'recebida', 'cancelado', 'cancelada'].includes(item.status)),
+        ...(db.receitasFuturas || []).filter(item => !['pago', 'recebida', 'cancelado', 'cancelada'].includes(item.status))
+    ].filter(item => String(item.dataVencimento || item.data || '').slice(0, 7) === period);
+    const record = {
+        id: `fechamento-${period}`, periodo: period, year, month, status: 'fechado', locked: false,
+        fechadoEm: capturedAt, receitas: totals.income, despesas: totals.expense,
+        resultado: addMoney(totals.income, -totals.expense), quantidadeLancamentos: transactions.length,
+        pendencias: pending.length, transacoesIds: transactions.map(item => item.id),
+        saldoBancario: bankBalance, saldoReservado: reserved, saldoDisponivel: addMoney(bankBalance, -reserved),
+        // Account balances are captured at close time. They are not presented
+        // as reconstructed historical month-end balances for previous periods.
+        saldosReferencia: 'momento-do-fechamento', saldosCapturadosEm: capturedAt,
+        contas: (db.bancos || []).map(bank => ({ id: bank.id, nome: bank.nome, saldo: fromCents(toCents(bank.saldo)) })),
+        historico: current ? [...(current.historico || []), { fechadoEm: current.fechadoEm, reabertoEm: current.reabertoEm, receitas: current.receitas, despesas: current.despesas, resultado: current.resultado }] : []
+    };
+    if (index >= 0) db.fechamentosMes[index] = record;
+    else db.fechamentosMes.unshift(record);
+    return record;
+}, ['fechamentosMes']);
+
+const reopenFinancialMonth = ({ year, month } = {}) => commitTransactionMutation(() => {
+    const period = financialMonthKey(year, month);
+    const index = (db.fechamentosMes || []).findIndex(item => item.periodo === period);
+    if (index < 0) throw new Error('Este mês ainda não possui fechamento.');
+    const current = db.fechamentosMes[index];
+    if (current.status === 'aberto') return current;
+    const updated = { ...current, status: 'aberto', locked: false, reabertoEm: new Date().toISOString() };
+    db.fechamentosMes[index] = updated;
+    return updated;
+}, ['fechamentosMes']);
 
 export const NotificationRepo = {
     add: (item) => { db.notificacoes.unshift(item); persist('notificacoes'); return true; },
@@ -1144,6 +1367,92 @@ export const ScheduleRepo = {
     },
     remove: (id) => { db.agendamentos = db.agendamentos.filter(i => i.id.toString() !== id.toString()); persist('agendamentos'); }
 };
+
+const normalizedForecast = (item, collection = 'agendamentos') => {
+    if (!item || typeof item !== 'object' || item.id == null || String(item.id) === '') throw new Error('Previsão inválida.');
+    const desc = String(item.desc || '').trim();
+    const date = String(item.dataVencimento || item.data || '');
+    const tipo = item.tipo || (collection === 'receitasFuturas' ? 'receita' : 'despesa');
+    const value = Number(item.valor);
+    if (!desc || !Number.isFinite(value) || toCents(value) <= 0 || !isValidTransferDate(date) || !['receita', 'despesa'].includes(tipo)) {
+        throw new Error('Informe descrição, valor, tipo e vencimento válidos.');
+    }
+    const bank = item.bancoId == null || item.bancoId === '' ? null : db.bancos.find(account => String(account.id) === String(item.bancoId));
+    const contact = item.contatoId == null || item.contatoId === '' ? null : db.contatos.find(person => String(person.id) === String(item.contatoId));
+    if (item.bancoId != null && item.bancoId !== '' && !bank) throw new Error('A conta selecionada não existe mais.');
+    if (item.contatoId != null && item.contatoId !== '' && !contact) throw new Error('A pessoa selecionada não existe mais.');
+    return { ...item, desc, valor: fromCents(toCents(value)), tipo, bancoId: bank?.id ?? null,
+        contatoId: contact?.id ?? null, dataVencimento: date,
+        ...(collection === 'receitasFuturas' ? { data: date } : {}) };
+};
+
+// Schedule creation and settlement use the same mutation queue as the ledger.
+// One failed write rolls back the complete series, or the balance and its status.
+const addSchedulesAtomically = items => commitTransactionMutation(() => {
+    if (!Array.isArray(items) || !items.length || items.length > 120) throw new Error('Informe de 1 a 120 ocorrências.');
+    const rows = items.map(item => normalizedForecast(item));
+    const ids = new Set(db.agendamentos.map(item => String(item.id)));
+    rows.forEach(row => {
+        if (ids.has(String(row.id))) throw new Error('Esta previsão já está cadastrada.');
+        ids.add(String(row.id));
+    });
+    db.agendamentos = [...rows, ...db.agendamentos];
+    return rows;
+}, ['agendamentos']);
+
+const saveForecastAtomically = (id, collection, data) => commitTransactionMutation(() => {
+    if (!['agendamentos', 'receitasFuturas'].includes(collection)) throw new Error('Origem da previsão inválida.');
+    const index = db[collection].findIndex(item => String(item.id) === String(id));
+    if (index < 0) throw new Error('Esta previsão não existe mais.');
+    const current = db[collection][index];
+    if (['pago', 'recebida'].includes(current.status)) throw new Error('Esta previsão já foi realizada. Edite o lançamento no histórico.');
+    if (current.categoria === 'Fatura Cartão') throw new Error('Use o fluxo de fatura para alterar este compromisso.');
+    const nextCollection = collection === 'receitasFuturas' && data.tipo === 'despesa' ? 'agendamentos' : collection;
+    const updated = normalizedForecast({ ...current, ...data, id: current.id, status: current.status || (collection === 'receitasFuturas' ? 'prevista' : 'pendente') }, nextCollection);
+    if (nextCollection !== collection) {
+        if (db[nextCollection].some(item => String(item.id) === String(id))) throw new Error('Já existe uma previsão com este identificador.');
+        db[collection].splice(index, 1);
+        updated.status = 'pendente';
+        db[nextCollection].unshift(updated);
+    } else db[collection][index] = updated;
+    return { schedule: updated, collection: nextCollection };
+}, ['agendamentos', 'receitasFuturas']);
+
+const settleScheduleAtomically = (id, options = {}) => commitTransactionMutation(() => {
+    const collection = options.collection || 'agendamentos';
+    if (!['agendamentos', 'receitasFuturas'].includes(collection)) throw new Error('Origem da previsão inválida.');
+    const index = db[collection].findIndex(item => String(item.id) === String(id));
+    if (index < 0) throw new Error('Esta previsão não existe mais.');
+    const current = db[collection][index];
+    if (current.categoria === 'Fatura Cartão' || current.pagamentoFaturaAutomatico) throw new Error('Use o pagamento de fatura para este compromisso.');
+    const reference = collection === 'receitasFuturas' ? 'receitaFuturaId' : 'agendamentoId';
+    const existing = db.transacoes.find(transaction => String(transaction[reference] ?? '') === String(id));
+    if (existing) return { transaction: existing, schedule: current, alreadySettled: true };
+    if (['pago', 'recebida'].includes(current.status)) throw new Error('Esta previsão já foi realizada. Consulte o histórico antes de lançar novamente.');
+    if (['cancelado', 'cancelada'].includes(current.status)) throw new Error('Esta previsão está cancelada.');
+    const bank = db.bancos.find(account => String(account.id) === String(options.bankId ?? current.bancoId ?? ''));
+    if (!bank) throw new Error('Selecione uma conta válida antes de realizar a previsão.');
+    const now = new Date();
+    const date = options.date || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    if (!isValidTransferDate(date)) throw new Error('Informe uma data de realização válida.');
+    const normalized = normalizedForecast({ ...current, bancoId: bank.id }, collection);
+    const transaction = {
+        id: `agenda-${collection}-${String(current.id)}`,
+        [reference]: current.id, desc: normalized.desc, valor: normalized.valor,
+        tipo: collection === 'receitasFuturas' ? 'receita' : normalized.tipo,
+        categoria: normalized.categoria || 'Outros', bancoId: bank.id, contatoId: normalized.contatoId,
+        isCartao: false, formaPagamento: collection === 'receitasFuturas' ? 'Receita futura recebida' : 'Automático (Agendamento)',
+        data: date, parcelaAtual: current.parcelaAtual || 1, totalParcelas: current.totalParcelas || 1,
+        recorrente: current.recorrente === true, grupoId: current.grupoId || null,
+        codigoRef: `AGENDA-${String(current.id)}`
+    };
+    if (db.transacoes.some(item => String(item.id) === transaction.id)) throw new Error('O identificador desta realização já existe no histórico.');
+    db.transacoes.unshift(transaction);
+    applyBalanceDelta(transaction, false, false);
+    const schedule = { ...current, bancoId: bank.id, status: collection === 'receitasFuturas' ? 'recebida' : 'pago', transacaoId: transaction.id, dataRealizacao: date };
+    db[collection][index] = schedule;
+    return { transaction, schedule, alreadySettled: false };
+}, ['transacoes', 'bancos', 'agendamentos', 'receitasFuturas']);
 
 export const FutureIncomeRepo = {
     add: (item) => { db.receitasFuturas.unshift({ ...item, status: item.status || 'prevista' }); persist('receitasFuturas'); return true; },
@@ -1183,14 +1492,36 @@ export const Database = {
     getComprasCartaoPorMes: TransactionsRepo.getCardExpensesByMonth,
     save: persist,
     getLastUpdated: () => db.metadados?.ultimaAtualizacao || null,
-    replaceAll: async (data) => {
+    auditIntegrity: (options = {}) => auditDatabase(db, options),
+    reconcileBalances: () => reconcileBalances(db),
+    getSchemaVersion: () => Number(db.metadados?.schemaVersion || 0),
+    replaceAll: async (data, options = {}) => {
         if (!data || typeof data !== 'object') throw new Error('Backup inválido');
 
-        for (const col of collections) {
-            if (!hasOwn(data, col)) continue;
+        const exact = options?.mode === 'exact';
+        const source = exact
+            ? Object.fromEntries(collections.map(col => [col, hasOwn(data, col) ? data[col] : cloneCollectionForRollback(initialDB[col])]))
+            : data;
+        // Validate the raw shape before migrations fill missing collections;
+        // malformed restore payloads must fail without mutating live data.
+        for (const col of (exact ? collections : collections.filter(name => hasOwn(source, name)))) {
+            if (Array.isArray(initialDB[col]) && hasOwn(source, col) && !Array.isArray(source[col])) {
+                throw new Error(`Coleção inválida: ${col}`);
+            }
+            if (!Array.isArray(initialDB[col]) && hasOwn(source, col) && (typeof source[col] !== 'object' || source[col] === null || Array.isArray(source[col]))) {
+                throw new Error(`Registro inválido: ${col}`);
+            }
+        }
+        const migrated = migrateDatabaseSnapshot(source, { defaults: initialDB });
+        const normalizedSource = migrated.database;
+        // Non-exact restores are patches: omitted collections must retain their
+        // current values instead of being replaced by migration defaults.
+        const replaceCollections = exact ? collections : collections.filter(col => hasOwn(data, col));
+
+        for (const col of replaceCollections) {
             if (Array.isArray(initialDB[col])) {
-                if (!Array.isArray(data[col])) throw new Error(`Coleção inválida: ${col}`);
-            } else if (typeof data[col] !== 'object' || data[col] === null || Array.isArray(data[col])) {
+                if (!Array.isArray(normalizedSource[col])) throw new Error(`Coleção inválida: ${col}`);
+            } else if (typeof normalizedSource[col] !== 'object' || normalizedSource[col] === null || Array.isArray(normalizedSource[col])) {
                 throw new Error(`Registro inválido: ${col}`);
             }
         }
@@ -1201,11 +1532,10 @@ export const Database = {
                 : (db[col] && typeof db[col] === 'object' ? { ...db[col] } : db[col])
         ]));
         try {
-            for (const col of collections) {
-                if (!hasOwn(data, col)) continue;
+            for (const col of replaceCollections) {
                 db[col] = Array.isArray(initialDB[col])
-                    ? data[col].map(item => item && typeof item === 'object' ? { ...item } : item)
-                    : { ...data[col] };
+                    ? normalizedSource[col].map(item => item && typeof item === 'object' ? { ...item } : item)
+                    : { ...normalizedSource[col] };
             }
 
             if (hasOwn(data, 'metas') && !hasOwn(data, 'reservas')) {
@@ -1255,6 +1585,28 @@ export const Database = {
             throw error;
         }
     },
+    clearAll: async () => {
+        const snapshot = Object.fromEntries(collections.map(col => [col, cloneCollectionForRollback(db[col])]));
+        try {
+            await IDB.clear();
+            if (typeof localStorage !== 'undefined') {
+                collections.forEach(col => localStorage.removeItem(DB_PREFIX + col));
+            }
+            collections.forEach(col => {
+                db[col] = cloneCollectionForRollback(initialDB[col]);
+            });
+            db.metadados = { ultimaAtualizacao: new Date().toISOString() };
+            await IDB.setMany(collections.map(col => [col, db[col]]));
+            clearCache();
+            if (typeof document !== 'undefined') document.dispatchEvent(new Event('db-updated'));
+            return true;
+        } catch (error) {
+            collections.forEach(col => { db[col] = snapshot[col]; });
+            try { await IDB.setMany(collections.map(col => [col, db[col]])); } catch (_) {}
+            clearCache();
+            throw error;
+        }
+    },
     saveMentoriaSnapshot: MentoriaRepo.saveSnapshot,
     add: (col, item) => {
         switch(col) {
@@ -1274,6 +1626,14 @@ export const Database = {
         return false;
     },
     addRecorrente: TransactionsRepo.addRecurrent,
+    addRecurringTransactionAtomically,
+    addSchedulesAtomically,
+    saveForecastAtomically,
+    settleScheduleAtomically,
+    saveContactAtomically,
+    closeFinancialMonth,
+    reopenFinancialMonth,
+    addTransactionsAtomically: TransactionsRepo.addMany,
     remove: (col, id) => {
         switch(col) {
             case 'transacoes': case 'comprasCartao': return TransactionsRepo.delete(id);
@@ -1290,8 +1650,8 @@ export const Database = {
             case 'investimentos': return InvestmentRepo.remove(id);
         }
     },
-    removeMultiple: (col, ids) => {
-        if (col === 'transacoes') return TransactionsRepo.deleteMultiple(ids);
+    removeMultiple: (col, ids, options) => {
+        if (col === 'transacoes') return TransactionsRepo.deleteMultiple(ids, options);
     },
     addTransfer: TransferRepo.add,
     restoreTransactions: TransferRepo.restoreMany,
@@ -1299,6 +1659,7 @@ export const Database = {
     updateTransactionCategories: TransactionsRepo.updateCategories,
     updateAgendamento: ScheduleRepo.update,
     updateReceitaFutura: FutureIncomeRepo.update,
+    updateContact: ContactRepo.update,
     addCardExpense: TransactionsRepo.addCardExpense,
     updateConfig: NotificationRepo.updateConfig,
     updateBudget: BudgetRepo.updateLimit,

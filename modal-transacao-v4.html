@@ -1,0 +1,140 @@
+<!-- ============================================================
+     Modal de lançamento v4 (Fase 2) — markup
+     Fiel ao mockup: toggle de tipo, valor com prefixo R$ + erro inline,
+     prévia ao vivo, pessoa, vencimento, recorrência.
+     INTEGRAÇÃO: campos escondidos com IDs antigos (edit-*, dc-*) garantem
+     compatibilidade com ctrl-transacoes.js / evt-submit.js sem alterá-los.
+     ============================================================ -->
+<div id="modal-backdrop" class="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm flex items-end md:items-center justify-center p-0 md:p-6 hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="card-elevated w-full md:max-w-xl max-h-[92vh] overflow-y-auto rounded-b-none md:rounded-[var(--radius-4)]" role="document">
+
+    <!-- Cabeçalho -->
+    <div class="flex items-start justify-between px-5 md:px-6 pt-5 pb-4 border-b border-border sticky top-0 bg-surface z-10">
+      <div>
+        <h2 id="modal-title" class="font-display text-xl font-semibold text-text">Novo lançamento</h2>
+        <p class="text-xs text-muted mt-0.5" id="modal-subtitle">Os dados ficam salvos apenas neste dispositivo.</p>
+      </div>
+      <button class="btn-ghost !p-2 !rounded-full" data-action="close-modal" aria-label="Fechar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <form id="transaction-form" class="px-5 md:px-6 py-5 space-y-5" novalidate>
+
+      <!-- Tipo de lançamento (toggle) -->
+      <div>
+        <span class="label">Tipo de lançamento</span>
+        <div class="grid grid-cols-3 gap-2 p-1 bg-surface-2 rounded-[var(--radius-2)]" role="tablist">
+          <button type="button" class="type-btn py-2 rounded-[var(--radius-1)] text-sm font-semibold text-positive transition-colors" data-tx-type="receita" aria-pressed="false">＋ Receita</button>
+          <button type="button" class="type-btn py-2 rounded-[var(--radius-1)] text-sm font-semibold bg-surface text-text shadow-soft transition-colors active" data-tx-type="despesa" aria-pressed="true">− Despesa</button>
+          <button type="button" class="type-btn py-2 rounded-[var(--radius-1)] text-sm font-semibold text-muted transition-colors" data-tx-type="transferencia" aria-pressed="false">⇄ Transferência</button>
+        </div>
+        <select id="tx-type" class="hidden" aria-hidden="true"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="transferencia">Transferência</option></select>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <!-- Valor (com parsing BRL + validação inline) -->
+        <div>
+          <label class="label" for="tx-amount">Valor</label>
+          <div class="relative">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-num font-semibold text-muted">R$</span>
+            <input id="tx-amount" type="text" inputmode="decimal" autocomplete="off"
+                   class="input pl-11 font-num text-lg font-semibold tracking-tight"
+                   placeholder="0,00" required>
+          </div>
+          <small id="tx-amount-error" class="hidden text-danger text-xs mt-1.5 flex items-center gap-1">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            Informe um valor maior que zero.
+          </small>
+        </div>
+
+        <!-- Data -->
+        <div>
+          <label class="label" for="tx-date">Data</label>
+          <input id="tx-date" type="date" class="input" required>
+        </div>
+
+        <!-- Descrição -->
+        <div class="sm:col-span-2">
+          <label class="label" for="tx-description">Descrição</label>
+          <input id="tx-description" type="text" maxlength="60" class="input" placeholder="Ex.: Mercado, aluguel, salário…" required>
+          <small class="text-muted-2 text-xs mt-1.5 block">Uma descrição curta ajuda a encontrar o lançamento depois.</small>
+        </div>
+
+        <!-- Categoria (combobox com busca) -->
+        <div>
+          <label class="label" for="tx-category">Categoria</label>
+          <div class="category-combobox" id="tx-category-wrap">
+            <input id="tx-category" type="text" class="input" placeholder="Buscar ou criar…" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="tx-category-list">
+            <ul id="tx-category-list" class="hidden absolute z-20 mt-1 w-full max-h-56 overflow-y-auto card p-1 list-none" role="listbox"></ul>
+          </div>
+        </div>
+
+        <!-- Conta -->
+        <div>
+          <label class="label" for="tx-account">Conta / cartão</label>
+          <select id="tx-account" class="input">
+            <!-- opções preenchidas por JS a partir de db.bancos + db.cartoes -->
+          </select>
+        </div>
+
+        <!-- Pessoa (opcional — integra com Contatos) -->
+        <div>
+          <label class="label" for="tx-person">Pessoa (opcional)</label>
+          <select id="tx-person" class="input">
+            <option value="">Sem pessoa</option>
+            <!-- preenchido por JS a partir de db.contatos -->
+          </select>
+        </div>
+
+        <!-- Vencimento (se pendente) -->
+        <div>
+          <label class="label" for="tx-due-date">Vencimento (se pendente)</label>
+          <input id="tx-due-date" type="date" class="input">
+        </div>
+      </div>
+
+      <!-- Recorrência -->
+      <div class="flex items-center gap-3 bg-surface-2 rounded-[var(--radius-2)] px-3.5 py-3">
+        <button type="button" id="tx-recurrence-toggle" class="switch w-10 h-6 rounded-full bg-border relative transition-colors" aria-pressed="false" aria-label="Repetir este lançamento">
+          <span class="absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform"></span>
+        </button>
+        <span class="text-sm font-medium text-text flex-1">Repetir este lançamento</span>
+        <select id="tx-frequency" class="input !w-auto !py-1.5 hidden">
+          <option value="mensal">Mensal</option>
+          <option value="semanal">Semanal</option>
+          <option value="quinzenal">Quinzenal</option>
+          <option value="anual">Anual</option>
+        </select>
+      </div>
+
+      <!-- Prévia ao vivo -->
+      <div class="rounded-[var(--radius-3)] bg-violet-soft/60 border border-violet-soft px-4 py-3">
+        <div class="text-[11px] font-semibold uppercase tracking-wide text-action/80 mb-1">Prévia</div>
+        <div id="tx-preview" class="text-sm text-text font-medium leading-relaxed">
+          Despesa · valor e descrição aparecem aqui
+        </div>
+      </div>
+
+      <!-- Campos escondidos — adaptador de compatibilidade (NÃO remover)
+           ctrl-transacoes.js / evt-submit.js leem estes IDs antigos. -->
+      <div class="hidden" aria-hidden="true">
+        <input id="edit-valor">     <input id="edit-desc">
+        <input id="edit-categoria"> <input id="edit-data">
+        <input id="edit-banco">     <input id="edit-tipo">
+        <input id="dc-valor">       <input id="dc-desc">
+        <input id="dc-categoria">   <input id="dc-data">
+        <input id="dc-cartao-id">   <input id="dc-parcelas">
+      </div>
+
+      <!-- Rodapé -->
+      <div class="flex items-center justify-end gap-2 pt-2 border-t border-border -mx-5 md:-mx-6 px-5 md:px-6 pt-4">
+        <button type="button" class="btn-ghost" data-action="close-modal">Cancelar</button>
+        <button type="submit" id="btn-submit-transacao" class="btn-primary" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12l5 5L20 7"/></svg>
+          Salvar lançamento
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

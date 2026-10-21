@@ -24,6 +24,8 @@ describe('grupos de Configurações', () => {
         expect(html).toContain('data-action="importBackupPicker"');
         expect(html).toContain('data-action="iniciarImportacaoCSV"');
         expect(html).toContain('data-action="iniciarImportacaoOFX"');
+        expect(html).toContain('data-action="runIntegrityCheck"');
+        expect(html).toContain('id="integrity-report"');
     });
 
     it('renders Anora preferences with local telemetry disabled by default', () => {
@@ -35,10 +37,10 @@ describe('grupos de Configurações', () => {
         expect(html).toContain('Redução de movimento');
     });
 
-    it('states clearly that whole-database cleanup is not exposed as a destructive control', () => {
+    it('exposes whole-database cleanup only through the protected action', () => {
         const html = PageComponents.settingsPage(database, settingsGroups);
-        expect(html).toContain('A limpeza integral não está disponível nesta tela.');
-        expect(html).toContain('Nenhum dado será apagado aqui.');
-        expect(html).not.toContain('data-action="clearAllData"');
+        expect(html).toContain('data-action="clearAllData"');
+        expect(html).toContain('exigem confirmação explícita');
+        expect(html).toContain('somente após confirmação');
     });
 });

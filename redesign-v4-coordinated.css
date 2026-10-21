@@ -1,0 +1,501 @@
+/* Avenera V4 — base visual coordenada para todas as rotas reais.
+   Fonte runtime própria, carregada após styles.css, fase2 e styles-v4.css.
+   Não contém dados, markup ou handlers do protótipo. */
+:root {
+  --c-bg: #F4F5F9;
+  --c-surface: #FFFFFF;
+  --c-surface-soft: #F0F1F6;
+  --c-border: #E1E3EB;
+  --c-text-primary: #242333;
+  --c-text-secondary: #737386;
+  --c-text-tertiary: #9696A5;
+  --c-brand-deep: #4C3C70;
+  --c-brand-dark: #5B3AA2;
+  --c-brand-medium: #8170B5;
+  --c-action-purple: #5B3AA2;
+  --c-brand-soft: #EEEAF7;
+  --c-success: #4E8065;
+  --c-success-soft: #E7F1EA;
+  --c-danger: #C45D5D;
+  --c-danger-soft: #F8E9E7;
+  --c-warning: #B97835;
+  --c-warning-soft: #FBF0E2;
+  --c-info: #5F7F9B;
+  --c-info-soft: #EAF0F5;
+  --c-surface-elevated: #FFFFFF;
+  --font-ui: "Public Sans", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-heading: "Fraunces", Georgia, serif;
+  --font-numeric: "Sora", Inter, ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-control: 10px;
+  --radius-panel-compact: 12px;
+  --nv-ui-page-radius: 16px;
+  --nv-ui-panel-radius: 16px;
+  --nv-ui-card-radius: 12px;
+  --nv-ui-control-radius: 10px;
+  --elevation-0: none;
+  --elevation-1: none;
+  --elevation-2: none;
+  --elevation-overlay: 0 18px 48px rgba(28, 24, 38, .18);
+  --shadow-sm: var(--elevation-1);
+  --shadow-md: var(--elevation-2);
+  --shadow-elevated: var(--elevation-overlay);
+  --focus-ring: 0 0 0 3px rgba(129, 112, 181, .28);
+}
+
+.dark {
+  --c-bg: #17191F;
+  --c-surface: #20232B;
+  --c-surface-soft: #282B35;
+  --c-border: #383B47;
+  --c-text-primary: #F2F1F7;
+  --c-text-secondary: #B0AFBD;
+  --c-text-tertiary: #89899A;
+  --c-brand-deep: #D1C6ED;
+  --c-brand-dark: #A58AE4;
+  --c-brand-medium: #AA96D7;
+  --c-action-purple: #A58AE4;
+  --c-brand-soft: #342E42;
+  --c-success: #8EBA9D;
+  --c-success-soft: #26392E;
+  --c-danger: #E69A96;
+  --c-danger-soft: #402C2E;
+  --c-warning: #F0B477;
+  --c-warning-soft: #443625;
+  --c-info: #9DBDD8;
+  --c-info-soft: #293743;
+  --c-surface-elevated: #20232B;
+  --elevation-1: none;
+  --elevation-2: none;
+  --elevation-overlay: 0 20px 50px rgba(0, 0, 0, .5);
+  --focus-ring: 0 0 0 3px rgba(178, 162, 223, .36);
+}
+
+/* Bridge the shell's V4 token names to the same page tokens. */
+.nv-v4-scope {
+  --page: var(--c-bg);
+  --surface: var(--c-surface);
+  --surface-2: var(--c-surface-soft);
+  --border: var(--c-border);
+  --text: var(--c-text-primary);
+  --muted: var(--c-text-secondary);
+  --muted-2: var(--c-text-tertiary);
+  --brand: var(--c-brand-deep);
+  --action: var(--c-action-purple);
+  --violet: var(--c-brand-medium);
+  --violet-soft: var(--c-brand-soft);
+  --success: var(--c-success);
+  --success-soft: var(--c-success-soft);
+  --danger: var(--c-danger);
+  --danger-soft: var(--c-danger-soft);
+  --warning: var(--c-warning);
+  --warning-soft: var(--c-warning-soft);
+  --info: var(--c-info);
+  --info-soft: var(--c-info-soft);
+  --font-display: var(--font-heading);
+  --font-sans: var(--font-ui);
+  --font-num: var(--font-numeric);
+  --elevated: var(--elevation-overlay);
+  --shadow-soft: var(--elevation-1);
+}
+
+html, body {
+  background-color: var(--c-bg);
+  color: var(--c-text-primary);
+}
+body,
+body.font-primary,
+#main-content .font-primary {
+  font-family: var(--font-ui) !important;
+}
+#main-content h1,
+#main-content .font-display,
+#main-content .nv-page-header h1,
+#main-content .nv-standard-page-header h1,
+#main-content .nv-standard-page-header h2,
+#main-content .nv-dashboard-header h1,
+#main-content .nv-tx-page-header h1,
+#main-content .nv-planning-header h1,
+#main-content .nv-accounts-header h1,
+#main-content .nv-agenda-page-header h1,
+#main-content .nv-contacts-header h1,
+#main-content .nv-category-page-header h1 {
+  font-family: var(--font-heading) !important;
+}
+#main-content .money,
+#main-content .num,
+#main-content [data-money],
+#main-content [data-currency-value],
+#main-content .nv-analysis-metric__value,
+#main-content .nv-tx-row-value,
+#main-content .nv-summary-card h3 {
+  font-family: var(--font-numeric) !important;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* One shared full-canvas layout and page-header rhythm. */
+#main-content {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none !important;
+  padding: 24px 32px 96px !important;
+  color: var(--c-text-primary);
+}
+#main-content :is(
+  .nv-page-header,
+  .nv-standard-page-header,
+  .nv-dashboard-header,
+  .nv-tx-page-header,
+  .nv-planning-header,
+  .nv-accounts-header,
+  .nv-agenda-page-header,
+  .nv-contacts-header,
+  .nv-category-page-header,
+  .nv-anora-header,
+  .nv-settings-header
+) {
+  color: var(--c-text-primary);
+}
+#main-content :is(
+  .nv-page-header__subtitle,
+  .nv-standard-page-header > div:first-child > p:not(:first-child),
+  .nv-dashboard-header p,
+  .nv-tx-page-header p,
+  .nv-planning-header p,
+  .nv-accounts-subtitle,
+  .nv-agenda-page-heading p,
+  .nv-contacts-header p
+) {
+  color: var(--c-text-secondary);
+}
+
+/* Panels/cards share one surface contract while keeping each route's layout. */
+#main-content :is(
+  .nv-standard-page-panel,
+  .nv-agenda-list-card,
+  .nv-report-panel,
+  .nv-settings-panel,
+  .nv-dashboard-accounts,
+  .nv-dashboard-agenda,
+  .nv-dashboard-categories,
+  .nv-dashboard-attention,
+  .nv-tx-list,
+  .nv-tx-panel,
+  .nv-planning-panel,
+  .nv-planning-goals-panel,
+  .nv-insight-panel,
+  .nv-accounts-section,
+  .nv-category-section,
+  .nv-contacts-list,
+  .nv-anora-chat
+) {
+  background-color: var(--c-surface);
+  border-color: var(--c-border);
+  border-radius: var(--nv-ui-panel-radius);
+  box-shadow: none;
+}
+#main-content :is(
+  .nv-dashboard-card,
+  .nv-summary-card,
+  .nv-analysis-metric,
+  .nv-report-metric,
+  .nv-tx-summary-card,
+  .nv-accounts-card,
+  .nv-accounts-summary-card,
+  .nv-standard-summary-card,
+  .nv-settings-card,
+  .nv-planning-signal-card,
+  .nv-spendable-card,
+  .nv-contacts-summary,
+  .nv-category-card,
+  .nv-anora-card
+) {
+  border-color: var(--c-border);
+  border-radius: var(--nv-ui-card-radius);
+  box-shadow: none;
+}
+#main-content :is(
+  .nv-dashboard-card:hover,
+  .nv-analysis-metric:hover,
+  .nv-report-metric:hover,
+  .nv-tx-summary-card:hover,
+  .nv-accounts-card:hover,
+  .nv-settings-card:hover,
+  .nv-planning-signal-card:hover
+) {
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+/* Consistent controls and action sizing across every rendered route. */
+#main-content :is(
+  .btn,
+  .btn-primary,
+  .btn-outline,
+  .btn-ghost,
+  .btn-danger,
+  .nv-page-header__action,
+  .nv-dashboard-primary-action,
+  .nv-tx-primary-action,
+  .nv-planning-primary-action,
+  .nv-accounts-primary-action,
+  .nv-agenda-primary-action,
+  .nv-settings-primary-action,
+  .nv-category-primary-action,
+  .nv-contacts-primary-action
+) {
+  border-radius: var(--nv-ui-control-radius);
+  font-family: var(--font-ui);
+  min-height: 36px;
+}
+#main-content :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  background-color: var(--c-surface);
+  border-color: var(--c-border);
+  border-radius: var(--nv-ui-control-radius);
+  color: var(--c-text-primary);
+}
+#main-content :is(input, select, textarea):focus-visible,
+#main-content :is(button, a, summary):focus-visible {
+  outline: 2px solid var(--c-brand-medium);
+  outline-offset: 2px;
+  box-shadow: var(--focus-ring);
+}
+#main-content :is(.nv-standard-empty-state, .nv-tx-empty, .nv-contacts-empty, .nv-category-empty, .nv-settings-empty, .nv-agenda-empty-state) {
+  border-color: var(--c-border);
+  border-radius: var(--nv-ui-card-radius);
+}
+
+/* Semantic colors stay distinct; only neutral borders and surfaces are shared. */
+#main-content .text-positive,
+#main-content .tone-positive { color: var(--c-success) !important; }
+#main-content .text-negative,
+#main-content .tone-negative { color: var(--c-danger) !important; }
+#main-content .tone-warning { color: var(--c-warning) !important; }
+
+@media (max-width: 1024px) {
+  #main-content { padding-inline: 24px !important; }
+}
+@media (max-width: 780px) {
+  #main-content { padding: 18px 12px calc(96px + env(safe-area-inset-bottom)) !important; }
+}
+@media (max-width: 430px) {
+  #main-content { padding-inline: 12px !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #main-content *, #main-content *::before, #main-content *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Route integration: shared visual language applied to real, route-specific
+   composition. These adapters intentionally style existing markup only. */
+#main-content :is(
+  .nv-dashboard-shell,
+  .nv-transactions-page,
+  .nv-planning-page,
+  .nv-agenda-page,
+  .nv-accounts-page,
+  .nv-contacts-page,
+  .nv-categories-page,
+  .nv-settings-page,
+  .nv-anora-page,
+  .nv-reports-workspace
+) {
+  color: var(--c-text-primary);
+  font-family: var(--font-ui);
+  min-width: 0;
+}
+#main-content :is(.nv-dashboard-shell, .nv-planning-page, .nv-transactions-page, .nv-agenda-page, .nv-accounts-page, .nv-contacts-page, .nv-categories-page, .nv-settings-page, .nv-anora-page, .nv-reports-workspace, .nv-standard-page) {
+  box-sizing: border-box;
+  margin-inline: 0;
+  max-width: none;
+  width: 100%;
+}
+#main-content :is(.nv-page-header, .nv-dashboard-header, .nv-tx-page-header, .nv-planning-header, .nv-agenda-page-header, .nv-accounts-header, .nv-contacts-header, .nv-category-page-header, .nv-settings-header) {
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px !important;
+}
+#main-content :is(.nv-page-header__eyebrow, .nv-dashboard-eyebrow, .nv-tx-eyebrow, .nv-planning-eyebrow, .nv-agenda-eyebrow, .nv-accounts-eyebrow, .nv-contacts-eyebrow, .nv-category-eyebrow, .nv-settings-eyebrow) {
+  color: var(--c-brand-medium);
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+#main-content :is(.nv-page-header h1, .nv-dashboard-header h1, .nv-tx-page-header h1, .nv-planning-header h1, .nv-agenda-page-heading h1, .nv-accounts-header h1, .nv-contacts-header h1, .nv-category-page-header h1, .nv-settings-header h1, .nv-reports-selected-heading h1) {
+  color: var(--c-text-primary);
+  font-family: var(--font-heading);
+  font-size: clamp(26px, 2.8vw, 34px);
+  font-weight: 600;
+  letter-spacing: -.035em;
+  line-height: 1.12;
+}
+#main-content :is(.nv-page-header__subtitle, .nv-dashboard-header p, .nv-tx-page-subtitle, .nv-planning-header p, .nv-agenda-page-heading p, .nv-accounts-subtitle, .nv-contacts-header p, .nv-category-page-header p, .nv-settings-header p) {
+  color: var(--c-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+#main-content :is(.nv-report-panel, .nv-analysis-summary, .nv-planning-panel, .nv-accounts-overview, .nv-accounts-section, .nv-category-section, .nv-settings-panel, .nv-agenda-list-card, .nv-tx-panel, .nv-anora-chat, .nv-reports-navigation, .nv-report-comparison-insight) {
+  background-color: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--nv-ui-panel-radius);
+  box-shadow: none;
+  min-width: 0;
+}
+#main-content :is(.nv-report-metric, .nv-analysis-metric, .nv-agenda-summary-card, .nv-category-summary-card, .nv-accounts-summary-card, .nv-contacts-summary, .nv-settings-card, .nv-tx-summary-card, .nv-tx-summary-count, .nv-dashboard-card, .nv-anora-card, .nv-spendable-card, .nv-planning-signal-card) {
+  background-color: var(--c-surface);
+  border-color: var(--c-border);
+  border-radius: var(--nv-ui-card-radius);
+  box-shadow: none;
+  min-width: 0;
+}
+#main-content :is(.nv-report-table-header, .nv-report-table-row) {
+  border-color: var(--c-border);
+  color: var(--c-text-primary);
+}
+#main-content :is(.nv-report-table-header, .nv-report-table-row) > div { min-width: 0; }
+#main-content .nv-report-table-header {
+  background: var(--c-surface-soft);
+  border-bottom: 1px solid var(--c-border);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--c-text-secondary);
+}
+#main-content .nv-report-table-row { border-bottom: 1px solid var(--c-border); }
+#main-content .nv-report-table-row:last-child { border-bottom: 0; }
+#main-content :is(.nv-report-table-row, .nv-agenda-row, .nv-category-subrow, .nv-dashboard-account-row, .nv-tx-row) {
+  overflow-wrap: anywhere;
+}
+#main-content :is(.nv-report-metric__value, .nv-analysis-metric__value, .nv-agenda-summary-value, .nv-agenda-row-amount, .nv-category-summary-card strong, .nv-accounts-summary-card strong, .nv-accounts-card-balance strong, .nv-contacts-summary strong, .nv-dashboard-card .money, .nv-dashboard-card .num) {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+#main-content :is(.nv-page-header__action, .nv-dashboard-primary-action, .nv-dashboard-secondary-action, .nv-tx-primary-action, .nv-tx-secondary-action, .nv-planning-primary-action, .nv-accounts-primary-action, .nv-agenda-primary-action, .nv-agenda-action, .nv-contacts-primary-action, .nv-category-primary-action, .nv-settings-primary-action, .nv-settings-secondary-action) {
+  border-radius: var(--nv-ui-control-radius);
+  box-shadow: none;
+  font-family: var(--font-ui);
+  min-height: 38px;
+  transition: background-color .16s ease, border-color .16s ease, color .16s ease;
+}
+#main-content :is(.nv-tx-filter-tabs, .nv-category-toolbar, .nv-agenda-period, .nv-reports-actions) { min-width: 0; }
+#main-content :is(.nv-category-filter, .nv-tx-tab, .nv-tx-page-button, .nv-agenda-month-button, .nv-anora-style, .nv-anora-suggestions button) {
+  font-family: var(--font-ui);
+}
+#main-content :is(.nv-report-empty, .nv-standard-empty-state, .nv-tx-empty, .nv-contacts-empty, .nv-category-empty, .nv-settings-empty, .nv-agenda-empty-state) {
+  background-color: var(--c-surface-soft);
+  border: 1px dashed var(--c-border);
+  color: var(--c-text-secondary);
+}
+#main-content :is(.nv-dashboard-card-row, .nv-agenda-row, .nv-category-subrow, .nv-tx-row, .nv-settings-items li) {
+  border-color: var(--c-border);
+}
+#main-content :is(.nv-tx-row-actions button, .nv-agenda-action, .nv-category-actions-popover button) { min-height: 34px; }
+
+@media (max-width: 780px) {
+  #main-content :is(.nv-dashboard-header, .nv-tx-page-header, .nv-agenda-page-header, .nv-accounts-header, .nv-contacts-header, .nv-category-page-header, .nv-page-header) {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+  #main-content :is(.nv-dashboard-header, .nv-tx-page-header, .nv-agenda-page-header, .nv-accounts-header, .nv-contacts-header, .nv-category-page-header, .nv-page-header) :is(.nv-page-header__actions, .nv-dashboard-header-actions, .nv-tx-page-actions, .nv-agenda-page-actions) {
+    max-width: 100%;
+  }
+  #main-content :is(.nv-agenda-summary-grid, .nv-analysis-metrics) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #main-content :is(.nv-report-table-header, .nv-report-table-row) { font-size: 11px; }
+}
+@media (max-width: 480px) {
+  #main-content :is(.nv-agenda-summary-grid, .nv-analysis-metrics) { grid-template-columns: minmax(0, 1fr); }
+  #main-content :is(.nv-category-toolbar, .nv-category-filters, .nv-tx-filter-grid, .nv-tx-more-grid) { min-width: 0; }
+  #main-content :is(.nv-agenda-row-actions, .nv-tx-row-actions) { flex-wrap: wrap; }
+}
+
+
+/* Live route canvas: shared structure emitted by renderer.js after each real
+   PageRenderer. Page-specific composition stays in the production templates. */
+#main-content > .nv-live-page {
+  --live-page-gap: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--live-page-gap);
+  min-width: 0;
+  width: 100%;
+  isolation: isolate;
+}
+#main-content > .nv-live-page > * {
+  min-width: 0;
+  margin-block-end: 0 !important;
+}
+#main-content > .nv-live-page :is(section, article, aside, header, nav) { scroll-margin-top: 88px; }
+#main-content > .nv-live-page :is(.nv-standard-page-header, .nv-page-header) {
+  min-height: 76px;
+  align-items: flex-end;
+  padding: 2px 0 5px;
+}
+#main-content > .nv-live-page :is(.nv-standard-page-header, .nv-page-header) h1 {
+  font-family: var(--font-heading) !important;
+  font-size: clamp(1.7rem, 2.4vw, 2.15rem);
+  font-weight: 600;
+  letter-spacing: -.035em;
+  line-height: 1.08;
+}
+#main-content > .nv-live-page :is(.nv-standard-page-header, .nv-page-header) :is(p, .nv-page-header__subtitle) {
+  max-width: 68ch;
+}
+#main-content > .nv-live-page .nv-dashboard-financial { margin-bottom: 22px; }
+#main-content > .nv-live-page .nv-live-metric-grid {
+  align-items: stretch;
+  gap: 12px;
+}
+#main-content > .nv-live-page .nv-live-metric-grid > * { min-width: 0; }
+#main-content > .nv-live-page .nv-reports-workspace,
+#main-content > .nv-live-page .nv-reports-workspace > *,
+#main-content > .nv-live-page .nv-reports-selected-heading,
+#main-content > .nv-live-page .nv-reports-navigation,
+#main-content > .nv-live-page .nv-report-export {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+#main-content > .nv-live-page--metas .nv-standard-page-panel,
+#main-content > .nv-live-page--orcamento .nv-standard-page-panel {
+  overflow: clip;
+}
+#main-content > .nv-live-page--metas .nv-standard-page-panel > summary,
+#main-content > .nv-live-page--orcamento .nv-standard-page-panel > summary {
+  min-height: 58px;
+  border-bottom: 1px solid var(--c-border);
+}
+#main-content > .nv-live-page--configuracoes .nv-settings-page,
+#main-content > .nv-live-page--configuracoes .nv-settings-layout { min-width: 0; }
+#main-content > .nv-live-page--conciliacao .nv-accounts-card,
+#main-content > .nv-live-page--importacao .nv-accounts-card {
+  border-radius: var(--radius-xl);
+  box-shadow: none;
+}
+#main-content > .nv-live-page--anora .nv-anora-layout { align-items: start; }
+@media (max-width: 780px) {
+  #main-content > .nv-live-page { --live-page-gap: 12px; }
+  #main-content > .nv-live-page :is(.nv-standard-page-header, .nv-page-header) {
+    min-height: auto;
+    padding-bottom: 0;
+  }
+  #main-content > .nv-live-page .nv-live-metric-grid { gap: 9px; }
+}
+@media (max-width: 560px) {
+  #main-content > .nv-live-page .nv-reports-selected-heading { width: 100%; }
+  #main-content > .nv-live-page .nv-reports-actions { flex: 1 1 100%; margin-left: 0; max-width: 100%; width: 100%; }
+  #main-content > .nv-live-page .nv-reports-actions > .flex { max-width: 100%; width: 100%; }
+  #main-content > .nv-live-page .nv-reports-export-button { max-width: 100%; white-space: normal; }
+  #main-content > .nv-live-page .nv-reports-tabs { max-width: 100%; min-width: 0; }
+}

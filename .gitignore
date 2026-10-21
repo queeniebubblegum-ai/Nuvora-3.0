@@ -26,3 +26,4 @@ vitest/results.json
 .DS_Store
 
 # input.css é a fonte do styles.css e deve ser versionado.
+# styles-v4.css é carregado pelo shell ativo; gere-o com npm.cmd run build:v4 e versione-o.

@@ -1,3 +1,5 @@
+import { fromCents, toCents } from './money-math.js';
+
 const asFiniteNumber = value => {
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
@@ -30,26 +32,33 @@ export const calculateSpendableAmount = ({
         };
     }
 
-    const expectedIncome = (Array.isArray(futureIncome) ? futureIncome : []).reduce(
-        (total, item) => total + (number(item?.valor) || 0),
+    const positiveCents = value => {
+        const parsed = number(value);
+        return parsed === null || parsed <= 0 ? 0 : toCents(parsed);
+    };
+    const expectedIncomeCents = (Array.isArray(futureIncome) ? futureIncome : []).reduce(
+        (total, item) => total + positiveCents(item?.valor),
         0
     );
 
-    const committedExpenses = (Array.isArray(pendingExpenses) ? pendingExpenses : []).reduce(
-        (total, item) => total + (number(item?.valor) || 0),
+    const committedExpensesCents = (Array.isArray(pendingExpenses) ? pendingExpenses : []).reduce(
+        (total, item) => total + positiveCents(item?.valor),
         0
     );
 
-    const cashAfterCommitments = balance + expectedIncome - committedExpenses;
+    const cashAfterCommitments = fromCents(toCents(balance) + expectedIncomeCents - committedExpensesCents);
+    const expectedIncome = fromCents(expectedIncomeCents);
+    const committedExpenses = fromCents(committedExpensesCents);
 
     const validBudgets = (Array.isArray(budgets) ? budgets : []).filter(item => number(item?.limite) !== null);
-    const budgetRoom = validBudgets.length
+    const budgetRoomCents = validBudgets.length
         ? validBudgets.reduce((total, item) => {
-            const limit = number(item?.limite) || 0;
-            const spent = number(spentByCategory?.[item?.categoria]) || 0;
+            const limit = positiveCents(item?.limite);
+            const spent = positiveCents(spentByCategory?.[item?.categoria]);
             return total + Math.max(0, limit - spent);
         }, 0)
         : null;
+    const budgetRoom = budgetRoomCents === null ? null : fromCents(budgetRoomCents);
 
     const value = budgetRoom === null
         ? cashAfterCommitments
@@ -248,11 +257,13 @@ export const animateCurrencyValues = (root, formatMoney, win = globalThis) => {
 
 export const projectionSourcesFromDatabase = (database, now = new Date(), currentBalance) => {
     const agendamentos = Array.isArray(database?.agendamentos) ? database.agendamentos : [];
-    const pending = Array.isArray(database?.agendamentos) ? database.agendamentos : [];
-    const pendingIds = new Set(pending.flatMap(item => [item?.id, item?.assinaturaId, item?.origemId].filter(Boolean).map(String)));
-    const recurring = (Array.isArray(database?.assinaturas) ? database.assinaturas : []).filter(item =>
-        item?.ativa !== false && Boolean(dateFrom(item)) && !pendingIds.has(String(item?.id))
-    );
+    const pendingIds = new Set(agendamentos.flatMap(item => [item?.id, item?.assinaturaId, item?.origemId].filter(Boolean).map(String)));
+    const pendingSignatures = new Set(agendamentos.map(item => `${String(item?.desc || item?.nome || '').trim().toLowerCase()}|${String(dateFrom(item) || '').slice(0, 10)}|${amount(item).toFixed(2)}`));
+    const recurring = (Array.isArray(database?.assinaturas) ? database.assinaturas : []).filter(item => {
+        if (item?.ativa === false || !dateFrom(item)) return false;
+        const signature = `${String(item?.desc || item?.nome || '').trim().toLowerCase()}|${String(dateFrom(item) || '').slice(0, 10)}|${amount(item).toFixed(2)}`;
+        return !pendingIds.has(String(item?.id)) && !pendingIds.has(String(item?.assinaturaId || '')) && !pendingSignatures.has(signature);
+    });
     return calculateEndOfMonthProjection({
         currentBalance: currentBalance ?? database?.bancos?.reduce((sum, bank) => sum + (asFiniteNumber(bank?.saldo) || 0), 0),
         futureIncome: database?.receitasFuturas,

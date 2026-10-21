@@ -20,6 +20,8 @@ import { planCardInvoiceSchedules } from './invoice-provisioning.js';
 import { buildInvoicePaymentTransaction, isInvoiceSchedulePending, isValidInvoicePaymentDate, preferredInvoicePaymentBankId } from './invoice-payment.js';
 import { parseLocalDate } from './util-date.js';
 import { createBackupDocument, normalizeBackupDocument } from './backup-format.js';
+import { setupWorkspaceInteractions } from './ctrl-investimentos.js';
+import { setupExperienceInteractions } from './experience.js';
 export { TRANSACTION_FILTER_KEYS, getDefaultTransactionFilters, loadTransactionFilters, persistTransactionFilters, normalizeTransactionFilter } from './transaction-filters.js';
 
 const validMonth = value => Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 11;
@@ -54,7 +56,7 @@ const FechamentoManager = {
         const btnNext = document.getElementById('btn-fechamento-next');
         const progress = document.getElementById('fechamento-progress');
 
-        if(!content) return;
+        if (!content || !btnPrev || !btnNext || !progress) return;
 
         progress.style.width = `${((FechamentoManager.state.step + 1) / 3) * 100}%`;
         btnPrev.classList.toggle('hidden', FechamentoManager.state.step === 0);
@@ -192,6 +194,7 @@ const FechamentoManager = {
                 try {
                     const goal = db.metas.find(item => String(item.id) === String(metaSelect.value));
                     await Database.depositGoal(metaSelect.value, sourceAccountId, valorDepositado, Utils.localISODate(), `Aporte de Fechamento de Mês: ${goal?.nome || 'Meta'}`);
+                    metaSelect.value = '';
                 } catch (error) {
                     Utils.showToast(error?.message || 'Não foi possível reservar o valor para a meta.', 'error');
                     if (btnNext) btnNext.disabled = false;
@@ -200,8 +203,15 @@ const FechamentoManager = {
                 if (btnNext) btnNext.disabled = false;
             }
 
+            try {
+                const today = new Date();
+                await Database.closeFinancialMonth({year:today.getFullYear(),month:today.getMonth(),lock:false});
+            } catch (error) {
+                Utils.showToast(error?.message || 'Não foi possível salvar o fechamento. Tente novamente.', 'error');
+                return;
+            }
             App.closeModal();
-            Utils.showToast('Mês concluído e blindado com sucesso!', 'success');
+            Utils.showToast('Resumo do mês salvo. Os lançamentos continuam editáveis.', 'success');
             App.scheduleRender();
         } else {
             FechamentoManager.state.step++;
@@ -239,6 +249,7 @@ export const App = {
         isNotifOpen: false,
         notifTab: 'alertas',
         dashboardPeriod: 'este_mes',
+        dashboardRecentTab: 'recent',
         reportPeriod: loadViewContext('reports.period', 6, isValidReportPeriod),
         reportCashflowPeriod: loadViewContext('reports.cashflowPeriod', 1, isValidCashflowPeriod),
         selectedTransactions: [],
@@ -258,6 +269,11 @@ export const App = {
         if (!allowed.has(String(groupId))) return false;
         const section = document.getElementById(`settings-group-${groupId}`);
         if (!section) return false;
+        const editor = section.querySelector('.nv-settings-profile-editor');
+        if (editor) editor.open = true;
+        document.querySelectorAll('.nv-settings-panel[data-settings-group]').forEach(panel => {
+            panel.classList.toggle('is-open', panel === section);
+        });
         document.querySelectorAll('.nv-settings-card[data-group]').forEach(button => {
             button.setAttribute('aria-pressed', String(button.getAttribute('data-group') === String(groupId)));
         });
@@ -271,6 +287,10 @@ export const App = {
         localStorage.setItem('nuvora_theme', isDark ? 'dark' : 'light');
         const themeState = document.querySelector('[data-settings-theme-state]');
         if (themeState) themeState.textContent = `Modo atual: ${isDark ? 'escuro' : 'claro'}`;
+        document.querySelectorAll('[data-action="toggleTheme"].nv-settings-switch').forEach(button => {
+            button.classList.toggle('is-on', isDark);
+            button.setAttribute('aria-pressed', String(isDark));
+        });
         return isDark;
     },
 
@@ -295,8 +315,62 @@ export const App = {
         return prefs;
     },
 
+    updateNotificationConfig: (key, value) => {
+        const allowed = new Set(['contasAtivo', 'orcamentoAtivo', 'metasAtivo', 'lembretesVencimentoAtivo', 'sincronizacaoAutomaticaAtiva']);
+        if (!allowed.has(String(key))) return false;
+        Database.updateConfig(key, value === true);
+        Utils.showToast('Preferência de notificações atualizada.', 'success');
+        return true;
+    },
+
+    runIntegrityCheck: () => {
+        const report = Database.auditIntegrity();
+        const { errors = 0, warnings = 0 } = report.summary || {};
+        const issues = [...(report.errors || []), ...(report.warnings || [])].slice(0, 6);
+        const reportNode = document.getElementById('integrity-report');
+        if (reportNode) {
+            const tone = errors > 0 ? 'is-error' : warnings > 0 ? 'is-warning' : 'is-ok';
+            const summary = errors > 0
+                ? `${errors} erro(s) encontrado(s)`
+                : warnings > 0
+                    ? `Dados válidos · ${warnings} aviso(s)`
+                    : 'Dados financeiros consistentes';
+            reportNode.className = `nv-settings-integrity-report ${tone}`;
+            reportNode.innerHTML = `<strong>${Utils.escapeHTML(summary)}</strong>${issues.length ? `<ul>${issues.map(item => `<li><span>${Utils.escapeHTML(item.path || 'registro')}</span>${Utils.escapeHTML(item.message)}</li>`).join('')}</ul>` : '<span>Nenhuma inconsistência foi encontrada nas coleções auditadas.</span>'}`;
+        }
+        if (errors > 0) {
+            Utils.showToast(`Integridade: ${errors} erro(s) encontrado(s). Faça um backup antes de corrigir.`, 'error');
+        } else if (warnings > 0) {
+            Utils.showToast(`Integridade: dados válidos com ${warnings} aviso(s) para revisar.`, 'warning');
+        } else {
+            Utils.showToast('Integridade: contas e lançamentos estão consistentes.', 'success');
+        }
+        return report;
+    },
+
     chooseProfilePhoto: () => document.getElementById('input-foto-perfil')?.click(),
     importBackupPicker: () => document.getElementById('backup-input')?.click(),
+
+    clearAllData: async () => {
+        if (!window.confirm('Esta ação apagará todos os lançamentos, contas, cartões, metas e configurações financeiras deste navegador. Faça um backup antes de continuar. Deseja prosseguir?')) return false;
+        try {
+            await Database.clearAll();
+            // Remove only legacy application data and transient view state. Keep
+            // visual preferences and Anora privacy settings intact.
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith('nexx_fin_v8_pro_') || key.startsWith('avenera:view:') || key.startsWith('avenera_last_manual_backup')) {
+                    localStorage.removeItem(key);
+                }
+            });
+            Utils.showToast('Todos os dados financeiros foram removidos com segurança.', 'success');
+            setTimeout(() => window.location.reload(), 500);
+            return true;
+        } catch (error) {
+            console.error('Falha ao limpar os dados financeiros:', error);
+            Utils.showToast('Não foi possível limpar os dados. Nenhuma alteração incompleta foi mantida.', 'error');
+            return false;
+        }
+    },
 
     init: () => {
         if (App.isInitialized) return;
@@ -351,6 +425,8 @@ export const App = {
         
         try {
             EventManager.setup();
+            setupWorkspaceInteractions(App);
+            setupExperienceInteractions(App);
 
             const startPage = Router.init((page, skipHistory) => {
                 App.closeModal();
@@ -494,7 +570,7 @@ export const App = {
 
     cancelInvoicePayment: () => App.closeModal(false, 'modal-pagar-fatura'),
 
-    markAgendamentoPaid: (id, bankId = null, paymentDate = null) => {
+    markAgendamentoPaid: async (id, bankId = null, paymentDate = null) => {
         const agendamento = db.agendamentos.find(item => String(item.id) === String(id));
         if (!agendamento) return false;
 
@@ -536,7 +612,12 @@ export const App = {
                 paymentDate: paymentDate || Utils.localISODate(),
             });
             const transactionIdCollision = transaction && db.transacoes.some(item => String(item.id) === String(transaction.id));
-            if (!transaction || transactionIdCollision || !Database.add('transacoes', transaction)) {
+            let transactionSaved = false;
+            if (transaction && !transactionIdCollision) {
+                try { transactionSaved = await Database.add('transacoes', transaction); }
+                catch (error) { Utils.showToast(error?.message || 'Não foi possível registrar o pagamento da fatura; os dados anteriores foram mantidos.', 'error'); return false; }
+            }
+            if (!transaction || transactionIdCollision || !transactionSaved) {
                 Utils.showToast(transactionIdCollision
                     ? 'Já existe um lançamento com este identificador; nenhum novo pagamento foi criado.'
                     : 'Não foi possível registrar o pagamento da fatura.', 'error');
@@ -558,26 +639,19 @@ export const App = {
         }
 
         if (agendamento.status !== 'pendente') return false;
-        Database.updateAgendamento(id, { status: 'pago' });
-        const transaction = {
-            id: Date.now(),
-            desc: agendamento.desc,
-            valor: agendamento.valor,
-            tipo: agendamento.tipo || 'despesa',
-            categoria: agendamento.categoria,
-            bancoId: agendamento.bancoId || (db.bancos.length > 0 ? db.bancos[0].id : null),
-            isCartao: false,
-            formaPagamento: 'Automático (Agendamento)',
-            data: Utils.localISODate()
-        };
-        Database.add('transacoes', transaction);
-        Utils.showToast('Conta marcada como paga!', 'success');
-        App.scheduleRender();
-        return true;
+        try {
+            await Database.settleScheduleAtomically(id, { collection: 'agendamentos', date: Utils.localISODate() });
+            Utils.showToast('Conta marcada como paga!', 'success');
+            App.scheduleRender();
+            return true;
+        } catch (error) {
+            Utils.showToast(error?.message || 'Não foi possível registrar o pagamento; a previsão continua pendente.', 'error');
+            return false;
+        }
     },
 
-    markCloseAgendaPaid: (id) => {
-        const recorded = App.markAgendamentoPaid(String(id));
+    markCloseAgendaPaid: async (id) => {
+        const recorded = await App.markAgendamentoPaid(String(id));
         if (!recorded) return false;
         FechamentoManager.state.pendencias = FechamentoManager.state.pendencias.filter(item => String(item.id) !== String(id));
         FechamentoManager.renderStep();
@@ -973,9 +1047,18 @@ export const App = {
         if (page !== 'Dashboard' && typeof window !== 'undefined') window.resetDashboardQuickAction?.();
         Router.navigate(page, skipHistory);
         App.scheduleRender(); 
+        const main = document.querySelector('main.nv-app-scroll');
+        if (main) {
+            if (typeof main.scrollTo === 'function') main.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            else main.scrollTop = 0;
+        }
     },
     
     setDashboardPeriod: (period) => { App.viewState.dashboardPeriod = period; },
+    setDashboardRecentTab: (tab) => {
+        const nextTab = tab === 'pending' ? 'pending' : 'recent';
+        App.viewState.dashboardRecentTab = nextTab;
+    },
     openContatoPerfil: (contatoId) => {
         const c = (db.contatos || []).find(x => String(x.id) === String(contatoId));
         if (!c) return;
@@ -1015,6 +1098,8 @@ export const App = {
             }
         }
         const btnExp = document.getElementById('contato-perfil-exportar');
+        const btnEdit = document.getElementById('contato-perfil-editar');
+        if (btnEdit) btnEdit.dataset.id = String(contatoId);
         if (btnExp) {
             btnExp.onclick = () => {
                 const escapeCsv = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
@@ -1108,6 +1193,8 @@ export const App = {
         const color = document.getElementById('nova-categoria-cor');
         if (icon) icon.value = item?.icone || 'fa-tag';
         if (color) color.value = item?.cor || '#3B82F6';
+        const keywords = document.getElementById('nova-categoria-palavras');
+        if (keywords) keywords.value = Array.isArray(item?.palavrasChave) ? item.palavrasChave.join(', ') : (item?.palavrasChave || '');
         if (title) title.textContent = item ? 'Editar categoria' : 'Nova categoria';
         if (submit) submit.textContent = item ? 'Salvar alterações' : 'Criar categoria';
         App.toggleCategoryLevel(isSubcategory ? 'subcategoria' : 'principal');
@@ -1270,7 +1357,7 @@ export const App = {
         if (lista) lista.innerHTML = items.length ? items.map(i => {
             const colecao = db.agendamentos.includes(i) ? 'agendamentos' : 'receitasFuturas';
             const pago = i.status === 'pago' || i.status === 'recebida';
-            const isPending = i.status === 'pendente';
+            const isPending = !['pago','paga','recebida','recebido','cancelado','cancelada','concluido','concluida'].includes(i.status);
             const isInvoice = colecao === 'agendamentos' && i.categoria === 'Fatura Cartão';
             const safeId = Utils.escapeHTML(String(i.id));
             const baixa = isPending
@@ -1287,17 +1374,22 @@ export const App = {
         if (botao) botao.dataset.date = date;
         App.openModal('modal-agenda-dia');
     },
-    markAgendaPaid: (id, col) => {
+    markAgendaPaid: async (id, col) => {
+        if (!['agendamentos','receitasFuturas'].includes(col)) return false;
         const item = (db[col] || []).find(i => String(i.id) === String(id));
-        if (!item || item.status === 'pago' || item.status === 'recebida') return;
-        if (!window.confirm('Confirmar que esta previsão foi realizada?')) return;
-        if (col === 'receitasFuturas') {
-            Database.updateReceitaFutura(id, { status: 'recebida' });
-            Database.add('transacoes', { id: Date.now(), desc: item.desc, valor: item.valor, tipo: 'receita', categoria: item.categoria || 'Outros', bancoId: item.bancoId || (db.bancos[0]?.id ?? null), isCartao: false, formaPagamento: 'Receita futura recebida', data: Utils.localISODate() });
-        } else {
-            App.markAgendamentoPaid(String(id));
+        if (!item || ['pago','recebida','recebido','cancelado','cancelada'].includes(item.status)) return false;
+        if (col === 'agendamentos' && item.categoria === 'Fatura Cartão') return App.openInvoicePayment(id);
+        if (!window.confirm('Confirmar que esta previsão foi realizada?')) return false;
+        try {
+            await Database.settleScheduleAtomically(id, { collection: col, date: Utils.localISODate() });
+            Utils.showToast(col === 'receitasFuturas' || item.tipo === 'receita' ? 'Recebimento registrado.' : 'Pagamento registrado.', 'success');
+            App.closeModal(false, 'modal-agenda-dia');
+            App.scheduleRender();
+            return true;
+        } catch (error) {
+            Utils.showToast(error?.message || 'Não foi possível dar baixa; a previsão continua pendente.', 'error');
+            return false;
         }
-        App.scheduleRender();
     },
     editAgenda: (id, col) => {
         const item = (db[col] || []).find(i => String(i.id) === String(id));
@@ -1313,10 +1405,19 @@ export const App = {
         document.getElementById('agendamento-valor').value = item.valor ?? '';
         document.getElementById('agendamento-data').value = item.dataVencimento || item.data || '';
         if (document.getElementById('agendamento-categoria')) document.getElementById('agendamento-categoria').value = item.categoria || '';
+        const fill = (field,value) => { const input = document.getElementById(field); if (input) input.value = value ?? ''; };
+        fill('agendamento-banco', item.bancoId);
+        fill('agendamento-contato', item.contatoId);
+        fill('agendamento-repeticao', item.repeticao || 'unica');
+        fill('agendamento-repeticoes', 1);
+        const repeats = document.getElementById('agendamento-repeticao');
+        const quantity = document.getElementById('agendamento-repeticoes');
+        if (repeats) repeats.disabled = true;
+        if (quantity) quantity.disabled = true;
         UI.captureModalState('modal-agendamento');
     },
-    addAgendaOnDate: () => {
-        const date = document.getElementById('agenda-dia-adicionar')?.dataset.date;
+    addAgendaOnDate: (explicitDate = null) => {
+        const date = explicitDate || document.getElementById('agenda-dia-adicionar')?.dataset.date;
         App.closeModal(); App.openModal('modal-agendamento');
         document.getElementById('agendamento-titulo').innerText = 'Nova previsão';
         document.getElementById('agendamento-submit').innerText = 'Adicionar na Agenda';
@@ -1363,6 +1464,19 @@ export const App = {
         // Prepare category state before capturing the modal snapshot. Otherwise a
         // previous edit is treated as unsaved data when opening a new category.
         if (id === 'modal-categoria') App.prepareCategoryModal(categoryId);
+        if (id === 'modal-contato') {
+            document.querySelector('#modal-contato form')?.reset();
+            const contactId = document.getElementById('contato-id'); if (contactId) contactId.value = '';
+            const title = document.getElementById('contato-titulo'); if (title) title.textContent = 'Novo contato';
+            const submit = document.getElementById('contato-submit'); if (submit) submit.textContent = 'Salvar contato';
+        }
+        if (id === 'modal-agendamento') {
+            document.querySelector('#modal-agendamento form')?.reset();
+            for (const field of ['agendamento-edit-id','agendamento-edit-col']) { const input = document.getElementById(field); if(input) input.value = ''; }
+            for (const field of ['agendamento-repeticao','agendamento-repeticoes']) { const input = document.getElementById(field); if(input) input.disabled = false; }
+            const title = document.getElementById('agendamento-titulo'); if(title) title.textContent = 'Novo agendamento';
+            const date = document.getElementById('agendamento-data'); if(date) date.value = Utils.localISODate();
+        }
         UI.openModal(id, transType);
     },
     switchToTransferMode: () => UI.switchToTransferMode(),
@@ -1488,7 +1602,7 @@ export const App = {
         modal.classList.add('hidden'); modal.classList.remove('flex'); modal.setAttribute('inert', ''); modal.setAttribute('aria-hidden', 'true');
     },
 
-    applyInvoiceClassification: () => {
+    applyInvoiceClassification: async () => {
         const group = document.getElementById('invoice-classification-group')?.value;
         const categoria = document.getElementById('invoice-classification-subgroup')?.value;
         const selected = (App.viewState.selectedTransactions || []).map(String).filter(Boolean);
@@ -1496,7 +1610,10 @@ export const App = {
             Utils.showToast('Selecione um grupo e uma categoria.', 'error');
             return;
         }
-        const changed = Database.updateTransactionCategories(selected, categoria);
+        let changed;
+        try { changed = await Database.updateTransactionCategories(selected, categoria); }
+        catch (error) { Utils.showToast(error?.message || 'Não foi possível salvar a classificação; nenhuma alteração foi mantida.', 'error'); return false; }
+        if (!changed) { Utils.showToast('Nenhuma transação foi classificada.', 'warning'); return false; }
         App.viewState.selectedTransactions = [];
         App.closeInvoiceClassification();
         App.renderInvoiceModal();
@@ -1542,30 +1659,34 @@ export const App = {
         Renderer.renderInvoiceAdjustmentsReview(pending);
     },
     closeInvoiceAdjustmentsReview: () => App.renderInvoiceModal(),
-    confirmInvoiceAdjustmentsBulk: () => {
+    confirmInvoiceAdjustmentsBulk: async () => {
         const cardId = App.viewState.activeCardId;
         if (!cardId) return;
         const pending = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth)
             .filter(a => !(a.lancamentoCriado && a.transactionId) && a.type !== 'unrecognized_purchase');
         if (!pending.length) { App.renderInvoiceModal(); return; }
         let created = 0; let alreadyExists = 0; let failed = 0;
-        pending.forEach(a => {
-            const result = ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, a.id);
-            if (!result.ok) failed++; else if (result.alreadyExists) alreadyExists++; else created++;
-        });
+        for (const adjustment of pending) {
+            try {
+                const result = await ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, adjustment.id);
+                if (!result.ok) failed++; else if (result.alreadyExists) alreadyExists++; else created++;
+            } catch (_) { failed++; }
+        }
         App.renderInvoiceModal();
         App.scheduleRender();
         if (failed) Utils.showToast(`${created} criado(s), ${failed} não puderam ser criados.`, 'error');
         else Utils.showToast(`${created + alreadyExists} ajuste(s) processado(s); ${created} novo(s), sem duplicidades.`, 'success');
     },
-    createInvoiceAdjustmentTransaction: (id) => {
+    createInvoiceAdjustmentTransaction: async (id) => {
         const cardId = App.viewState.activeCardId;
         const adjustment = ReconciliationRepo.listAdjustments(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth).find(a => String(a.id) === String(id));
         if (!adjustment || (adjustment.lancamentoCriado && adjustment.transactionId)) return;
         const isCredit = adjustment.effect === 'credit' || adjustment.sign === -1;
         const kind = isCredit ? 'receita/crédito' : 'despesa';
         if (!confirm(`Criar ${kind} de ${Utils.formatMoney(adjustment.amount)} para “${adjustment.description || 'Ajuste de fatura'}”? Esta ação altera o histórico e não pode ser desfeita automaticamente.`)) return;
-        const result = ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, id);
+        let result;
+        try { result = await ReconciliationRepo.createAdjustmentTransaction(cardId, App.viewState.invoiceYear, App.viewState.invoiceMonth, id); }
+        catch (error) { Utils.showToast(error?.message || 'Não foi possível salvar o lançamento; os dados anteriores foram mantidos.', 'error'); return false; }
         if (!result.ok) { Utils.showToast('Não foi possível criar o lançamento.', 'error'); return; }
         App.renderInvoiceModal();
         App.scheduleRender();
@@ -1642,7 +1763,7 @@ export const App = {
                     localStorage.setItem('avenera_backup_antes_importacao', JSON.stringify(createBackupDocument(db, new Date().toISOString())));
                     recoveryCopySaved = true;
                 } catch (_error) {}
-                await Database.replaceAll(importedDB);
+                await Database.replaceAll(importedDB, { mode: 'exact' });
                 Utils.showToast(recoveryCopySaved
                     ? 'Backup restaurado com sucesso! Uma cópia local anterior foi preservada.'
                     : 'Backup restaurado; não foi possível guardar a cópia local anterior.', recoveryCopySaved ? 'success' : 'warning');

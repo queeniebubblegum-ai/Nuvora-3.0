@@ -109,11 +109,15 @@ export const UIRenderer = {
     },
 
     updateContatoSelect: () => {
-        const select = document.getElementById('input-contato');
+        ['input-contato', 'agendamento-contato'].forEach(id => {
+        const select = document.getElementById(id);
         if (select) {
+            const current = select.value;
             select.innerHTML = '<option value="">Nenhum</option>' + 
                 db.contatos.map(c => `<option value="${c.id}">${Utils.escapeHTML(c.nome)} - ${Utils.escapeHTML(c.documento || 'Sem doc')}</option>`).join('');
+            select.value = current;
         }
+        });
     },
 
     updateBankSelect: () => {
@@ -121,6 +125,8 @@ export const UIRenderer = {
             const displayName = Utils.formatBankName(b);
             return `<option value="${b.id}">${Utils.escapeHTML(displayName)}</option>`;
         }).join('');
+        const agendaBank = document.getElementById('agendamento-banco');
+        if (agendaBank) { const current = agendaBank.value; agendaBank.innerHTML = '<option value="">Selecione a conta</option>' + bankOptions; agendaBank.value = current; }
 
         const selectBancoTrans = document.getElementById('input-banco-trans');
         if (selectBancoTrans) {
@@ -158,7 +164,7 @@ export const UIRenderer = {
                     <button data-action="exportBackup" class="flex-1 bg-brand-deep text-white px-5 py-3 rounded-[12px] font-bold shadow-soft hover:bg-brand-dark transition-colors text-center">
                         1. Fazer Backup
                     </button>
-                    <button onclick="if(confirm('Atenção: Esta ação irá apagar os dados do navegador para resolver o erro. Confirma?')) { localStorage.clear(); window.location.reload(); }" class="flex-1 bg-surface border border-border text-danger px-5 py-3 rounded-[12px] font-bold hover:bg-bg transition-colors text-center">
+                    <button data-action="clearAllData" class="flex-1 bg-surface border border-border text-danger px-5 py-3 rounded-[12px] font-bold hover:bg-bg transition-colors text-center">
                         2. Limpar Cache
                     </button>
                 </div>

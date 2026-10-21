@@ -1,0 +1,201 @@
+/* ============================================================
+   Avenera — Redesign v4 (Fase 1: shell integrado e escopado)
+   Fonte do CSS adicional do shell ativo e da prévia; não substitui input.css.
+   Gera styles-v4.css com: npm.cmd run build:v4
+   ============================================================ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* As variáveis e componentes só existem dentro das áreas do shell v4. */
+@layer base {
+  .nv-v4-scope {
+    --page:        #F4F5F9;
+    --surface:     #FFFFFF;
+    --surface-2:   #F0F1F6;
+    --border:      #E1E3EB;
+    --text:        #242333;
+    --muted:       #737386;
+    --muted-2:     #89899A;
+    --brand:       #4C3C70;
+    --action:      #5B3AA2;
+    --violet:      #8170B5;
+    --violet-soft: #EEEAF7;
+    --success:      #4E8065;
+    --success-soft: #E7F1EA;
+    --warning:      #B97835;
+    --warning-soft: #FBF0E2;
+    --danger:       #C45D5D;
+    --danger-soft:  #F8E9E7;
+    --info:         #5F7F9B;
+    --info-soft:    #EAF0F5;
+    --elevated: 0 18px 48px rgba(28, 24, 38, .18);
+    --shadow-soft: 0 4px 18px rgba(24, 20, 36, .06);
+    --radius-1: 8px;
+    --radius-2: 10px;
+    --radius-3: 12px;
+    --radius-4: 16px;
+    --radius-5: 20px;
+    --font-display: "Fraunces", Georgia, serif;
+    --font-sans: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-num: "Sora", Inter, system-ui, sans-serif;
+    color-scheme: light;
+    color: var(--text);
+    background-color: var(--page);
+    font-family: var(--font-sans);
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .dark .nv-v4-scope {
+    --page:        #17191F;
+    --surface:     #20232B;
+    --surface-2:   #282B35;
+    --border:      #383B47;
+    --text:        #F2F1F7;
+    --muted:       #B0AFBD;
+    --muted-2:     #9696A5;
+    --brand:       #D1C6ED;
+    --action:      #A58AE4;
+    --violet:      #AA96D7;
+    --violet-soft: #342E42;
+    --success:      #8EBA9D;
+    --success-soft: #26392E;
+    --warning:      #F0B477;
+    --warning-soft: #443625;
+    --danger:       #E69A96;
+    --danger-soft:  #402C2E;
+    --info:         #9DBDD8;
+    --info-soft:    #293743;
+    --elevated: 0 20px 50px rgba(0, 0, 0, .5);
+    --shadow-soft: 0 4px 18px rgba(0, 0, 0, .25);
+    color-scheme: dark;
+  }
+
+  .nv-v4-scope h1,
+  .nv-v4-scope h2,
+  .nv-v4-scope h3,
+  .nv-v4-scope .font-display {
+    font-family: var(--font-display);
+    letter-spacing: -0.01em;
+  }
+
+  .nv-v4-scope .font-num,
+  .nv-v4-scope .money,
+  .nv-v4-scope [data-money] {
+    font-family: var(--font-num);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+  }
+
+  .nv-v4-scope :focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .nv-v4-scope .card,
+  .nv-v4-scope .card-elevated {
+    @apply bg-surface border border-border rounded-[var(--radius-4)];
+  }
+  .nv-v4-scope .card { box-shadow: var(--shadow-soft); }
+  .nv-v4-scope .card-elevated { box-shadow: var(--elevated); }
+
+  .nv-v4-scope .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-border bg-surface-2 text-muted;
+  }
+  .nv-v4-scope .chip-active { @apply bg-violet-soft text-action border-transparent; }
+
+  .nv-v4-scope .btn,
+  .nv-v4-scope .btn-primary,
+  .nv-v4-scope .btn-ghost,
+  .nv-v4-scope .btn-outline,
+  .nv-v4-scope .btn-danger {
+    @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[var(--radius-2)] text-sm font-semibold transition-colors duration-150 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .nv-v4-scope .btn-primary {
+    @apply bg-action text-white hover:brightness-110 active:brightness-95;
+    box-shadow: 0 6px 18px rgba(91,58,162,.35);
+  }
+  .nv-v4-scope .btn-ghost { @apply bg-surface-2 text-text border border-transparent; }
+  .nv-v4-scope .btn-ghost:hover {
+    background-color: var(--border);
+    background-color: color-mix(in srgb, var(--border) 60%, var(--surface-2));
+  }
+  .nv-v4-scope .btn-outline { @apply border border-border bg-surface text-text hover:bg-surface-2; }
+  .nv-v4-scope .btn-danger { @apply bg-danger-soft text-danger hover:brightness-95; }
+
+  .nv-v4-scope .fab {
+    @apply fixed z-40 flex items-center justify-center w-14 h-14 rounded-full bg-action text-white shadow-lg;
+    box-shadow: 0 10px 28px rgba(91,58,162,.45);
+  }
+
+  .nv-v4-scope .input {
+    @apply w-full px-3.5 py-2.5 rounded-[var(--radius-2)] bg-surface border border-border text-text text-sm placeholder:text-muted-2 transition-colors;
+  }
+  .nv-v4-scope .input:focus { @apply outline-none border-action; box-shadow: 0 0 0 3px var(--violet-soft); }
+  .nv-v4-scope .input-error { @apply border-danger; }
+  .nv-v4-scope .input-error:focus { box-shadow: 0 0 0 3px var(--danger-soft); }
+  .nv-v4-scope .label { @apply block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5; }
+
+  .nv-v4-scope .nav-item {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-[var(--radius-2)] text-sm font-medium text-muted transition-colors hover:text-text hover:bg-surface-2;
+  }
+  .nv-v4-scope .nav-item.active { @apply bg-violet-soft text-action font-semibold; }
+  .nv-v4-scope .text-positive { color: var(--success); }
+  .nv-v4-scope .text-negative { color: var(--danger); }
+}
+
+/* Shell da aplicação e prévia independente; sem reset global do app financeiro. */
+body.nv-v4-prototype { margin: 0; min-height: 100vh; }
+.nv-v4-scope-contents { display: contents; }
+.nv-v4-topbar { background: color-mix(in srgb, var(--surface) 94%, transparent); border-bottom: 1px solid var(--border); color: var(--text); backdrop-filter: blur(14px); }
+.nv-v4-sidebar { background: var(--surface) !important; color: var(--text); border-color: var(--border) !important; }
+.nv-v4-section-label { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .12em; line-height: 1.3; padding: 3px 9px 7px; text-transform: uppercase; }
+.nv-v4-nav-group { border: 1px solid transparent; border-radius: var(--radius-2); margin-top: 3px; }
+.nv-v4-nav-group[open] { background: var(--surface-2); border-color: var(--border); }
+.nv-v4-group-toggle { align-items: center; border-radius: var(--radius-2); color: var(--muted); cursor: pointer; display: flex; font-size: 12px; font-weight: 700; justify-content: space-between; list-style: none; min-height: 40px; padding: 8px 11px; }
+.nv-v4-group-toggle::-webkit-details-marker { display: none; }
+.nv-v4-group-toggle > span { align-items: center; display: inline-flex; gap: 9px; }
+.nv-v4-group-toggle > span > i { color: var(--action); font-size: 12px; width: 16px; }
+.nv-v4-group-toggle .nv-sidebar__group-chevron { color: var(--muted); font-size: 9px; transition: transform .15s ease; }
+.nv-v4-nav-group[open] .nv-sidebar__group-chevron { transform: rotate(180deg); }
+.nv-v4-group-items { display: grid; gap: 2px; padding: 2px 5px 7px; }
+#sidebar.nv-v4-sidebar .nv-v4-nav-link { align-items: center; background: transparent !important; border: 1px solid transparent; border-radius: var(--radius-2); color: var(--muted) !important; display: flex; font-size: 13px; font-weight: 500; gap: 11px; min-height: 39px; padding: 8px 10px; text-align: left; transition: color .15s ease, background-color .15s ease, border-color .15s ease; width: 100%; }
+#sidebar.nv-v4-sidebar .nv-v4-nav-link > i { color: var(--muted-2) !important; flex: 0 0 18px; font-size: 13px; text-align: center; }
+#sidebar.nv-v4-sidebar .nv-v4-nav-link:hover { background: var(--surface-2) !important; color: var(--text) !important; }
+#sidebar.nv-v4-sidebar .nv-v4-nav-link.active { background: var(--violet-soft) !important; border-color: color-mix(in srgb, var(--action) 14%, var(--border)); color: var(--action) !important; font-weight: 700; }
+#sidebar.nv-v4-sidebar .nv-v4-nav-link.active > i { color: var(--action) !important; }
+.nv-v4-system-nav { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+.nv-v4-profile-area { border-color: var(--border) !important; }
+#sidebar.nv-v4-sidebar .nv-v4-profile-button { background: transparent !important; border: 1px solid transparent; color: var(--text) !important; }
+#sidebar.nv-v4-sidebar .nv-v4-profile-button:hover { background: var(--surface-2) !important; }
+.nv-v4-search-button { color: var(--muted); min-width: 210px; justify-content: flex-start; }
+.nv-v4-search-button kbd { margin-left: auto; font-family: var(--font-sans); font-size: 10px; color: var(--muted-2); }
+.nv-v4-drawer-overlay { backdrop-filter: blur(2px); }
+.nv-v4-mobile-dock { background: color-mix(in srgb, var(--surface) 95%, transparent); backdrop-filter: blur(14px); border-color: var(--border); }
+.nv-v4-mobile-dock .nv-v4-mobile-nav { align-items: center; background: transparent !important; border: 0; color: var(--muted) !important; display: flex; font-size: 10px; }
+.nv-v4-mobile-dock .nv-v4-mobile-nav > i { font-size: 17px; }
+.nv-v4-mobile-dock .nv-v4-mobile-nav.active { color: var(--action) !important; font-weight: 700; }
+.nv-v4-main-fab { box-shadow: 0 10px 28px rgba(91,58,162,.35); }
+.nv-v4-preview-layout { display: flex; min-height: 100vh; }
+.nv-v4-layout { display: flex; flex: 1 1 auto; min-height: 0; overflow: hidden; position: relative; }
+.nv-v4-main-column { display: flex; flex: 1 1 auto; flex-direction: column; min-width: 0; overflow: hidden; }
+.nv-v4-mobile-dock { position: fixed; inset-inline: 0; bottom: 0; z-index: 40; }
+.nv-v4-speed-dial { position: fixed; z-index: 50; bottom: calc(2rem + env(safe-area-inset-bottom)); left: 50%; right: auto; transform: translateX(-50%); }
+.nv-v4-speed-dial .nv-v4-speed-dial-menu { align-items: flex-end; }
+@media (min-width: 768px) {
+  .nv-v4-speed-dial { left: auto; right: 2rem; bottom: 2rem; transform: none; }
+}
+
+.nv-v4-scope ::-webkit-scrollbar { width: 10px; height: 10px; }
+.nv-v4-scope ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; border: 2px solid var(--page); }
+.nv-v4-scope ::-webkit-scrollbar-track { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-v4-scope *, .nv-v4-scope *::before, .nv-v4-scope *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}

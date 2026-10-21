@@ -3,7 +3,7 @@ import { Utils } from './utils.js';
 import { calculatePeriodTotals, isExpense } from './financial-ledger.js';
 
 export const AnoraNLP = {
-    processarMensagem: (mensagem) => {
+    processarMensagem: async (mensagem) => {
         // 1. Limpar e normalizar a mensagem (minúsculas, sem acentos)
         const msgLimpa = mensagem.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const hoje = new Date();
@@ -77,14 +77,15 @@ export const AnoraNLP = {
             if (isCartao) {
                 if (db.cartoes.length === 0) return "⚠️ Você não possui um Cartão de Crédito cadastrado para registrar esta despesa.";
                 const cartaoPadrao = db.cartoes[0]; 
-                Database.addCardExpense({
+                const saved = await Database.addCardExpense({
                     desc: desc.charAt(0).toUpperCase() + desc.slice(1), 
                     total: valor, parcelas: 1, cartaoId: cartaoPadrao.id, categoria, data: dataHojeStr, contatoId: null
                 });
+                if (!saved) throw new Error('Não foi possível salvar a despesa no cartão.');
                 return `🚀 **Fast-Track:** Lançamento de **${Utils.formatMoney(valor)}** ("${desc}") salvo no cartão **${cartaoPadrao.nome}** com sucesso. Categoria deduzida: ${categoria}.`;
             } else {
                 const bancoPadrao = db.bancos[0];
-                Database.add('transacoes', {
+                const saved = await Database.add('transacoes', {
                     id: Date.now(),
                     desc: desc.charAt(0).toUpperCase() + desc.slice(1), 
                     valor, tipo, categoria, bancoId: bancoPadrao.id,
@@ -95,6 +96,7 @@ export const AnoraNLP = {
                     recorrente: false,
                     contatoId: null
                 });
+                if (!saved) throw new Error('Não foi possível salvar a transação.');
                 return `🚀 **Fast-Track:** ${isReceita ? 'Receita' : 'Despesa'} de **${Utils.formatMoney(valor)}** ("${desc}") salva na conta **${bancoPadrao.nome}** com sucesso. Via: ${formaPagamento}.`;
             }
         }

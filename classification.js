@@ -20,6 +20,13 @@ export const Classification = {
     suggest: (description, categories = []) => {
         const text = norm(description);
         if (text.length < 3) return null;
+        const custom = categories.filter(c => c && typeof c === 'object' && c.ativo !== false && !c.arquivada)
+            .flatMap(category => {
+                const raw = category.palavrasChave || [];
+                const words = Array.isArray(raw) ? raw : String(raw).split(/[,;\n]/);
+                return words.map(norm).filter(word => word.trim().length >= 3 && text.includes(word.trim())).map(word => ({ category, word }));
+            }).sort((a, b) => b.word.length - a.word.length)[0];
+        if (custom) return { tipo: custom.category.tipo || 'despesa', grupo: custom.category.grupo || custom.category.nome, subgrupo: custom.category.subgrupo || custom.category.nome, category: custom.category, confidence: 'alta', source: 'regra pessoal' };
         const rule = rules.find(r => r.words.some(word => text.includes(norm(word))));
         if (!rule) return null;
         const candidates = categories.filter(c => typeof c !== 'string' && c.ativo !== false && !c.arquivada && (!rule.tipo || c.tipo === rule.tipo) && (!rule.grupo || c.grupo === rule.grupo));
