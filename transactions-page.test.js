@@ -95,9 +95,14 @@ describe('transactions Phase 1 redesign contracts', () => {
         expect(header).toContain('<h1 class=\"font-display\">Transações</h1>');
         expect(component).toContain('class=\"money num\"');
         expect(component).toContain('class=\"money num ${valColor}\"');
-        expect(html).toContain('family=Fraunces:ital,opsz,wght');
-        expect(html).toContain('family=Public+Sans');
-        expect(html).toContain('family=Sora');
+        const visualCss = read('avenera-visual.css');
+        expect(html).toContain('./avenera-visual.css');
+        expect(visualCss).toContain("font-family:'Fraunces'");
+        expect(visualCss).toContain("font-family:'Public Sans'");
+        for (const font of ['fraunces-500.ttf', 'public-sans-400.ttf']) {
+            expect(fs.existsSync(path.join(process.cwd(), 'assets/fonts', font))).toBe(true);
+            expect(serviceWorker).toContain(`./assets/fonts/${font}`);
+        }
         expect(html).toContain('styles.css?v=20260925-anora-restoration-2');
         expect(serviceWorker).toContain("avenera-app-shell-v25");
         expect(serviceWorker).toContain('./styles.css?v=20260925-anora-restoration-2');

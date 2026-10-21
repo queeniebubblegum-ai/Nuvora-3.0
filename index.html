@@ -10,14 +10,12 @@
     <meta property="og:type" content="website">
 
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#4C3C70">
+    <meta name="theme-color" content="#30263F">
     <link rel="icon" href="assets/icon-192.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="assets/icon-192.svg">
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&family=Public+Sans:wght@400;500;600;700&family=Sora:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <link rel="preload" href="assets/fonts/public-sans-400.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="preload" href="assets/fonts/fraunces-500.ttf" as="font" type="font/ttf" crossorigin>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" integrity="sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
@@ -28,6 +26,8 @@
     <link rel="stylesheet" href="./redesign-v4-coordinated.css?v=20261016-layout-v4">
     <link rel="stylesheet" href="./mockup-theme.css?v=20261016-v6">
     <link rel="stylesheet" href="./design-system.css?v=20261016-mockups-1">
+    <link rel="stylesheet" href="./avenera-icons.css?v=20261021">
+    <link rel="stylesheet" href="./avenera-visual.css?v=20261021-refinements">
 
     <style>
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -134,21 +134,21 @@
             </div>
             <nav class="flex-1 overflow-y-auto px-3 py-3 space-y-1" aria-label="Navegação principal">
                 <div class="px-2 pb-2">
-                    <p class="nv-v4-section-label">Visão geral</p>
+                    <p class="nv-v4-section-label">Seu dia a dia</p>
                     <button type="button" data-action="navigate" data-payload="Dashboard" id="nav-Dashboard" class="nv-v4-nav-link nav-item w-full"><i class="fa-solid fa-border-all" aria-hidden="true"></i><span>Visão geral</span></button>
+                    <button type="button" data-action="navigate" data-payload="Transacoes" id="nav-Transacoes" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i><span>Lançamentos</span></button>
+                    <button type="button" data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-wallet" aria-hidden="true"></i><span>Contas e cartões</span></button>
+                    <button type="button" data-action="navigate" data-payload="Conciliacao" id="nav-Conciliacao" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-list-check" aria-hidden="true"></i><span>Conferir registros</span></button>
                 </div>
                 <details class="nv-sidebar__group nv-v4-nav-group" data-nav-group="finance">
-                    <summary class="nv-v4-group-toggle"><span><i class="fa-solid fa-wallet" aria-hidden="true"></i>Finanças</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
+                    <summary class="nv-v4-group-toggle"><span><i class="fa-solid fa-wallet" aria-hidden="true"></i>Planejar e compreender</span><i class="fa-solid fa-chevron-down nv-sidebar__group-chevron" aria-hidden="true"></i></summary>
                     <div class="nv-sidebar__group-items nv-v4-group-items">
-                        <button type="button" data-action="navigate" data-payload="Transacoes" id="nav-Transacoes" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i><span>Lançamentos</span></button>
                         <button type="button" data-action="navigate" data-payload="Planejamento" id="nav-Planejamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-check" aria-hidden="true"></i><span>Planejamento</span></button>
                         <button type="button" data-action="navigate" data-payload="Agendamentos" id="nav-Agendamentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-calendar-days" aria-hidden="true"></i><span>Agenda de contas</span></button>
-                        <button type="button" data-action="navigate" data-payload="Contas" id="nav-Contas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-wallet" aria-hidden="true"></i><span>Contas e cartões</span></button>
                         <button type="button" data-action="navigate" data-payload="Investimentos" id="nav-Investimentos" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Investimentos</span></button>
                         <button type="button" data-action="navigate" data-payload="Metas" id="nav-Metas" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-bullseye" aria-hidden="true"></i><span>Metas</span></button>
                         <button type="button" data-action="navigate" data-payload="Orcamento" id="nav-Orcamento" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><span>Orçamento</span></button>
                         <button type="button" data-action="navigate" data-payload="Relatorios" id="nav-Relatorios" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-chart-line" aria-hidden="true"></i><span>Relatórios</span></button>
-                        <button type="button" data-action="navigate" data-payload="Conciliacao" id="nav-Conciliacao" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-scale-balanced" aria-hidden="true"></i><span>Conciliação</span></button>
                         <button type="button" data-action="navigate" data-payload="Importacao" id="nav-Importacao" class="nv-v4-nav-link nav-item"><i class="fa-solid fa-file-arrow-down" aria-hidden="true"></i><span>Importar extrato</span></button>
                     </div>
                 </details>
@@ -175,7 +175,7 @@
                     <span class="nv-sidebar-anora-glyph" aria-hidden="true"><i class="fa-solid fa-sparkles"></i></span>
                     <span class="flex-1 text-left min-w-0">
                         <span class="block text-sm font-semibold text-text truncate">Anora</span>
-                        <span class="block text-[10px] text-muted truncate">1 sugestão útil</span>
+                        <span class="block text-[10px] text-muted truncate">Seu apoio financeiro</span>
                     </span>
                     <i class="fa-solid fa-chevron-right text-[10px] text-muted" aria-hidden="true"></i>
                 </button>
@@ -200,7 +200,7 @@
 
     <div class="nv-v4-scope nv-v4-scope-contents">
     <div class="nv-v4-speed-dial flex flex-col items-end">
-        <div id="speed-dial-menu" aria-hidden="true" class="nv-v4-speed-dial-menu flex flex-col items-end gap-3 opacity-0 translate-y-4 pointer-events-none transition-all duration-300 mb-3">
+        <div id="speed-dial-menu" aria-hidden="true" inert class="nv-v4-speed-dial-menu flex flex-col items-end gap-3 opacity-0 translate-y-4 pointer-events-none transition-all duration-300 mb-3">
             <button type="button" id="speed-dial-contextual" tabindex="-1" hidden class="flex items-center gap-3 group/item focus:outline-none cursor-pointer" aria-label="Ação recomendada no Dashboard"><span id="speed-dial-contextual-label" class="bg-surface text-text text-xs font-bold py-1.5 px-3 rounded-r1 shadow-soft"></span><div class="w-11 h-11 bg-action text-white rounded-full shadow-soft flex items-center justify-center text-sm"><i id="speed-dial-contextual-icon" class="fa-solid fa-bolt" aria-hidden="true"></i></div></button>
             <button type="button" tabindex="-1" data-action="openModal" data-modal="modal-transacao" data-type="receita" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer"><span class="bg-surface text-text text-xs font-bold py-1.5 px-3 rounded-r1 shadow-soft">Receita</span><div class="w-11 h-11 bg-success text-white rounded-full shadow-soft flex items-center justify-center text-sm"><i class="fa-solid fa-arrow-down" aria-hidden="true"></i></div></button>
             <button type="button" tabindex="-1" data-action="openModal" data-modal="modal-transferencia" onclick="toggleSpeedDial()" class="flex items-center gap-3 group/item focus:outline-none cursor-pointer"><span class="bg-surface text-text text-xs font-bold py-1.5 px-3 rounded-r1 shadow-soft">Transferência</span><div class="w-11 h-11 bg-action text-white rounded-full shadow-soft flex items-center justify-center text-sm"><i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i></div></button>
@@ -230,6 +230,7 @@
 
             const menuItems = menu.querySelectorAll('button');
             const isOpening = menu.classList.contains('opacity-0');
+            menu.inert = !isOpening;
 
             if (isOpening) {
                 // Abre o menu e gira o ícone. Os itens só entram na ordem de

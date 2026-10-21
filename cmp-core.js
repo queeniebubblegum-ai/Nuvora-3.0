@@ -1,6 +1,6 @@
 import { Utils } from './utils.js';
 import { db } from './db.js';
-import { getCategoriaIcon } from './categorias-padrao.js';
+import { getCategoriaIcon, getCategoriaColor } from './categorias-padrao.js';
 import { isIncome, isTransfer } from './financial-ledger.js';
 
 export const CoreComponents = {
@@ -14,8 +14,8 @@ export const CoreComponents = {
             const nome = typeof c === 'string' ? c : c.nome;
             return nome === catName;
         });
-        if (cat && typeof cat === 'object') return { icone: getCategoriaIcon(cat), cor: cat.cor || 'var(--c-text-secondary)' }; 
-        return { icone: 'fa-tag', cor: 'var(--c-text-secondary)' };
+        if (cat && typeof cat === 'object') return { icone: getCategoriaIcon(cat), cor: getCategoriaColor(cat) };
+        return { icone: getCategoriaIcon(catName), cor: getCategoriaColor(catName) };
     },
 
     _buildSummaryCard: (title, value, trendStr, isUp, iconClass, trendSubtitle) => {
@@ -146,7 +146,7 @@ export const CoreComponents = {
         <div data-key="${o.id}" class="bg-surface p-6 rounded-[16px] border border-border shadow-soft mb-4 hover:-translate-y-1 transition-all duration-300">
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-4">
-                    <div class="w-12 h-12 rounded-[12px] flex items-center justify-center text-lg shadow-sm text-white border border-border" style="background-color: ${catObj.cor || '#6C3BB6'}">
+                    <div class="av-category-icon w-12 h-12 rounded-[12px] flex items-center justify-center text-lg shadow-sm text-white border border-border" style="--category-color:${Utils.escapeHTML(catObj.cor)}">
                         <i class="fa-solid ${catObj.icone}"></i>
                     </div>
                     <div>
@@ -299,7 +299,7 @@ export const CoreComponents = {
                                 <input type="checkbox" data-change="toggleTransaction" value="${t.id}" ${isSelected ? 'checked' : ''} class="w-4 h-4 text-brand-medium bg-bg border-border rounded focus:ring-brand-medium">
                             </label>
                             
-                            <div class="w-10 h-10 rounded-[10px] flex items-center justify-center text-white shrink-0 shadow-sm transition-transform group-hover:scale-105" style="background-color: ${catObj.cor}">
+                            <div class="av-category-icon w-10 h-10 rounded-[10px] flex items-center justify-center text-white shrink-0 shadow-sm transition-transform group-hover:scale-105" style="--category-color:${Utils.escapeHTML(catObj.cor)}">
                                 <i class="fa-solid ${catObj.icone}"></i>
                             </div>
                             

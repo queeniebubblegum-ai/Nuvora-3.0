@@ -144,7 +144,7 @@ test('atualização aguarda abas antigas e mostra recuperação em vez de uma te
     await legacy.close();
     await current.getByRole('button', { name: 'Tentar novamente' }).click();
     await current.waitForFunction(() => window.App?.isInitialized);
-    await expect(current.locator('#main-content')).toContainText('Visão geral');
+    await expect(current.getByRole('heading', { name: 'Seu dinheiro, com clareza.' })).toBeVisible();
     await context.close();
 });
 

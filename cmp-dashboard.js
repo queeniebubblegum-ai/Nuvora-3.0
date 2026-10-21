@@ -37,9 +37,9 @@ export const DashboardComponents = {
     dashboardMockupKpis: (atual = {}) => {
         const receitas = Number(atual.receitas) || 0;
         const despesas = Number(atual.despesas) || 0;
-        const economia = receitas > 0 ? Math.round(((receitas - despesas) / receitas) * 100) : null;
-        const card = (label, value, note, tone = '') => `<article class="nv-mockup-kpi"><span>${label}</span><strong class="${tone}">${value}</strong><small>${note}</small></article>`;
-        return `<section class="nv-mockup-kpis" aria-label="Resumo financeiro"><div class="nv-mockup-kpis__title"><p class="nv-dashboard-eyebrow">Visão do período</p><h3>Panorama financeiro</h3><p>Uma leitura rápida do que aconteceu com seu dinheiro.</p></div><div class="nv-mockup-kpis__grid">${card('Saldo registrado', Utils.formatMoney(atual.saldo), 'Registros locais · confira com sua instituição')} ${card('Receitas no período', Utils.formatMoney(receitas), 'Entradas realizadas', 'is-positive')} ${card('Despesas no período', Utils.formatMoney(despesas), 'Consumo registrado · inclui cartão', 'is-negative')} ${card('Taxa de economia', economia == null ? '—' : `${economia}%`, economia == null ? 'Sem dados suficientes' : 'Resultado sobre receitas', economia != null && economia >= 0 ? 'is-positive' : 'is-negative')}</div></section>`;
+        const resultado = receitas - despesas;
+        const card = (label, value, note, icon, tone = '') => `<article class="nv-mockup-kpi"><span class="av-kpi-label"><i class="fa-solid ${icon}" aria-hidden="true"></i>${label}</span><strong class="${tone}">${value}</strong><small>${note}</small></article>`;
+        return `<section class="nv-mockup-kpis" aria-label="Resumo financeiro"><div class="nv-mockup-kpis__title"><p class="nv-dashboard-eyebrow">Visão do período</p><h3>Panorama financeiro</h3><p>Uma leitura rápida do que aconteceu com seu dinheiro.</p></div><div class="nv-mockup-kpis__grid">${card('Receitas no período', Utils.formatMoney(receitas), 'Entradas realizadas', 'fa-arrow-down', 'is-positive')} ${card('Despesas no período', Utils.formatMoney(despesas), 'Consumo registrado · inclui cartão', 'fa-arrow-up')} ${card('Resultado do período', Utils.formatMoney(resultado), 'Receitas menos consumo registrado', 'fa-chart-line', resultado < 0 ? 'is-negative' : '')} ${card('Compromissos do mês', Utils.formatMoney(atual.contasPendentes || 0), 'Despesas previstas de hoje ao fim do mês', 'fa-calendar-days')}</div></section>`;
     },
     dashboardCards: (atual = {}, anterior = {}) => {
         const calcTrend = calculateDashboardTrend;
@@ -493,7 +493,8 @@ export const DashboardComponents = {
         const byDate = new Map(items.map(item => [String(item.agendaDate).slice(0, 10), item]));
         const first = new Date(year, month, 1);
         const offset = (first.getDay() + 6) % 7;
-        const cells = Array.from({ length: 35 }, (_, index) => {
+        const visibleDays = Math.ceil((offset + new Date(year, month + 1, 0).getDate()) / 7) * 7;
+        const cells = Array.from({ length: visibleDays }, (_, index) => {
             const date = new Date(year, month, 1 - offset + index);
             const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
             const inMonth = date.getMonth() === month;
@@ -502,7 +503,7 @@ export const DashboardComponents = {
             return `<button type="button" class="nv-mockup-calendar-day ${inMonth ? '' : 'is-muted'} ${isToday ? 'is-today' : ''} ${item ? 'has-item' : ''}" data-action="showAgendaDay" data-payload="${key}" aria-label="${date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}">${date.getDate()}${item ? '<i></i>' : ''}</button>`;
         }).join('');
         const upcoming = items.filter(item => String(item.agendaDate) >= `${year}-${String(month + 1).padStart(2, '0')}-01`).sort((a, b) => String(a.agendaDate).localeCompare(String(b.agendaDate))).slice(0, 3).map(item => `<div class="nv-mockup-upcoming-row"><span>${String(item.agendaDate).slice(8, 10)}/${String(item.agendaDate).slice(5, 7)}</span><strong>${Utils.escapeHTML(item.label)}</strong><b>${Utils.formatMoney(item.valor || 0)}</b></div>`).join('');
-        return `<section class="nv-mockup-agenda nv-dashboard-card" aria-label="Agenda financeira"><header><div><h3>Agenda · ${monthLabel}</h3><p>Próximos compromissos</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Agendamentos">Abrir calendário →</button></header><div class="nv-mockup-calendar-weekdays"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div><div class="nv-mockup-calendar-grid">${cells}</div><div class="nv-mockup-upcoming">${upcoming || '<p class="nv-mockup-upcoming-empty">Nenhum compromisso próximo.</p>'}</div></section>`;
+        return `<section class="nv-mockup-agenda nv-dashboard-card" aria-label="Agenda financeira"><header><div><h3>Agenda · ${monthLabel}</h3><p>Próximos compromissos</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Agendamentos">Abrir calendário →</button></header><div class="nv-mockup-calendar-weekdays" aria-hidden="true"><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span><span>D</span></div><div class="nv-mockup-calendar-grid">${cells}</div><div class="nv-mockup-upcoming">${upcoming || '<p class="nv-mockup-upcoming-empty">Nenhum compromisso próximo.</p>'}</div></section>`;
     },
 
     dashboardAgenda: (agendamentos = [], receitas = [], state = {}) => {
@@ -643,7 +644,7 @@ export const DashboardComponents = {
                 listHtml += `
                 <div data-key="${t.id}" class="flex items-center justify-between py-3 border-b border-bg last:border-0 hover:bg-bg px-2 -mx-2 rounded-[12px] transition-colors cursor-pointer group">
                     <div class="flex items-center gap-4">
-                        <div class="w-10 h-10 rounded-[12px] flex items-center justify-center text-white border border-border" style="background-color: ${catObj.cor}">
+                        <div class="av-category-icon w-10 h-10 rounded-[12px] flex items-center justify-center text-white border border-border" style="--category-color:${Utils.escapeHTML(catObj.cor)}">
                             <i class="fa-solid ${catObj.icone}"></i>
                         </div>
                         <div>

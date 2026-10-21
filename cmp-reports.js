@@ -89,13 +89,13 @@ export const ReportComponents = {
                 <div class="nv-report-metric is-expense"><p><i class="fa-solid fa-arrow-trend-down"></i> Saídas</p><h3 data-currency-value="${model.saidas}" class="${financialValueClass(-model.saidas)}">${Utils.formatMoney(model.saidas)}</h3>${reportSource('Soma das despesas realizadas, excluindo transferências e pagamentos de fatura das despesas comuns.')}</div>
                 <div class="nv-report-metric is-net"><p><i class="fa-solid fa-arrow-right-arrow-left"></i> Fluxo líquido</p><h3 data-currency-value="${liquido}" class="${financialValueClass(liquido)}">${Utils.formatMoney(liquido)}</h3>${reportSource('Entradas menos saídas, calculadas a partir das transações do período selecionado.')}</div>
             </div>
-            <div class="nv-report-panel mb-6"><div class="nv-report-panel-heading"><div><h4>Evolução do fluxo</h4><p>${model.isDaily ? 'Acompanhamento diário' : 'Acompanhamento mensal'} · fluxo acumulado no período</p></div></div>
-                <div class="relative h-[300px] w-full">${model.hasMovement ? '<canvas id="reportsFluxoChart" aria-label="Gráfico do fluxo acumulado"></canvas>' : emptyState}</div>
+            ${model.hasMovement ? `<div class="nv-report-panel mb-6"><div class="nv-report-panel-heading"><div><h4>Evolução do fluxo</h4><p>${model.isDaily ? 'Acompanhamento diário' : 'Acompanhamento mensal'} · fluxo acumulado no período</p></div></div>
+                <div class="relative h-[300px] w-full"><canvas id="reportsFluxoChart" aria-label="Gráfico do fluxo acumulado"></canvas></div>
             </div>
             <div class="nv-report-panel"><div class="nv-report-panel-heading"><div><h4>Movimentação do período</h4><p>Somente períodos com entradas ou saídas são listados.</p></div></div>
                 <div class="nv-report-table-header"><div>${model.isDaily ? 'Data' : 'Mês'}</div><div>Entradas</div><div>Saídas</div><div>Fluxo acumulado</div></div>
-                <div class="nv-report-table-body">${tableRows || emptyState}</div>
-            </div>
+                <div class="nv-report-table-body">${tableRows}</div>
+            </div>` : `<section class="nv-report-panel nv-report-panel--empty" aria-label="Fluxo de caixa sem movimentações">${emptyState}<button type="button" data-action="navigate" data-payload="Transacoes" class="nv-workspace-button is-secondary">Ver lançamentos</button></section>`}
         `;
     },
 

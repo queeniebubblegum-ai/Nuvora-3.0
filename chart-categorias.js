@@ -1,4 +1,5 @@
-import { Database } from './db.js';
+import { getCategoriaColor } from './categorias-padrao.js';
+import { Database, db } from './db.js';
 import { isExpense } from './financial-ledger.js';
 import { parseLocalDate } from './util-date.js';
 
@@ -17,8 +18,7 @@ export const ChartCategorias = {
         });
         const labels = Object.keys(cats); const data = Object.values(cats);
         
-        // Soft variations within purple-neutral spectrum
-        const bgColors = ['#CDBCF2', '#D8C8F8', '#E5DAFB', '#E6E8EF', '#D9D9E3', '#B8A6D9', '#6C3BB6', '#1F0F42'];
+        const bgColors = labels.map(name => getCategoriaColor(db.categorias.find(category => category.nome === name)));
         
         if (instances.reportsCategoria) instances.reportsCategoria.destroy();
         instances.reportsCategoria = new globalThis.Chart(ctxCat, {
@@ -60,7 +60,7 @@ export const ChartCategorias = {
                 labels.push(cat);
                 data.push(val);
                 const catObj = db.categorias.find(c => c.nome === cat);
-                colors.push(catObj && catObj.cor ? catObj.cor : '#6C3BB6');
+                colors.push(getCategoriaColor(catObj));
             });
 
         if (data.length === 0) {

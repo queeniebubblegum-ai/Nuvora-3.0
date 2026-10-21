@@ -1072,7 +1072,7 @@ const CATEGORY_ICON_RULES = [
   [/hospitais|clínicas|laboratórios/i, 'fa-hospital'], [/farmácia/i, 'fa-pills'],
   [/^educação$|universidade|escola/i, 'fa-graduation-cap'], [/cursos online/i, 'fa-laptop'], [/creche/i, 'fa-child'],
   [/^serviços digitais$|assinaturas/i, 'fa-layer-group'], [/streaming de música/i, 'fa-music'], [/streaming de vídeo/i, 'fa-film'],
-  [/^investimentos$|fundos multimercado/i, 'fa-chart-line'], [/pagamento de cartão/i, 'fa-credit-card'],
+  [/^investimentos$|fundos multimercado/i, 'fa-chart-line'], [/pagamento de cartão|fatura.*cartão/i, 'fa-credit-card'],
   [/empréstimos|financiamento|dívidas/i, 'fa-hand-holding-dollar'], [/atraso no pagamento|juros/i, 'fa-percent'],
   [/^seguros$/i, 'fa-shield-halved'], [/impostos|taxas/i, 'fa-file-invoice-dollar'], [/despesas gerais/i, 'fa-receipt'],
   [/a classificar/i, 'fa-circle-question'], [/estorno/i, 'fa-rotate-left'],
@@ -1093,6 +1093,25 @@ export const isCategoriaPadrao = (category, canonical = null) => {
   const id = String(item.id ?? '');
   if (/^cat_padrao(?:_|-)/i.test(id)) return true;
   return Boolean(canonical?.id && id && String(canonical.id) === id);
+};
+
+// Presentation only: the seed originally assigned the same pink to every
+// group. Give those untouched defaults a stable identity without rewriting
+// stored records or overriding a user's custom color.
+const CATEGORY_GROUP_COLORS = Object.freeze({
+  'Alimentação': '#946322', 'Compras': '#7352A5', 'Educação': '#436998',
+  'Finanças': '#626785', 'Lazer e entretenimento': '#8D537E',
+  'Moradia': '#40736D', 'Outros': '#686575', 'Renda': '#28745A',
+  'Saúde e bem-estar': '#996078', 'Seguros': '#55669D',
+  'Serviços digitais': '#7060A0', 'Transporte': '#93632E', 'Fatura Cartão': '#7060A0'
+});
+
+export const getCategoriaColor = category => {
+  const item = category && typeof category === 'object' ? category : { nome: category };
+  const stored = String(item.cor || '').trim();
+  const validColor = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(stored);
+  if (validColor && !(isCategoriaPadrao(item) && stored.toUpperCase() === '#F43F5E')) return stored;
+  return CATEGORY_GROUP_COLORS[item.grupo || item.nome] || '#686575';
 };
 
 export const getCategoriaIcon = (category) => {

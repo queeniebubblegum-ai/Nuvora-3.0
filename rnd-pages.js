@@ -324,9 +324,9 @@ export const PageRenderers = {
             <div class="nv-dashboard-shell nv-mockup-dashboard" data-visual-system="mockup-v4">
             <header class="nv-dashboard-header nv-mockup-page-head flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <p class="nv-dashboard-eyebrow">${Utils.escapeHTML(dashboardPeriodLabel).toUpperCase()}</p>
-                    <h1 class="text-2xl font-bold text-text-primary mb-1">Visão geral</h1>
-                    <p class="text-text-secondary text-sm">Panorama do período, contas e próximos passos.</p>
+                    <p class="nv-dashboard-eyebrow">SUA VIDA FINANCEIRA</p>
+                    <h1 class="text-2xl font-bold text-text-primary mb-1">Seu dinheiro, com clareza.</h1>
+                    <p class="text-text-secondary text-sm">Registre o que acontece. Confira o que importa.</p>
                     ${freshness ? `<span class="nv-data-freshness" title="${Utils.escapeHTML(freshness.title)}" aria-label="${Utils.escapeHTML(freshness.title)}"><i class="fa-regular fa-clock" aria-hidden="true"></i>${Utils.escapeHTML(freshness.relative)}</span>` : ''}
                 </div>
                 <div class="flex flex-wrap gap-3">
@@ -336,8 +336,27 @@ export const PageRenderers = {
 
             ${filterHtml}
             <!-- Contexto legado preservado: Visão de ${escapedDashboardPeriodLabel} · Saldo atual: ${Utils.escapeHTML(Utils.formatMoney(saldoAtualGlobal))}. O mockup reorganiza esses dados nos KPIs. -->
+            <section class="av-overview-hero" aria-label="Saldo e conferência">
+                <div class="av-balance-panel">
+                    <span class="av-hero-eyebrow"><span class="av-source-dot" aria-hidden="true"></span> SEU DINHEIRO HOJE</span>
+                    <div class="av-balance-label">Saldo registrado nas contas</div>
+                    <strong class="av-balance-value">${Utils.escapeHTML(Utils.formatMoney(saldoAtualGlobal))}</strong>
+                    <p>Soma dos registros locais. Não inclui limite de crédito.</p>
+                    <button type="button" data-action="navigate" data-payload="Contas" class="av-hero-link">Ver minhas contas <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></button>
+                    <span class="av-hero-orbit" aria-hidden="true"></span>
+                </div>
+                <div class="av-confidence-panel">
+                    <span class="av-confidence-icon"><i class="fa-solid fa-list-check" aria-hidden="true"></i></span>
+                    <span class="av-hero-eyebrow">CONFERIR PARA CONFIAR</span>
+                    <h2>${atual.pendingReview ? `${atual.pendingReview} ${atual.pendingReview === 1 ? 'lançamento para conferir' : 'lançamentos para conferir'}` : 'Um hábito que traz clareza.'}</h2>
+                    <p>${atual.pendingReview ? 'Compare os registros do período com seu extrato ou fatura. Cada conferência deixa sua visão mais clara.' : 'Confira seus registros com o extrato ou a fatura para acompanhar seu dinheiro com confiança.'}</p>
+                    <button type="button" data-action="navigate" data-payload="Conciliacao" class="av-confidence-cta">${atual.pendingReview ? 'Conferir lançamentos' : 'Abrir conferência'} <span aria-hidden="true">→</span></button>
+                    <small>Você confirma. A Avenera organiza.</small>
+                </div>
+            </section>
+            <div class="av-section-heading"><h2>Seu resumo</h2><span>${Utils.escapeHTML(dashboardPeriodLabel)} · registros do aplicativo</span></div>
             ${Components.dashboardMockupKpis(atual)}
-            <section class="av-draft-banner" aria-label="Próxima ação financeira"><p><strong>Não basta registrar. A Avenera ajuda você a conferir.</strong><br>${atual.pendingReview} lançamento(s) do período ainda precisam de conferência. Compare com seu extrato ou fatura antes de concluir.</p><button type="button" data-action="navigate" data-payload="Conciliacao">Conferir agora</button><details><summary>Como interpretar os valores</summary><p>Saldo registrado é a soma das contas locais, sem limite de crédito. Consumo inclui compras no cartão; a saída de caixa ocorre no pagamento da fatura. As previsões do Planejamento são estimativas baseadas nos compromissos cadastrados.</p></details></section>
+            <details class="av-value-explainer"><summary><i class="fa-solid fa-circle-info" aria-hidden="true"></i> Como interpretar esses valores</summary><p>Saldo registrado é a soma das contas locais, sem limite de crédito. Consumo inclui compras no cartão; a saída de caixa ocorre no pagamento da fatura. O resultado do período é a diferença entre receitas e consumo registrado. As previsões do Planejamento são estimativas baseadas nos compromissos cadastrados.</p></details>
 
             <!-- Components.dashboardCards / Resultado financeiro remain part of the compatibility contract while the mockup KPI renderer owns this layout. -->
             <details class="nv-dashboard-context"><summary>Revisão do período e próximos passos</summary>${Components.nextDecisionBlock(atual, priorityContext)}
@@ -349,21 +368,20 @@ export const PageRenderers = {
                 // render a duplicate competing alert below it.
                 excludePriority: nextDecision?.priority
             })}</details>
+            <div class="nv-mockup-bottom-grid">
+                ${Components.dashboardMockupRecent(transacoesPeriodoAtual, appState.dashboardRecentTab, db)}
+                ${Components.dashboardMockupAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
+            </div>
             <div class="nv-mockup-dashboard-grid">
                 ${Components.dashboardMockupFlow(db.transacoes || [])}
                 ${Components.dashboardMockupAccounts(db.bancos || [], db.cartoes || [], db.comprasCartao || [], db)}
             </div>
             <!-- Components.dashboardAccounts remains available as the full legacy account renderer; the mockup uses Components.dashboardMockupAccounts for this composition. -->
-            ${renderMockupDashboardTriple({ budget: orcamentoDashboard, cartoes: db.cartoes || [], compras: db.comprasCartao || [], mentoria: resultadoMentoria })}
-            ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria, priorityContext)}
-
-            <!-- Components.dashboardAgenda remains available for the full calendar route; the mockup uses compact agenda + recent transactions here. -->
-            <div class="nv-mockup-bottom-grid">
-                ${Components.dashboardMockupRecent(transacoesPeriodoAtual, appState.dashboardRecentTab, db)}
-                ${Components.dashboardMockupAgenda(db.agendamentos || [], db.receitasFuturas || [], appState)}
-            </div>
-
-            ${resultadoMentoria.isOnboarding ? '' : Components.dashboardPillars(resultadoMentoria.pillars)}
+            <details class="av-secondary-overview"><summary>Planejamento e sugestões <span aria-hidden="true">＋</span></summary>
+                ${renderMockupDashboardTriple({ budget: orcamentoDashboard, cartoes: db.cartoes || [], compras: db.comprasCartao || [], mentoria: resultadoMentoria })}
+                ${resultadoMentoria.isOnboarding ? '' : Components.insightsSection(resultadoMentoria, priorityContext)}
+            </details>
+            <footer class="av-page-signature"><span>Avenera</span> Uma nova era para suas finanças.</footer>
         </div>
         `);
         const topbarMonth = document.getElementById('nv-topbar-month');
@@ -377,7 +395,9 @@ export const PageRenderers = {
         const mobileMenu = document.getElementById('speed-dial-menu');
         if (mobileContext && mobileMenu) {
             const contextual = quickAction.action !== 'openTypeSelector';
+            const mobileMenuOpen = mobileMenu.getAttribute('aria-hidden') === 'false';
             mobileContext.hidden = !contextual;
+            mobileContext.tabIndex = contextual && mobileMenuOpen ? 0 : -1;
             mobileContext.setAttribute('aria-label', Utils.escapeHTML(quickAction.ariaLabel));
             mobileContext.dataset.action = contextual ? quickAction.action : '';
             if (quickAction.payload) mobileContext.dataset.payload = quickAction.payload;
@@ -390,7 +410,7 @@ export const PageRenderers = {
             const mobileIcon = document.getElementById('speed-dial-contextual-icon');
             if (mobileLabel) mobileLabel.textContent = quickAction.label;
             if (mobileIcon) mobileIcon.className = `fa-solid ${quickAction.icon}`;
-            mobileMenu.querySelectorAll('button:not(#speed-dial-contextual)').forEach(button => { button.hidden = contextual; button.tabIndex = contextual ? -1 : 0; });
+            mobileMenu.querySelectorAll('button:not(#speed-dial-contextual)').forEach(button => { button.hidden = contextual; button.tabIndex = !contextual && mobileMenuOpen ? 0 : -1; });
         }
     },
     Transacoes: (appState) => {
@@ -435,7 +455,7 @@ export const PageRenderers = {
                 ]
             })}
             ${Components.transactionSummary(filtered)}
-            <section class="nv-tx-panel" aria-label="Lista de transações"><div class="nv-tx-panel-toolbar"><div><h2>Histórico de transações</h2><p class="nv-tx-results-status" aria-live="polite">${totalItems} ${totalItems === 1 ? 'movimentação encontrada' : 'movimentações encontradas'}</p></div></div>${Components.filtersSection(f, db.bancos, db.categorias, db.cartoes)}${Components.uncategorizedTransactionsNotice(uncategorizedCount, !!appState.uncategorizedOnly)}<div class="nv-tx-results">${Components.transactionList(pagedTransactions, { ...appState, previousTransactionDate: filtered[(currentPage - 1) * perPage - 1]?.data })}${paginationHtml}</div></section>
+            <section class="nv-tx-panel" aria-label="Lista de transações"><div class="nv-tx-panel-toolbar"><div><h2>Histórico de transações</h2><p class="nv-tx-results-status" aria-live="polite">${totalItems} ${totalItems === 1 ? 'movimentação encontrada' : 'movimentações encontradas'}</p></div></div>${Components.filtersSection(f, db.bancos, db.categorias, db.cartoes)}${Components.uncategorizedTransactionsNotice(uncategorizedCount, !!appState.uncategorizedOnly)}<div class="nv-tx-results">${Components.transactionList(pagedTransactions, appState)}${paginationHtml}</div></section>
         </div>`);
     },
 
@@ -498,7 +518,7 @@ export const PageRenderers = {
             const cat = Components._getCategoryConfig(o.categoria);
             const statusClasses = `${status} is-${status}`;
             const accessibleProgress = pct == null ? `aria-valuenow="0" aria-valuetext="${statusText}"` : `aria-valuenow="${visualPct.toFixed(0)}" aria-valuetext="${pct.toFixed(1)}% utilizado"`;
-            return `<div class="nv-planning-budget-row ${statusClasses}" data-budget-status="${status}"><div class="nv-planning-budget-row__top"><span class="nv-planning-budget-name"><span class="nv-planning-category-icon" style="background:${cat.cor || 'var(--c-brand-medium)'}"><i class="fa-solid ${cat.icone}" aria-hidden="true"></i></span><strong>${Utils.escapeHTML(o.categoria)}</strong></span><span class="nv-planning-budget-values"><b>${money(spent)}</b><span>de ${hasPlannedLimit ? money(limit) : 'Limite não informado'}</span></span></div><div class="nv-planning-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" ${accessibleProgress} aria-label="${Utils.escapeHTML(o.categoria)}"><span style="width:${visualPct.toFixed(2)}%"></span></div><p class="nv-planning-budget-alert" role="status">${statusText}</p></div>`;
+            return `<div class="nv-planning-budget-row ${statusClasses}" data-budget-status="${status}"><div class="nv-planning-budget-row__top"><span class="nv-planning-budget-name"><span class="nv-planning-category-icon" style="--category-color:${Utils.escapeHTML(cat.cor || 'var(--c-brand-medium)')}"><i class="fa-solid ${cat.icone}" aria-hidden="true"></i></span><strong>${Utils.escapeHTML(o.categoria)}</strong></span><span class="nv-planning-budget-values"><b>${money(spent)}</b><span>de ${hasPlannedLimit ? money(limit) : 'Limite não informado'}</span></span></div><div class="nv-planning-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" ${accessibleProgress} aria-label="${Utils.escapeHTML(o.categoria)}"><span style="width:${visualPct.toFixed(2)}%"></span></div><p class="nv-planning-budget-alert" role="status">${statusText}</p></div>`;
         }).join('');
         const budgetCategoriesHtml = budget.orcamentos.length ? budgetCategories : `<div class="nv-planning-empty nv-planning-empty--compact"><i class="fa-solid fa-chart-pie" aria-hidden="true"></i><div><strong>Você ainda não definiu um orçamento para ${Utils.escapeHTML(periodLabel)}.</strong><p>Defina limites por categoria para acompanhar o planejado sem inventar um saldo.</p></div><button data-action="openModal" data-modal="modal-orcamento">Definir limite</button></div>`;
 
