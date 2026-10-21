@@ -167,7 +167,6 @@ export const buildDailyCashflowProjection = ({
     });
 
     const pendingSubscriptionOccurrences = new Set();
-    const pendingSubscriptionSignatures = new Set();
     pending.forEach(item => {
         const originalDate = parseLocalDate(pendingDate(item));
         if (!originalDate) return;
@@ -177,17 +176,11 @@ export const buildDailyCashflowProjection = ({
         [item?.id, item?.assinaturaId, item?.origemId]
             .filter(value => value !== null && value !== undefined && String(value).trim() !== '')
             .forEach(value => pendingSubscriptionOccurrences.add(`${String(value)}:${dateKey(date)}`));
-        pendingSubscriptionSignatures.add(`${String(item?.desc || item?.nome || '').trim().toLowerCase()}|${dateKey(date)}|${amountCents(item)}`);
     });
     (Array.isArray(recurringForecasts) ? recurringForecasts : []).forEach(item => {
         if (!item || item.ativa === false || !isOpen(item) || isInternalMovement(item)) return;
         subscriptionOccurrences(item, today, endDate).forEach((date, index) => {
-            const dateValue = dateKey(date);
-            const knownIds = [item?.id, item?.assinaturaId, item?.origemId]
-                .filter(value => value !== null && value !== undefined && String(value).trim() !== '')
-                .map(value => `${String(value)}:${dateValue}`);
-            const signature = `${String(item?.desc || item?.nome || '').trim().toLowerCase()}|${dateValue}|${amountCents(item)}`;
-            if (knownIds.some(key => pendingSubscriptionOccurrences.has(key)) || pendingSubscriptionSignatures.has(signature)) return;
+            if (pendingSubscriptionOccurrences.has(`${String(item.id)}:${dateKey(date)}`)) return;
             addMovement({ item, date, source: 'Assinatura', direction: 'expense', occurrence: index });
         });
     });

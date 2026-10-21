@@ -12,13 +12,14 @@ describe('Anora NLP expense lookup', () => {
         vi.unstubAllGlobals();
     });
 
-    it('handles legacy transactions with missing descriptions or categories', async () => {
+    it('handles legacy transactions with missing descriptions or categories', () => {
         vi.spyOn(Database, 'getTransacoesPorMes').mockReturnValue([
             { tipo: 'despesa', valor: 25, categoria: null },
             { tipo: 'despesa', valor: 12, desc: undefined }
         ]);
 
-        const response = await AnoraNLP.processarMensagem('Quanto gastei com Uber este mês?');
+        let response;
+        expect(() => { response = AnoraNLP.processarMensagem('Quanto gastei com Uber este mês?'); }).not.toThrow();
         expect(response).toContain('não encontrei nenhuma despesa relacionada a "uber"');
     });
 });

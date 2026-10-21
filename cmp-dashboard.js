@@ -32,13 +32,6 @@ const onboardingStepStatus = (database = {}) => ({
 });
 
 export const DashboardComponents = {
-    dashboardMockupKpis: (atual = {}) => {
-        const receitas = Number(atual.receitas) || 0;
-        const despesas = Number(atual.despesas) || 0;
-        const economia = receitas > 0 ? Math.round(((receitas - despesas) / receitas) * 100) : null;
-        const card = (label, value, note, tone = '') => `<article class="nv-mockup-kpi"><span>${label}</span><strong class="${tone}">${value}</strong><small>${note}</small></article>`;
-        return `<section class="nv-mockup-kpis" aria-label="Resumo financeiro"><div class="nv-mockup-kpis__title"><p class="nv-dashboard-eyebrow">Visão do período</p><h3>Panorama financeiro</h3><p>Uma leitura rápida do que aconteceu com seu dinheiro.</p></div><div class="nv-mockup-kpis__grid">${card('Patrimônio consolidado', Utils.formatMoney(atual.saldo), 'Saldo global das contas')} ${card('Receitas no período', Utils.formatMoney(receitas), 'Entradas realizadas', 'is-positive')} ${card('Despesas no período', Utils.formatMoney(despesas), 'Saídas realizadas', 'is-negative')} ${card('Taxa de economia', economia == null ? '—' : `${economia}%`, economia == null ? 'Sem dados suficientes' : 'Resultado sobre receitas', economia != null && economia >= 0 ? 'is-positive' : 'is-negative')}</div></section>`;
-    },
     dashboardCards: (atual = {}, anterior = {}) => {
         const calcTrend = calculateDashboardTrend;
 
@@ -60,7 +53,7 @@ export const DashboardComponents = {
         const projectionTone = projectionAvailable ? financialValueClass(projection.value) : financialValueClass(null);
 
         const resultadoCard = `
-        <article class="nv-dashboard-card nv-summary-card nv-summary-card--result group" >
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--result group">
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-2">
                     <span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Resultado do período</span>
@@ -70,27 +63,27 @@ export const DashboardComponents = {
             </div>
             <h3 data-currency-value="${resultadoPeriodo}" class="text-3xl font-bold ${resultadoColor} ${financialValueClass(resultadoPeriodo)} mb-1 font-mono tracking-tight">${Utils.formatMoney(resultadoPeriodo)}</h3>
             <p class="text-[11px] text-text-secondary font-medium">Receitas ${Utils.formatMoney(atual.receitas)} · Despesas ${Utils.formatMoney(atual.despesas)}</p>
-        </article>`;
+        </div>`;
 
         const projectionCard = `
-        <article class="nv-dashboard-card nv-summary-card nv-summary-card--projection group"  aria-label="Projeção de saldo no fim do mês">
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--projection group" aria-label="Projeção de saldo no fim do mês">
             <div class="flex justify-between items-start mb-4"><div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Fim do mês</span></div><div class="w-10 h-10 text-brand-medium bg-brand-soft rounded-[12px] flex items-center justify-center text-base shadow-sm"><i class="fa-solid fa-chart-line" aria-hidden="true"></i></div></div>
             <h3 data-currency-value="${projectionAvailable ? projection.value : ''}" class="text-3xl font-bold ${projectionTone} mb-1 font-mono tracking-tight">${projectionValue}</h3>
             <p class="text-[11px] text-text-secondary font-medium" title="${Utils.escapeHTML(projection.explanation || 'Dados futuros insuficientes para projetar.')}">${Utils.escapeHTML(projectionAvailable ? 'Saldo estimado no fim do mês' : 'Dados insuficientes para projetar')}</p>
-        </article>`;
+        </div>`;
 
         const vencimentosCard = `
-        <article class="nv-dashboard-card nv-summary-card nv-summary-card--due group" >
+        <div class="nv-dashboard-card nv-summary-card nv-summary-card--due group">
             <div class="flex justify-between items-start mb-4">
                 <div class="flex items-center gap-2"><span class="text-text-primary text-xs font-black uppercase tracking-widest opacity-90">Próximos vencimentos</span></div>
                 <div class="w-10 h-10 ${vencimentos > 0 ? 'text-danger bg-danger/10' : 'text-success bg-success/10'} rounded-[12px] flex items-center justify-center text-base shadow-sm group-hover:scale-110 transition-transform"><i class="fa-solid fa-clock" aria-hidden="true"></i></div>
             </div>
             <h3 data-currency-value="${vencimentos}" class="text-3xl font-bold ${vencimentosColor} ${financialValueClass(vencimentos)} mb-1 font-mono tracking-tight">${Utils.formatMoney(vencimentos)}</h3>
             <p class="text-[11px] text-text-secondary font-medium">Contas pendentes de hoje até o fim do mês</p>
-        </article>`;
+        </div>`;
 
         return `
-        <div class="nv-dashboard-summary-grid nv-live-metric-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6" role="group" aria-label="Indicadores principais">
+        <div class="nv-dashboard-summary-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
             ${CoreComponents._buildSummaryCard('Saldo atual', atual.saldo, '', true, 'fa-wallet', 'Saldo global de todas as contas')}
             ${resultadoCard}
             ${vencimentosCard}
@@ -423,82 +416,6 @@ export const DashboardComponents = {
         return `<div class="nv-dashboard-accounts-grid" aria-label="Contas e cartões"><section class="nv-dashboard-card nv-dashboard-accounts nv-dashboard-accounts--bank" aria-label="Contas"><div class="nv-dashboard-accounts__header flex items-center justify-between gap-3 mb-3"><div class="flex items-center gap-2 min-w-0"><i class="fa-solid fa-wallet text-success" aria-hidden="true"></i><div class="min-w-0"><h3 class="font-bold text-text-primary text-base font-primary">Contas</h3><p class="text-[10px] text-text-secondary uppercase tracking-wider">Contas correntes e poupança</p></div></div><span class="nv-dashboard-accounts__count text-[10px] font-bold text-success bg-bg px-2 py-1 rounded-full whitespace-nowrap">${bancos.length}</span></div><div class="nv-dashboard-accounts__list">${contasHtml}</div></section><section class="nv-dashboard-card nv-dashboard-accounts nv-dashboard-accounts--cards" aria-label="Cartões"><div class="nv-dashboard-accounts__header flex items-center justify-between gap-3 mb-3"><div class="flex items-center gap-2 min-w-0"><i class="fa-regular fa-credit-card text-brand-medium" aria-hidden="true"></i><div class="min-w-0"><h3 class="font-bold text-text-primary text-base font-primary">Cartões</h3><p class="text-[10px] text-text-secondary uppercase tracking-wider">Limite disponível e utilização</p></div></div><span class="nv-dashboard-accounts__count text-[10px] font-bold text-brand-medium bg-brand-soft px-2 py-1 rounded-full whitespace-nowrap">${cartoes.length}</span></div><div class="nv-dashboard-accounts__list">${cartoesHtml}</div></section></div>`;
     },
 
-    dashboardMockupFlow: (transacoes = []) => {
-        const now = new Date();
-        const months = Array.from({length:6},(_,index) => {
-            const date = new Date(now.getFullYear(),now.getMonth()-(5-index),1);
-            return {date,label:date.toLocaleDateString('pt-BR',{month:'short'}).replace('.',''),income:0,expense:0};
-        });
-        transacoes.forEach(transaction => {
-            const date = new Date(`${String(transaction?.data || '').slice(0,10)}T12:00:00`);
-            if(Number.isNaN(date.getTime()) || isTransferTransaction(transaction)) return;
-            const month = months.find(item => item.date.getFullYear() === date.getFullYear() && item.date.getMonth() === date.getMonth());
-            if(!month) return;
-            if(isIncome(transaction)) month.income += Number(transaction.valor) || 0;
-            if(isExpense(transaction)) month.expense += Number(transaction.valor) || 0;
-        });
-        const max = Math.max(...months.flatMap(item => [item.income,item.expense]),1);
-        const hasData = months.some(item => item.income || item.expense);
-        const bars = months.map((item,index) => {
-            const x = 55 + index*88;
-            const income = Math.max(0,item.income / max*150), expense = Math.max(0,item.expense / max*150);
-            return `<g><title>${item.label}: receitas ${Utils.formatMoney(item.income)}, despesas ${Utils.formatMoney(item.expense)}</title><rect x="${x-16}" y="${176-income}" width="15" height="${income}" rx="4" class="nv-flow-bar--income"></rect><rect x="${x+3}" y="${176-expense}" width="15" height="${expense}" rx="4" class="nv-flow-bar--expense"></rect><text x="${x}" y="201" text-anchor="middle" font-size="10">${item.label}</text></g>`;
-        }).join('');
-        const chart = hasData ? `<svg viewBox="0 0 550 215" role="img" aria-label="Receitas e despesas realizadas nos últimos seis meses"><path d="M25 26H535M25 76H535M25 126H535M25 176H535" class="nv-mockup-flow__grid-line"></path><g class="nv-mockup-flow__labels">${bars}</g></svg>` : '<div class="nv-flow-empty"><i class="fa-solid fa-chart-column" aria-hidden="true"></i><strong>Seu fluxo começa com o primeiro lançamento</strong><p>As receitas e despesas realizadas aparecerão aqui.</p></div>';
-        return `<section class="nv-mockup-flow nv-dashboard-card" aria-label="Fluxo de caixa"><header class="nv-mockup-flow__header"><div><h3>Fluxo de caixa · 6 meses</h3><p>Receitas e despesas realizadas</p></div><div class="nv-mockup-flow__legend"><span><i class="is-income"></i>Receitas</span><span><i class="is-expense"></i>Despesas</span></div></header><div class="nv-mockup-flow__chart">${chart}</div></section>`;
-    },
-
-    dashboardMockupAccounts: (bancos = [], cartoes = [], compras = []) => {
-        const logo = (name, color) => `<span class="nv-mockup-account-icon" style="--account-color:${color || 'var(--mock-action)'}">${Utils.escapeHTML(String(name || 'C').slice(0, 1).toUpperCase())}</span>`;
-        const rows = bancos.map(account => `<div class="nv-mockup-account-row">${logo(account.instituicao || account.nome, account.cor)}<div><strong>${Utils.escapeHTML(account.nome || account.instituicao || 'Conta')}</strong><small>${Utils.escapeHTML(account.instituicao || 'Conta corrente')} · Conciliada</small></div><b>${Utils.formatMoney(account.saldo || 0)}</b></div>`).join('');
-        const cardRows = cartoes.map(card => {
-            const limit = Number(card.limite || card.limiteTotal || 0);
-            const used = compras.filter(item => String(item.cartaoId ?? item.bancoId) === String(card.id)).reduce((total, item) => total + Math.abs(Number(item.valor) || 0), 0);
-            const available = Math.max(limit - used, 0);
-            const percentage = limit > 0 ? Math.min(Math.round((used / limit) * 100), 100) : 0;
-            return `<div class="nv-mockup-account-row"><span class="nv-mockup-account-icon" style="--account-color:var(--mock-action)"><i class="fa-regular fa-credit-card" aria-hidden="true"></i></span><div><strong>${Utils.escapeHTML(card.nome || 'Cartão')}</strong><small>${percentage}% utilizado · limite ${Utils.formatMoney(limit)}</small></div><b>${Utils.formatMoney(available)}</b></div>`;
-        }).join('');
-        const empty = (icon, label, action, modal, payload = '') => `<div class="nv-mockup-accounts-empty"><i class="fa-solid ${icon}" aria-hidden="true"></i><p>${label}</p><button type="button" data-action="${action}"${modal ? ` data-modal="${modal}"` : ''}${payload ? ` data-payload="${payload}"` : ''}>Adicionar ${label.toLowerCase()}</button></div>`;
-        return `<div class="nv-dashboard-accounts-grid nv-mockup-accounts-grid" aria-label="Contas e cartões"><section class="nv-mockup-accounts nv-dashboard-card" aria-label="Contas"><header><div><p class="nv-dashboard-eyebrow">Patrimônio</p><h3>Contas</h3><p>Saldos das contas e investimentos.</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Contas">Gerenciar →</button></header><div class="nv-mockup-account-list">${rows || empty('fa-wallet', 'conta', 'openModal', 'modal-banco')}</div></section><section class="nv-mockup-accounts nv-dashboard-card" aria-label="Cartões"><header><div><p class="nv-dashboard-eyebrow">Crédito</p><h3>Cartões</h3><p>Limite disponível e utilização.</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Contas">Gerenciar →</button></header><div class="nv-mockup-account-list">${cardRows || empty('fa-credit-card', 'cartão', 'navigate', '', 'Contas')}</div></section></div>`;
-    },
-
-    dashboardMockupRecent: (transacoes = [], selectedTab = 'recent') => {
-        const isPending = transaction => ['pendente', 'pending', 'em aberto'].includes(String(transaction?.status || '').trim().toLocaleLowerCase('pt-BR')) || transaction?.pendente === true;
-        const pending = transacoes.filter(isPending);
-        const source = selectedTab === 'pending' ? pending : transacoes;
-        const recent = [...source].sort((a, b) => String(b.data || '').localeCompare(String(a.data || ''))).slice(0, 4);
-        const rows = recent.map(transaction => {
-            const category = CoreComponents._getCategoryConfig(transaction.categoria);
-            const income = isIncome(transaction);
-            const date = transaction.data ? new Date(`${String(transaction.data).slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—';
-            const status = isPending(transaction) ? 'Pendente' : (income ? 'Conciliado' : (transaction.status || 'Conciliado'));
-            const safeStatus = Utils.escapeHTML(status);
-            return `<div class="nv-mockup-transaction-row"><span class="nv-mockup-transaction-icon" style="--category-color:${category.cor}"><i class="fa-solid ${category.icone}" aria-hidden="true"></i></span><div class="nv-mockup-transaction-copy"><strong>${Utils.escapeHTML(transaction.desc || 'Lançamento')}</strong><small>${date} · ${Utils.escapeHTML(transaction.categoria || 'Sem categoria')}</small></div><span class="nv-mockup-transaction-status ${status === 'Pendente' ? 'is-pending' : (income ? 'is-success' : 'is-neutral')}" aria-label="Status: ${safeStatus}">${safeStatus}</span><b class="${income ? 'is-positive' : 'is-negative'}">${income ? '+' : '−'}${Utils.formatMoney(Math.abs(Number(transaction.valor) || 0))}</b></div>`;
-        }).join('');
-        return `<section class="nv-mockup-recent nv-dashboard-card" aria-label="Transações recentes"><header><div><h3>Transações recentes</h3><p>Últimos registros do período</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Transacoes">Ver todas →</button></header><div class="nv-mockup-recent-tabs" role="tablist" aria-label="Filtro de transações"><button class="${selectedTab !== 'pending' ? 'is-active' : ''}" type="button" data-action="setDashboardRecentTab" data-payload="recent" role="tab" aria-selected="${selectedTab !== 'pending'}">Recentes</button><button class="${selectedTab === 'pending' ? 'is-active' : ''}" type="button" data-action="setDashboardRecentTab" data-payload="pending" role="tab" aria-selected="${selectedTab === 'pending'}">Pendentes${pending.length ? ` (${pending.length})` : ''}</button></div><div class="nv-mockup-transaction-list">${rows || `<div class="nv-mockup-recent-empty"><i class="fa-solid fa-receipt" aria-hidden="true"></i><p>${selectedTab === 'pending' ? 'Nenhuma pendência no período.' : 'Nenhuma transação no período.'}</p><button type="button" data-action="openModal" data-modal="modal-transacao">Adicionar lançamento</button></div>`}</div></section>`;
-    },
-
-    dashboardMockupAgenda: (agendamentos = [], receitas = [], state = {}) => {
-        const today = new Date();
-        const year = Number(state.agendaYear ?? today.getFullYear());
-        const month = Number(state.agendaMonth ?? today.getMonth());
-        const monthLabel = new Date(year, month, 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '');
-        const items = [...agendamentos.map(item => ({ ...item, agendaDate: item.dataVencimento || item.data, label: item.nome || item.descricao || 'Vencimento' })), ...receitas.map(item => ({ ...item, agendaDate: item.data || item.dataVencimento, label: item.descricao || item.nome || 'Receita prevista' }))].filter(item => /^\d{4}-\d{2}-\d{2}$/.test(String(item.agendaDate || '')));
-        const byDate = new Map(items.map(item => [String(item.agendaDate).slice(0, 10), item]));
-        const first = new Date(year, month, 1);
-        const offset = (first.getDay() + 6) % 7;
-        const cells = Array.from({ length: 35 }, (_, index) => {
-            const date = new Date(year, month, 1 - offset + index);
-            const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-            const inMonth = date.getMonth() === month;
-            const isToday = key === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-            const item = byDate.get(key);
-            return `<button type="button" class="nv-mockup-calendar-day ${inMonth ? '' : 'is-muted'} ${isToday ? 'is-today' : ''} ${item ? 'has-item' : ''}" data-action="showAgendaDay" data-payload="${key}" aria-label="${date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })}">${date.getDate()}${item ? '<i></i>' : ''}</button>`;
-        }).join('');
-        const upcoming = items.filter(item => String(item.agendaDate) >= `${year}-${String(month + 1).padStart(2, '0')}-01`).sort((a, b) => String(a.agendaDate).localeCompare(String(b.agendaDate))).slice(0, 3).map(item => `<div class="nv-mockup-upcoming-row"><span>${String(item.agendaDate).slice(8, 10)}/${String(item.agendaDate).slice(5, 7)}</span><strong>${Utils.escapeHTML(item.label)}</strong><b>${Utils.formatMoney(item.valor || 0)}</b></div>`).join('');
-        return `<section class="nv-mockup-agenda nv-dashboard-card" aria-label="Agenda financeira"><header><div><h3>Agenda · ${monthLabel}</h3><p>Próximos compromissos</p></div><button type="button" class="nv-mockup-link" data-action="navigate" data-payload="Agendamentos">Abrir calendário →</button></header><div class="nv-mockup-calendar-weekdays"><span>D</span><span>S</span><span>T</span><span>Q</span><span>Q</span><span>S</span><span>S</span></div><div class="nv-mockup-calendar-grid">${cells}</div><div class="nv-mockup-upcoming">${upcoming || '<p class="nv-mockup-upcoming-empty">Nenhum compromisso próximo.</p>'}</div></section>`;
-    },
-
     dashboardAgenda: (agendamentos = [], receitas = [], state = {}) => {
         const hoje = new Date();
         const ano = Number(state.agendaYear ?? hoje.getFullYear());
@@ -542,7 +459,7 @@ export const DashboardComponents = {
             ].join('');
             const states = [isOutside ? 'is-outside' : '', isToday ? 'is-today agenda-day--today' : '', isSelected ? 'is-selected' : '', lista.length ? 'agenda-day--has-items' : ''].filter(Boolean).join(' ');
             const label = `${date.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}${lista.length ? `, ${lista.length} ${lista.length === 1 ? 'item' : 'itens'}` : ''}`;
-            cells.push(`<button type="button" data-action="showAgendaDay" data-payload="${dateKey}" class="calendar-day agenda-day ${states}" aria-label="${Utils.escapeHTML(label)}" aria-current="${isToday ? 'date' : 'false'}" aria-pressed="${isSelected ? 'true' : 'false'}"><span class="calendar-day-number">${date.getDate()}</span>${dots ? `<span class="calendar-day-dots" aria-label="Indicadores do dia">${dots}</span>` : '<span class="calendar-day-dots" aria-hidden="true"></span>'}</button>`);
+            cells.push(`<button type="button" data-action="showAgendaDay" onclick="App.showAgendaDay('${dateKey}')" data-payload="${dateKey}" class="calendar-day agenda-day ${states}" aria-label="${Utils.escapeHTML(label)}" aria-current="${isToday ? 'date' : 'false'}" aria-pressed="${isSelected ? 'true' : 'false'}"><span class="calendar-day-number">${date.getDate()}</span>${dots ? `<span class="calendar-day-dots" aria-label="Indicadores do dia">${dots}</span>` : '<span class="calendar-day-dots" aria-hidden="true"></span>'}</button>`);
         }
         return `<section class="nv-dashboard-card nv-dashboard-agenda agenda-calendar" aria-label="Agenda financeira"><header class="calendar-header"><div><p class="calendar-eyebrow">Planejamento</p><h3 class="calendar-title">Agenda financeira</h3><p class="calendar-subtitle">${nomes[mes]} de ${ano} · selecione um dia para ver os detalhes</p></div><div class="calendar-controls"><button type="button" data-action="resetAgendaToday" class="calendar-today" aria-label="Ir para hoje">Hoje</button><div class="calendar-nav" role="group" aria-label="Navegação da agenda"><button type="button" data-action="changeAgendaMonth" data-dir="-1" class="calendar-nav-button" aria-label="Mês anterior"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></button><button type="button" data-action="changeAgendaMonth" data-dir="1" class="calendar-nav-button" aria-label="Próximo mês"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></button></div></div></header><div class="calendar-weekdays agenda-weekdays" aria-hidden="true">${diasSemana.map(dia => `<span>${dia}</span>`).join('')}</div><div class="calendar-grid agenda-grid" role="grid" aria-label="${nomes[mes]} de ${ano}">${cells.join('')}</div><footer class="calendar-legend" aria-label="Legenda da agenda"><span><i class="calendar-legend-dot calendar-legend-dot--commitment" aria-hidden="true"></i>Compromisso</span><span><i class="calendar-legend-dot calendar-legend-dot--due-date" aria-hidden="true"></i>Vencimento</span><span><i class="calendar-legend-dot calendar-legend-dot--completed" aria-hidden="true"></i>Concluído</span></footer></section>`;
     },

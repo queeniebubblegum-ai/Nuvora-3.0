@@ -2,11 +2,9 @@ import { db } from './db.js';
 import { Utils } from './utils.js';
 import { SubmitFeedback } from './submit-feedback.js';
 import { SubmitGuard } from './submit-guard.js';
-import { ModalDesign } from './modal-design.js';
 
 export const UI = {
     modalSnapshots: {},
-    modalReturnFocus: {},
 
     captureModalState: (id) => {
         const modal = document.getElementById(id);
@@ -100,18 +98,10 @@ export const UI = {
 
         const m = document.getElementById(id);
         if (m) {
-            ModalDesign.enhance(m);
-            const active = document.activeElement;
-            UI.modalReturnFocus[id] = active && active !== document.body ? active : null;
             m.removeAttribute('inert');
             m.setAttribute('aria-hidden', 'false');
             m.classList.remove('hidden'); m.classList.add('flex');
-            ModalDesign.syncLayers();
             UI.captureModalState(id);
-            const scheduleFocus = globalThis.requestAnimationFrame || (callback => setTimeout(callback, 0));
-            scheduleFocus(() => {
-                ModalDesign.focusInitial(m);
-            });
         }
     },
 
@@ -131,7 +121,6 @@ export const UI = {
             modal.setAttribute('inert', '');
             modal.classList.add('hidden');
             modal.classList.remove('flex', 'animate-fade-in-up');
-            ModalDesign.syncLayers();
             // Só a camada encerrada é resetada; não destrói o estado da fatura subjacente.
             modal.querySelectorAll('form').forEach(form => {
                 form.reset();
@@ -140,8 +129,6 @@ export const UI = {
             });
             if (modalId === 'modal-categoria') UI.resetCategoryModal();
             delete UI.modalSnapshots[modal.id];
-            UI.modalReturnFocus[modal.id]?.focus?.({ preventScroll: true });
-            delete UI.modalReturnFocus[modal.id];
             if (modalId === 'modal-fatura-detalhes') {
                 viewState.selectedTransactions = [];
                 viewState.activeCardId = null;
@@ -171,14 +158,10 @@ export const UI = {
             const el = document.getElementById(id); if(el) { el.innerHTML = ''; el.classList.add('hidden'); }
         });
         
-        document.querySelectorAll('div[id^="modal-"]').forEach(modal => {
-            modal.querySelectorAll('form').forEach(form => {
-                form.reset();
-                SubmitFeedback.reset(form);
-                SubmitGuard.cancel(form);
-            });
-            UI.modalReturnFocus[modal.id]?.focus?.({ preventScroll: true });
-            delete UI.modalReturnFocus[modal.id];
+        document.querySelectorAll('form').forEach(form => {
+            form.reset();
+            SubmitFeedback.reset(form);
+            SubmitGuard.cancel(form);
         });
         UI.resetCategoryModal();
         UI.modalSnapshots = {};
@@ -333,5 +316,3 @@ export const UI = {
         }
     }
 };
-
-ModalDesign.install({ onActivate: modal => UI.captureModalState(modal.id) });

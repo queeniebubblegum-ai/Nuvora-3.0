@@ -8,35 +8,8 @@ const mark = (form, state) => {
     if (!form) return;
     if (state) {
         form.dataset.submitLocked = 'true';
-        form.setAttribute?.('aria-busy', 'true');
-        (form.querySelectorAll?.('button[type="submit"], input[type="submit"]') || []).forEach(button => {
-            button.dataset.submitOriginalDisabled = button.disabled ? 'true' : 'false';
-            if (button.tagName === 'BUTTON') {
-                button.dataset.submitOriginalHtml = button.innerHTML;
-                button.innerHTML = '<span class="nv-submit-spinner" aria-hidden="true"></span> Salvando…';
-            } else {
-                button.dataset.submitOriginalValue = button.value;
-                button.value = 'Salvando…';
-            }
-            button.disabled = true;
-        });
     } else {
         delete form.dataset.submitLocked;
-        form.removeAttribute?.('aria-busy');
-        (form.querySelectorAll?.('button[type="submit"], input[type="submit"]') || []).forEach(button => {
-            if (button.dataset.submitOriginalHtml !== undefined) {
-                button.innerHTML = button.dataset.submitOriginalHtml;
-                delete button.dataset.submitOriginalHtml;
-            }
-            if (button.dataset.submitOriginalValue !== undefined) {
-                button.value = button.dataset.submitOriginalValue;
-                delete button.dataset.submitOriginalValue;
-            }
-            if (button.dataset.submitOriginalDisabled !== undefined) {
-                button.disabled = button.dataset.submitOriginalDisabled === 'true';
-                delete button.dataset.submitOriginalDisabled;
-            }
-        });
     }
 };
 

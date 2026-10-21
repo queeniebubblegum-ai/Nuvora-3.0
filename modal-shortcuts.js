@@ -9,11 +9,6 @@
 (function () {
   'use strict';
 
-  // This helper is intentionally opt-in so a debug utility cannot leak into
-  // the production shell. Append ?debugModals=1 when a modal inventory is
-  // needed during local QA.
-  if (new URLSearchParams(window.location.search).get('debugModals') !== '1') return;
-
   // Lista de todos os modais existentes no cmp-modals.js
   const MODAIS = [
     { id: 'modal-transacao',         nome: 'Nova Transação',        grupo: 'Lançamentos' },
