@@ -5,7 +5,7 @@ import { MentorEngine } from './mentorEngine.js';
 import { loadAnoraPreferences } from './anora-preferences.js';
 
 const escape = value => Utils.escapeHTML(value == null ? '' : String(value));
-const styleLabel = style => ({ suave: 'Suave', equilibrado: 'Equilibrado', rigoroso: 'Foco Extremo' }[style] || 'Equilibrado');
+const styleLabel = style => ({ suave: 'Suave', equilibrado: 'Equilibrado', rigoroso: 'Direto' }[style] || 'Equilibrado');
 const styleIcon = style => ({ suave: '🌿', equilibrado: '⚖️', rigoroso: '🎯' }[style] || '⚖️');
 
 const insightType = (text, index) => {

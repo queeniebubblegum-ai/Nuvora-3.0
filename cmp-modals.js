@@ -113,6 +113,9 @@ export const Modals = {
                 <button type="button" data-action="cancelInvoicePayment" class="text-text-secondary hover:text-text-primary w-8 h-8" aria-label="Cancelar registro"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
             </header>
             <input type="hidden" id="invoice-payment-schedule-id" value="">
+            <input type="hidden" id="invoice-payment-operation-id" value="">
+            <label for="invoice-payment-value">Valor pago (R$)</label><input id="invoice-payment-value" type="number" min="0.01" step="0.01" inputmode="decimal" required class="w-full p-3 bg-surface border border-border rounded-[10px] text-text-primary">
+            <p class="text-xs text-text-secondary">Você pode registrar um pagamento parcial. O restante continua pendente.</p>
             <div class="rounded-xl border border-border bg-bg p-4 mb-4">
                 <p id="invoice-payment-description" class="font-bold text-text-primary"></p>
                 <p class="text-xs text-text-secondary mt-1">Vencimento: <span id="invoice-payment-due-date" class="font-semibold text-text-primary"></span></p>
@@ -140,6 +143,13 @@ export const Modals = {
             
             <form data-submit="editarTransacao" class="space-y-3.5 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
                 <input type="hidden" id="edit-id">
+                <fieldset id="edit-purchase-options" hidden>
+                    <label for="edit-purchase-scope">O que deseja alterar?</label>
+                    <select id="edit-purchase-scope" disabled><option value="one">Somente esta parcela</option><option value="remaining">Redistribuir o total a partir desta parcela</option></select>
+                    <label for="edit-purchase-total">Novo total das parcelas a partir desta (R$)</label>
+                    <input id="edit-purchase-total" type="number" inputmode="decimal" min="0.01" step="0.01" disabled>
+                    <p id="edit-purchase-explanation">As datas e parcelas anteriores são preservadas. Faturas com pagamentos exigem revisão individual.</p>
+                </fieldset>
                 <div>
                     <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Descrição</label>
                     <input id="edit-desc" type="text" required disabled class="w-full p-2.5 bg-bg opacity-70 cursor-not-allowed border border-border rounded-[10px] text-sm transition-all text-text-primary">
@@ -372,10 +382,10 @@ export const Modals = {
                     </div>
                 </div>
 
-                <div>
+                <details><summary>Pessoa (opcional)</summary>
                     <div class="flex items-center justify-between mb-1"><label for="input-contato" class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider">Pessoa (opcional)</label><button type="button" onclick="App.openModal('modal-contato'); event.stopPropagation()" title="Novo contato" aria-label="Novo contato" class="w-5 h-5 rounded-full bg-brand-medium/10 text-brand-medium text-[10px] font-bold">+</button></div>
                     <select id="input-contato" class="w-full p-2.5 bg-surface border border-border rounded-[8px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary"></select>
-                </div>
+                </details>
 
                 <div id="smart-category-badge" class="hidden text-[10px] font-mentor bg-bg text-brand-medium border border-border px-3 py-1.5 mt-2 rounded-[8px] items-center gap-2 w-fit transition-all"></div>
 
@@ -399,7 +409,7 @@ export const Modals = {
                         <div>
                             <label class="block text-[10px] font-bold text-text-secondary mb-1 uppercase tracking-wider">Parcelas</label>
                             <select id="input-parcelas-trans" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm focus:border-brand-medium outline-none transition-all text-text-primary">
-                                <option value="1">1x</option><option value="2">2x</option><option value="12">12x</option>
+                                <option value="1">1x</option><option value="2">2x</option><option value="3">3x</option><option value="6">6x</option><option value="12">12x</option><option value="18">18x</option><option value="24">24x</option><option value="36">36x</option>
                             </select>
                         </div>
                         <div>
@@ -482,7 +492,7 @@ export const Modals = {
                 <h3 class="text-lg font-bold font-primary text-text-primary">Novo Cartão</h3>
                 <button data-action="closeModal" class="text-text-secondary hover:text-text-primary"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <form data-submit="cartao" class="space-y-3.5 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide">
+            <form data-submit="cartao" class="space-y-3.5 flex-1 min-h-0 overflow-y-auto pr-1 pb-1 scrollbar-hide"><input type="hidden" id="cartao-id"><p class="text-xs text-text-secondary">Alterar fechamento preserva as faturas já registradas e muda a regra para novas compras.</p>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Conta Vinculada</label><select id="cartao-bancoId" data-change="handleCartaoBancoChange" required class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary"></select></div>
                 <div><label class="block text-[10px] font-bold text-text-secondary uppercase tracking-wider mb-1">Modelo</label>
                     <select id="cartao-modelo" data-change="handleCartaoModelo" class="w-full p-2.5 bg-surface border border-border rounded-[10px] text-sm text-text-primary">

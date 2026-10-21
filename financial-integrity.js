@@ -64,7 +64,7 @@ export const validateEntity = (collectionName, record, index = 0) => {
         if (amount === null || amount < 0) errors.push(issue('error', 'transaction.amount', `${path}.valor`, 'O lançamento precisa ter um valor maior ou igual a zero.'));
         if (!validDate(record.data)) errors.push(issue('error', 'transaction.date', `${path}.data`, 'O lançamento precisa ter uma data válida.'));
         const kind = String(record.tipo || '').trim().toLowerCase();
-        if (kind && !['receita', 'despesa', 'pagamento-fatura', ...transferKinds].includes(kind)) {
+        if (kind && !['receita', 'despesa', 'estorno-cartao', 'pagamento-fatura', ...transferKinds].includes(kind)) {
             errors.push(issue('error', 'transaction.type', `${path}.tipo`, 'Tipo de lançamento desconhecido.'));
         }
     }

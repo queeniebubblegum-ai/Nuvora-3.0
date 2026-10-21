@@ -1,4 +1,5 @@
-import { isExpense, isIncome } from './financial-ledger.js';
+import { isCashflowMovement, isCashInflow } from './financial-ledger.js';
+import { fromCents, toCents } from './money-math.js';
 
 const monthNames = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
@@ -10,7 +11,7 @@ const transactionDate = transaction => {
     return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const isCashflowMovement = transaction => isIncome(transaction) || isExpense(transaction);
+
 
 /**
  * Builds the one source of truth for Cash Flow's cards, chart and table.
@@ -43,11 +44,11 @@ export const buildCashflowModel = (db, period = 1, referenceDate = new Date()) =
                 : date.getFullYear() === bucketDate.getFullYear() && date.getMonth() === bucketDate.getMonth();
         });
         const entradas = bucketMovements
-            .filter(isIncome)
-            .reduce((total, transaction) => total + (Number(transaction.valor) || 0), 0);
+            .filter(isCashInflow)
+            .reduce((total, transaction) => fromCents(toCents(total) + toCents(transaction.valor)), 0);
         const saidas = bucketMovements
-            .filter(isExpense)
-            .reduce((total, transaction) => total + (Number(transaction.valor) || 0), 0);
+            .filter(t => !isCashInflow(t))
+            .reduce((total, transaction) => fromCents(toCents(total) + toCents(transaction.valor)), 0);
         buckets.push({
             date: bucketDate,
             label: isDaily
@@ -73,8 +74,8 @@ export const buildCashflowModel = (db, period = 1, referenceDate = new Date()) =
         movements,
         buckets,
         activeBuckets: buckets.filter(bucket => bucket.entradas > 0 || bucket.saidas > 0),
-        entradas: movements.filter(isIncome).reduce((total, transaction) => total + (Number(transaction.valor) || 0), 0),
-        saidas: movements.filter(isExpense).reduce((total, transaction) => total + (Number(transaction.valor) || 0), 0),
+        entradas: movements.filter(isCashInflow).reduce((total, transaction) => fromCents(toCents(total) + toCents(transaction.valor)), 0),
+        saidas: movements.filter(t => !isCashInflow(t)).reduce((total, transaction) => fromCents(toCents(total) + toCents(transaction.valor)), 0),
         hasMovement: movements.length > 0
     };
 };

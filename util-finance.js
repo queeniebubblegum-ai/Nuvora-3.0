@@ -76,12 +76,13 @@ export const UtilFinance = {
             if (nameMatch && nameMatch[1]) descBanco += nameMatch[1].trim();
             if (memoMatch && memoMatch[1]) descBanco += (descBanco ? ' - ' : '') + memoMatch[1].trim();
 
-            const parsedDate = parseDate(dateMatch ? dateMatch[1] : null) || UtilDate.localISODate();
+            const parsedDate = parseDate(dateMatch ? dateMatch[1] : null);
             const rawAmount = amountMatch ? parseFloat(amountMatch[1].replace(',', '.')) : 0;
 
             const cleanedData = cleanDescriptionAndMethod(descBanco);
 
             transactions.push({
+                identificador: trnBlock.match(/<FITID>(.*?)(?:\r|\n|<|$)/)?.[1]?.trim() || '',
                 tipo: rawAmount > 0 || (typeMatch && typeMatch[1].trim() === 'CREDIT') ? 'receita' : 'despesa',
                 data: parsedDate,
                 valor: Math.abs(rawAmount),

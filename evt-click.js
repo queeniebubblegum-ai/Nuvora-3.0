@@ -34,6 +34,8 @@ export const ClickEvents = {
             };
 
             const actionsMap = {
+                editCard: () => App.editCard(actionId()),
+                reloadFinancialData: () => location.reload(),
                 'navigate': () => {
                     App.navigate(btn.getAttribute('data-payload'));
                     const sidebar = document.getElementById('sidebar');
@@ -165,7 +167,8 @@ export const ClickEvents = {
             if (!handler) return;
             e.preventDefault();
             e.stopPropagation();
-            handler();
+            try { Promise.resolve(handler()).catch(error => Utils.showToast(error.message || 'Não foi possível salvar. Seus dados anteriores foram mantidos.', 'error')); }
+            catch (error) { Utils.showToast(error.message, 'error'); }
             if (action === 'navigate' || action === 'openModal') {
                 trackUIEvent({ screen: App.currentPage || 'unknown', source: 'quick_action', action });
             }

@@ -184,11 +184,12 @@ export const NotifUI = {
 
         const inputs = container.querySelectorAll('input[data-config], select[data-config]');
         inputs.forEach(input => {
-            input.addEventListener('change', (e) => {
+            input.addEventListener('change', async (e) => {
                 const key = e.target.getAttribute('data-config');
                 const value = e.target.type === 'checkbox' ? e.target.checked : parseInt(e.target.value);
                 
-                Database.updateConfig(key, value);
+                try { await Database.updateConfig(key, value); }
+                catch (error) { Utils.showToast(error.message, 'error'); NotifUI.renderConfig(); return; }
                 Utils.showToast('Configuração de alerta atualizada.', 'success');
                 NotifUI.renderConfig(); 
             });

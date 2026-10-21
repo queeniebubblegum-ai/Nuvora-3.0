@@ -31,7 +31,7 @@ export const NotifEngine = {
                 cor,
                 lida: false,
                 data: new Date().toISOString()
-            });
+            }).catch(error => console.warn('Não foi possível salvar o lembrete local:', error.name));
         }
     },
 
@@ -93,7 +93,7 @@ export const NotifEngine = {
             if (pct >= 100) {
                 NotifEngine.addNotification(
                     'orcamento_estourado',
-                    'Orçamento Estourado',
+                    'Despesas acima do limite definido',
                     `Você ultrapassou o limite definido para a categoria ${orc.categoria}.`,
                     'fa-chart-pie',
                     'text-danger'

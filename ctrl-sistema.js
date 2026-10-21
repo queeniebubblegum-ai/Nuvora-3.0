@@ -4,7 +4,7 @@ import { App } from './app.js';
 import { AnoraNLP } from './anora-nlp.js';
 
 export const SistemaController = {
-    submitUsuario: (e) => {
+    submitUsuario: async (e) => {
         e.preventDefault();
         const nome = document.getElementById('input-usuario-nome').value;
         const subtitulo = document.getElementById('input-usuario-subtitulo').value;
@@ -13,12 +13,12 @@ export const SistemaController = {
         const mentorStyleEl = document.getElementById('input-usuario-mentor-style');
         const mentorStyle = mentorStyleEl ? mentorStyleEl.value : 'equilibrado';
         
-        Database.updateUser({ nome, subtitulo, mentorStyle });
+        await Database.updateUser({ nome, subtitulo, mentorStyle });
         
         Utils.showToast('Perfil atualizado com sucesso!', 'success');
     },
 
-    processarFotoPerfil: (e) => {
+    processarFotoPerfil: async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
@@ -28,9 +28,9 @@ export const SistemaController = {
         }
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             const base64String = event.target.result;
-            Database.updateUser({ fotoUrl: base64String });
+            await Database.updateUser({ fotoUrl: base64String });
             Utils.showToast('Foto de perfil atualizada!', 'success');
             
             App.scheduleRender();
@@ -38,7 +38,7 @@ export const SistemaController = {
         reader.readAsDataURL(file);
     },
 
-    submitChatAnora: (e) => {
+    submitChatAnora: async (e) => {
         e.preventDefault();
         const form = e.target?.matches?.('form[data-submit="chatAnora"]') ? e.target : null;
         const chatRoot = form?.closest('[data-anora-chat]') || form?.closest('#modal-chat-anora');

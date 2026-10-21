@@ -27,30 +27,30 @@ export const buildScheduleOccurrences = (base, repetition = 'unica', quantity = 
 };
 
 export const PlaneamentoController = {
-    submitReceitaFutura: (e) => {
+    submitReceitaFutura: async (e) => {
         e.preventDefault();
         const form = e.target;
         const desc = form.querySelector('[name="desc"]').value.trim();
         const valor = Number(form.querySelector('[name="valor"]').value);
         const data = form.querySelector('[name="data"]').value;
         if (!desc || !Number.isFinite(valor) || valor <= 0 || !data) { Utils.showToast('Informe descrição, valor e data válidos.', 'error'); return; }
-        Database.add('receitasFuturas', { id: Date.now(), desc, valor, data, status: 'prevista' });
+        await Database.add('receitasFuturas', { id: Date.now(), desc, valor, data, status: 'prevista' });
         Utils.showToast('Receita futura adicionada!', 'success');
         App.scheduleRender();
     },
 
-    submitAssinatura: (e) => {
+    submitAssinatura: async (e) => {
         e.preventDefault();
         const form = e.target;
         const nome = form.querySelector('[name="nome"]').value.trim();
         const valor = Number(form.querySelector('[name="valor"]').value);
         if (!nome || !Number.isFinite(valor) || valor <= 0) { Utils.showToast('Informe nome e valor válidos.', 'error'); return; }
-        Database.add('assinaturas', { id: Date.now(), nome, valor, periodicidade: form.querySelector('[name="periodicidade"]').value, ativa: true });
+        await Database.add('assinaturas', { id: Date.now(), nome, valor, periodicidade: form.querySelector('[name="periodicidade"]').value, ativa: true });
         Utils.showToast('Assinatura adicionada!', 'success');
         App.scheduleRender();
     },
 
-    submitInvestimento: (e) => {
+    submitInvestimento: async (e) => {
         e.preventDefault();
         const form = e.target;
         const nome = form.querySelector('[name="nome"]').value.trim();
@@ -59,7 +59,7 @@ export const PlaneamentoController = {
         const aporte = aporteRaw === '' || aporteRaw == null ? 0 : Number(aporteRaw);
         const classe = form.querySelector('[name="classe"]')?.value.trim() || '';
         if (!nome || !Number.isFinite(valorAtual) || valorAtual < 0 || !Number.isFinite(aporte) || aporte < 0) { Utils.showToast('Informe nome e valores válidos.', 'error'); return; }
-        Database.add('investimentos', { id: Date.now(), nome, valorAtual, aporte, classe });
+        await Database.add('investimentos', { id: Date.now(), nome, valorAtual, aporte, classe });
         Utils.showToast('Investimento adicionado!', 'success');
         App.closeModal();
         App.scheduleRender();
@@ -102,12 +102,12 @@ export const PlaneamentoController = {
         }
     },
 
-    submitMeta: (e) => {
+    submitMeta: async (e) => {
         e.preventDefault();
         const nome = document.getElementById('meta-nome').value;
         const data = document.getElementById('meta-data').value;
         const alvo = parseFloat(document.getElementById('meta-alvo').value);
-        Database.add('metas', { id: Date.now(), nome, data, alvo, atual: 0 });
+        await Database.add('metas', { id: Date.now(), nome, data, alvo, atual: 0 });
         Utils.showToast('Meta criada com sucesso!', 'success');
         App.closeModal();
     },
@@ -136,17 +136,17 @@ export const PlaneamentoController = {
         }
     },
 
-    submitOrcamento: (e) => {
+    submitOrcamento: async (e) => {
         e.preventDefault();
         const categoria = document.getElementById('orcamento-categoria').value;
         const limite = parseFloat(document.getElementById('orcamento-valor').value);
-        Database.updateBudget(categoria, limite, App.viewState.budgetYear, App.viewState.budgetMonth);
+        await Database.updateBudget(categoria, limite, App.viewState.budgetYear, App.viewState.budgetMonth);
         Utils.showToast('Orçamento definido com sucesso!', 'success');
         App.closeModal();
     },
 
     // --- MÓDULO INTELIGENTE 50/30/20 ---
-    preview503020: (valorInput) => {
+    preview503020: async (valorInput) => {
         const val = parseFloat(valorInput) || 0;
         const necess = val * 0.5;
         const lazer = val * 0.3;
@@ -161,7 +161,7 @@ export const PlaneamentoController = {
         if(el20) el20.innerText = Utils.formatMoney(poup);
     },
 
-    submitOrcamentoInteligente: (e) => {
+    submitOrcamentoInteligente: async (e) => {
         e.preventDefault();
         const renda = parseFloat(document.getElementById('oi-renda').value);
         if(!renda || renda <= 0) {
@@ -170,18 +170,18 @@ export const PlaneamentoController = {
         }
 
         // Distribui os 50% (Necessidades Vitais)
-        Database.updateBudget('Moradia', renda * 0.15);
-        Database.updateBudget('Alimentação', renda * 0.15);
-        Database.updateBudget('Transporte', renda * 0.10);
-        Database.updateBudget('Saúde', renda * 0.05);
-        Database.updateBudget('Serviços', renda * 0.05);
+        await Database.updateBudget('Moradia', renda * 0.15);
+        await Database.updateBudget('Alimentação', renda * 0.15);
+        await Database.updateBudget('Transporte', renda * 0.10);
+        await Database.updateBudget('Saúde', renda * 0.05);
+        await Database.updateBudget('Serviços', renda * 0.05);
 
         // Distribui os 30% (Estilo de Vida e Lazer)
-        Database.updateBudget('Lazer', renda * 0.15);
-        Database.updateBudget('Compras', renda * 0.15);
+        await Database.updateBudget('Lazer', renda * 0.15);
+        await Database.updateBudget('Compras', renda * 0.15);
 
         // Atualiza a expectativa de renda no perfil do usuário
-        Database.updateUser({ rendaMensalMedia: renda.toString() });
+        await Database.updateUser({ rendaMensalMedia: renda.toString() });
 
         Utils.showToast('Limites 50/30/20 aplicados com sucesso!', 'success');
         App.closeModal();

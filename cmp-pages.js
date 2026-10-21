@@ -1,10 +1,12 @@
+import { getReviewState, reviewLabels } from './conferencing-model.js';
+import { cardCreditUsed, invoiceModel } from './invoice-model.js';
 import { Utils } from './utils.js';
 import { Database, db } from './db.js';
 import { getCategoriaIcon, isCategoriaPadrao } from './categorias-padrao.js';
 import { CoreComponents } from './cmp-core.js';
 import { listInvoiceTransactions, calculateReconciliation, getInvoicePeriod, invoiceReconciliationKey } from './reconciliation.js';
 import { loadAnoraPreferences } from './anora-preferences.js';
-import { calculatePeriodTotals, isExpense, isIncome, isInvoicePayment, isTransfer as isTransferTransaction } from './financial-ledger.js';
+import { calculatePeriodTotals, isExpense, isIncome, isInvoicePayment, isCardRefund, isConsumptionExpense, consumptionExpense, isTransfer as isTransferTransaction } from './financial-ledger.js';
 import { addMoney } from './money-math.js';
 import { cardInvoiceDueDate } from './invoice-provisioning.js';
 import { isInvoiceSchedulePending } from './invoice-payment.js';
@@ -16,6 +18,7 @@ export const accountPortfolioSummary = ({
     reserves = [],
     cards = [],
     cardPurchases = [],
+    transactions = null, schedules = [], reconciliations = [],
 } = {}) => {
     const cashBalance = (Array.isArray(banks) ? banks : []).reduce(
         (total, bank) => addMoney(total, bank?.saldo),
@@ -31,9 +34,7 @@ export const accountPortfolioSummary = ({
 
     const credit = (Array.isArray(cards) ? cards : []).map(card => {
         const limit = addMoney(card?.limite || card?.limiteTotal || 0);
-        const used = (Array.isArray(cardPurchases) ? cardPurchases : [])
-            .filter(item => String(item?.cartaoId || item?.bancoId) === String(card?.id))
-            .reduce((total, item) => addMoney(total, item?.valor), 0);
+        const used = cardCreditUsed({ transacoes: transactions || cardPurchases.map(t => ({ ...t, isCartao: true, bancoId: t.cartaoId ?? t.bancoId })), agendamentos: schedules, conciliacoesFaturas: reconciliations }, card);
 
         return {
             ...card,
@@ -102,14 +103,10 @@ export const PageComponents = {
             }
             return due;
         };
-        const invoiceFor = card => {
-            const items = listInvoiceTransactions(transacoes, card, anoAtual, mesAtual);
-            const record = (db.conciliacoesFaturas || []).find(item => item.chave === invoiceReconciliationKey(card.id, anoAtual, mesAtual));
-            return calculateReconciliation(items, record?.valorFaturaReal, record?.ajustes || []);
-        };
+        const invoiceFor = card => invoiceModel({ ...db, transacoes, agendamentos }, card, anoAtual, mesAtual);
         const cardPurchases = (Array.isArray(transacoes) ? transacoes : [])
             .filter(item => item?.isCartao && !item.transferenciaInterna);
-        const portfolio = accountPortfolioSummary({ banks: bancos, reserves: reservas, cards: cartoes, cardPurchases });
+        const portfolio = accountPortfolioSummary({ banks: bancos, reserves: reservas, cards: cartoes, cardPurchases, transactions: transacoes, schedules: agendamentos, reconciliations: db.conciliacoesFaturas });
         const cardsData = cartoes.map(card => {
             const portfolioCard = portfolio.credit.find(item => String(item.id) === String(card.id));
             const committed = portfolioCard?.used || 0;
@@ -120,7 +117,7 @@ export const PageComponents = {
                 .sort((a, b) => String(a?.dataVencimento || '').localeCompare(String(b?.dataVencimento || '')) || String(a?.id || '').localeCompare(String(b?.id || '')))[0] || null;
             return { card, committed, limit, hasLimit: limit > 0, available: portfolioCard?.available || 0, utilization: portfolioCard?.utilization || 0, invoice, paymentSchedule, dueDate: dueDateFor(card) };
         });
-        const openInvoiceAmount = cardsData.reduce((sum, item) => addMoney(sum, item.invoice.explainedTotal), 0);
+        const openInvoiceAmount = cardsData.reduce((sum, item) => addMoney(sum, item.invoice.outstanding), 0);
         const nextDue = cardsData.map(item => item.dueDate).filter(Boolean).sort((a, b) => a - b)[0] || null;
         const firstBankId = bancos.length ? Utils.escapeHTML(String(bancos[0].id)) : '';
         // A card can only be linked to an existing bank. Keep the CTA useful in
@@ -134,7 +131,7 @@ export const PageComponents = {
         const cardMenuDescription = bancos.length ? 'Fatura e limite' : 'Cadastre uma conta antes';
         const bankFor = card => bancos.find(bank => String(bank.id) === String(card.bancoId));
         const cardFinal = card => {
-            const candidate = card.ultimosDigitos ?? card.ultimo4 ?? card.last4 ?? card.lastDigits ?? card.digitosFinais ?? card.numeroFinal;
+            const candidate = card.final ?? card.ultimosDigitos ?? card.ultimo4 ?? card.last4 ?? card.lastDigits ?? card.digitosFinais ?? card.numeroFinal;
             const digits = candidate == null ? '' : String(candidate).replace(/\D/g, '').slice(-4);
             return digits ? `•••• ${digits}` : 'Final não informado';
         };
@@ -176,7 +173,7 @@ export const PageComponents = {
                     <span class="nv-credit-status is-${usageState}">${Utils.escapeHTML(usageLabel)}</span>
                 </div>
                 <div class="nv-credit-card__body">
-                <div class="nv-credit-card-highlight"><strong>${hasLimit ? money(available) : '—'}</strong><p>Limite disponível</p></div>
+                <div class="nv-credit-card-highlight"><strong>${hasLimit ? money(available) : '—'}</strong><p>Limite disponível estimado</p></div>
                 <div class="nv-credit-card-progress nv-credit-progress" data-usage-state="${usageState}"><div class="nv-credit-card-progress-label"><span>Utilizado ${hasLimit ? `· ${money(committed)} de ${money(limit)}` : ''}</span><strong>${Utils.escapeHTML(usageLabel)}</strong></div><div class="nv-credit-card-progress-track" role="progressbar" aria-label="Limite comprometido de ${Utils.escapeHTML(card.nome || 'cartão')}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${usagePercent == null ? 0 : visualUsagePercent.toFixed(0)}" aria-valuetext="${Utils.escapeHTML(usageLabel)}"><span class="${usageClass}" style="width:${visualUsagePercent}%"></span></div></div>
                 <footer class="nv-credit-card__footer"><span>Fatura atual: ${money(invoice.explainedTotal)}</span><span>Vencimento: dia ${Utils.escapeHTML(String(card.vencimento || card.diaVencimento || '—'))}</span></footer>
                 ${paymentSchedule ? `
@@ -184,7 +181,7 @@ export const PageComponents = {
                 ` : ''}
                 <button type="button" data-action="openInvoicePaymentForCard" data-id="${Utils.escapeHTML(String(card.id))}" aria-label="Registrar pagamento da fatura de ${Utils.escapeHTML(card.nome || 'cartão')}" class="mt-3 w-full py-2.5 rounded-lg bg-brand-medium text-white text-sm font-bold hover:bg-brand-dark transition-colors"><i class="fa-solid fa-money-bill-transfer mr-2" aria-hidden="true"></i>Registrar pagamento da fatura</button>
                 <div class="nv-accounts-card-actions">
-                    ${actionButton('openInvoiceDetails', 'Abrir fatura', 'fa-solid fa-file-invoice-dollar', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}
+                    ${actionButton('openInvoiceDetails', 'Abrir fatura', 'fa-solid fa-file-invoice-dollar', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}${actionButton('editCard', 'Editar cartão', 'fa-solid fa-pen', `data-id="${Utils.escapeHTML(String(card.id))}"`, 'secondary')}
                     ${actionButton('openCardExpenseModal', 'Lançar despesa', 'fa-solid fa-plus', `data-id="${Utils.escapeHTML(String(card.id))}" data-nome="${Utils.escapeHTML(card.nome || 'Cartão')}"`, 'primary')}
                     <button type="button" data-action="delete" data-col="cartoes" data-id="${Utils.escapeHTML(String(card.id))}" class="nv-accounts-icon-action nv-accounts-icon-action--danger" title="Excluir cartão" aria-label="Excluir cartão"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></button>
                 </div>
@@ -284,12 +281,12 @@ export const PageComponents = {
     filtersSection: (f, bancos, categorias = [], cartoes = []) => {
         const meses = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
         const currentType = f.tipo || '';
-        const filterKeys = ['desc', 'categoria', 'bancoId', 'mes', 'tipo', 'dataInicio', 'dataFim'];
+        const filterKeys = ['desc', 'categoria', 'bancoId', 'mes', 'tipo', 'dataInicio', 'dataFim', 'ano', 'conferencia'];
         const activeFilterCount = filterKeys.reduce((count, key) => {
             const value = f?.[key];
             return count + (value !== null && value !== undefined && String(value).trim() !== '' ? 1 : 0);
         }, 0);
-        const advancedFilterKeys = ['categoria', 'bancoId', 'dataInicio', 'dataFim'];
+        const advancedFilterKeys = ['categoria', 'bancoId', 'dataInicio', 'dataFim', 'ano', 'conferencia'];
         const activeAdvancedFilterCount = advancedFilterKeys.reduce((count, key) => {
             const value = f?.[key];
             return count + (value !== null && value !== undefined && String(value).trim() !== '' ? 1 : 0);
@@ -322,7 +319,7 @@ export const PageComponents = {
                 <div><label for="transactions-month" class="nv-tx-label">Período</label><select id="transactions-month" data-change="setFilter" data-filter-key="mes" class="nv-tx-input"><option value="">Todos os meses</option>${meses.map((m,i)=>`<option value="${i}" ${f.mes===String(i)?'selected':''}>${m}</option>`).join('')}</select></div>
             </div>
             ${clearFiltersHtml ? `<div class="nv-tx-filter-utilities" aria-live="polite">${clearFiltersHtml}</div>` : ''}
-            <details class="nv-tx-more-filters" ${activeAdvancedFilterCount > 0 ? 'open' : ''}><summary>Mais filtros${activeAdvancedFilterCount ? ` <span class="nv-tx-more-count">${activeAdvancedFilterCount} ativos</span>` : ''}<i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid">
+            <details class="nv-tx-more-filters" ${activeAdvancedFilterCount > 0 ? 'open' : ''}><summary>Mais filtros${activeAdvancedFilterCount ? ` <span class="nv-tx-more-count">${activeAdvancedFilterCount} ativos</span>` : ''}<i class="fa-solid fa-chevron-down" aria-hidden="true"></i></summary><div class="nv-tx-more-grid"><div><label for="transactions-year" class="nv-tx-label">Ano</label><input id="transactions-year" type="number" min="1900" max="2199" placeholder="Todos os anos" data-change="setFilter" data-filter-key="ano" value="${Utils.escapeHTML(f.ano || '')}" class="nv-tx-input"></div><div><label for="transactions-review" class="nv-tx-label">Conferência</label><select id="transactions-review" data-change="setFilter" data-filter-key="conferencia" class="nv-tx-input"><option value="">Todos os estados</option>${Object.entries(reviewLabels).map(([value,label])=>`<option value="${value}" ${f.conferencia===value?'selected':''}>${label}</option>`).join('')}</select></div>
                 <div><label for="transactions-category" class="nv-tx-label">Categoria</label><select id="transactions-category" data-change="setFilter" data-filter-key="categoria" class="nv-tx-input"><option value="">Todas as categorias</option>${cats}</select></div>
                 <div><label for="transactions-account" class="nv-tx-label">Conta ou cartão</label><select id="transactions-account" data-change="setFilter" data-filter-key="bancoId" class="nv-tx-input">${contas}</select></div>
                 <div class="nv-tx-date-range"><div><label for="transactions-start" class="nv-tx-label">De</label><input id="transactions-start" type="date" data-change="setFilter" data-filter-key="dataInicio" value="${Utils.escapeHTML(f.dataInicio || '')}" class="nv-tx-input"></div><div><label for="transactions-end" class="nv-tx-label">Até</label><input id="transactions-end" type="date" data-change="setFilter" data-filter-key="dataFim" value="${Utils.escapeHTML(f.dataFim || '')}" class="nv-tx-input"></div></div>
@@ -362,7 +359,7 @@ export const PageComponents = {
 
         return `<div class="nv-tx-list-head"><label class="nv-tx-select-all"><input type="checkbox" data-change="toggleSelectAllTx" ${allVisibleSelected ? 'checked' : ''} aria-label="Selecionar todas as movimentações visíveis"><span>Selecionar página</span></label>${selected.length > 0 ? `<button type="button" data-action="deleteSelectedTx" class="nv-tx-bulk-delete"><i class="fa-solid fa-trash-can" aria-hidden="true"></i> Apagar selecionadas (${selected.length})</button>` : ''}</div><div class="nv-tx-list">${list.map((t, index) => {
             const isTransfer = isTransferTransaction(t);
-            const isRec = isTransfer ? !!t.transferenciaEntrada : isIncome(t);
+            const isRec = isTransfer ? !!t.transferenciaEntrada : isIncome(t) || isCardRefund(t);
             const valColor = isRec ? 'is-income' : 'is-expense';
             const sign = isRec ? '+' : '-';
             const dateInfo = transactionDateInfo(t.data);
@@ -382,10 +379,10 @@ export const PageComponents = {
             const catObj = CoreComponents._getCategoryConfig(t.categoria);
             const catColor = Utils.escapeHTML(String(catObj.cor || 'var(--c-text-secondary)'));
             const isSelected = selected.includes(String(t.id));
-            const typeLabel = isInvoicePayment(t) ? 'Pagamento de fatura' : isTransfer ? 'Transferência' : (isIncome(t) ? 'Receita' : 'Despesa');
+            const typeLabel = isCardRefund(t) ? 'Estorno no cartão' : isInvoicePayment(t) ? 'Pagamento de fatura' : isTransfer ? 'Transferência' : (isIncome(t) ? 'Receita' : 'Despesa');
             const uncategorized = !String(t.categoria || '').trim() || String(t.categoria).trim().toLocaleLowerCase('pt-BR') === 'sem categoria';
             const categoryLabel = uncategorized ? 'Sem categoria' : t.categoria;
-            return `${dateHeading}<div class="swipe-container nv-tx-row ${isSelected ? 'is-selected' : ''} ${uncategorized ? 'is-uncategorized' : ''}" data-id="${Utils.escapeHTML(String(t.id))}"><div class="swipe-front nv-tx-row-front"><div class="nv-tx-row-main"><label class="nv-tx-check"><input type="checkbox" data-change="toggleSelectTx" value="${Utils.escapeHTML(String(t.id))}" ${isSelected ? 'checked' : ''} aria-label="Selecionar ${Utils.escapeHTML(t.desc || typeLabel)}"><span></span></label><span class="nv-tx-category-icon" style="background-color: ${catColor}"><i class="fa-solid ${Utils.escapeHTML(catObj.icone)}" aria-hidden="true"></i></span><div class="nv-tx-description"><div class="nv-tx-title-line"><strong>${Utils.escapeHTML(t.desc || typeLabel)}</strong><span class="nv-tx-reference">#${Utils.escapeHTML(String(txId))}</span></div><div class="nv-tx-meta"><span class="nv-tx-type" style="--tx-category-color: ${catColor}">${Utils.escapeHTML(categoryLabel || typeLabel)}${uncategorized ? ' <span class="sr-only">Sem categoria</span>' : ''}</span><span><i class="fa-regular fa-calendar" aria-hidden="true"></i>${Utils.escapeHTML(dateInfo.label)}</span>${contaLabel ? `<span><i class="fa-solid fa-building-columns" aria-hidden="true"></i>${Utils.escapeHTML(contaLabel)}</span>` : ''}${t.isCartao ? `<span><i class="fa-regular fa-credit-card" aria-hidden="true"></i>Cartão${t.parcelaAtual ? ` · ${Utils.escapeHTML(String(t.parcelaAtual))}/${Utils.escapeHTML(String(t.totalParcelas))}` : ''}</span>` : ''}${t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="nv-tx-meta-optional">${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}${t.recorrente && !t.isCartao ? '<span><i class="fa-solid fa-repeat" aria-hidden="true"></i>Fixa</span>' : ''}${contato ? `<span class="nv-tx-meta-optional"><i class="fa-regular fa-address-book" aria-hidden="true"></i>${Utils.escapeHTML(contato.nome)}</span>` : ''}</div></div></div><div class="nv-tx-row-value"><strong class="money num ${valColor}">${sign} ${Utils.formatMoney(t.valor)}</strong><span class="nv-tx-row-kind">${typeLabel}</span><div class="nv-tx-row-actions"><button type="button" data-action="openEditModal" data-id="${Utils.escapeHTML(String(t.id))}" title="Editar transação" aria-label="Editar transação"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Editar</span></button><button type="button" data-action="deleteExpense" data-id="${Utils.escapeHTML(String(t.id))}" title="Apagar transação" aria-label="Apagar transação"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Apagar</span></button></div></div></div></div>`;
+            return `${dateHeading}<div class="swipe-container nv-tx-row ${isSelected ? 'is-selected' : ''} ${uncategorized ? 'is-uncategorized' : ''}" data-id="${Utils.escapeHTML(String(t.id))}"><div class="swipe-front nv-tx-row-front"><div class="nv-tx-row-main"><label class="nv-tx-check"><input type="checkbox" data-change="toggleSelectTx" value="${Utils.escapeHTML(String(t.id))}" ${isSelected ? 'checked' : ''} aria-label="Selecionar ${Utils.escapeHTML(t.desc || typeLabel)}"><span></span></label><span class="nv-tx-category-icon" style="background-color: ${catColor}"><i class="fa-solid ${Utils.escapeHTML(catObj.icone)}" aria-hidden="true"></i></span><div class="nv-tx-description"><div class="nv-tx-title-line"><strong>${Utils.escapeHTML(t.desc || typeLabel)}</strong><span class="nv-tx-reference">#${Utils.escapeHTML(String(txId))}</span></div><div class="nv-tx-meta"><span class="nv-tx-type" style="--tx-category-color: ${catColor}">${Utils.escapeHTML(categoryLabel || typeLabel)}${uncategorized ? ' <span class="sr-only">Sem categoria</span>' : ''}</span><span><i class="fa-regular fa-calendar" aria-hidden="true"></i>${Utils.escapeHTML(dateInfo.label)}</span>${contaLabel ? `<span><i class="fa-solid fa-building-columns" aria-hidden="true"></i>${Utils.escapeHTML(contaLabel)}</span>` : ''}${t.isCartao ? `<span><i class="fa-regular fa-credit-card" aria-hidden="true"></i>Cartão${t.parcelaAtual ? ` · ${Utils.escapeHTML(String(t.parcelaAtual))}/${Utils.escapeHTML(String(t.totalParcelas))}` : ''}</span>` : ''}${t.formaPagamento && t.formaPagamento !== 'Não informada' ? `<span class="nv-tx-meta-optional">${Utils.escapeHTML(t.formaPagamento)}</span>` : ''}${t.recorrente && !t.isCartao ? '<span><i class="fa-solid fa-repeat" aria-hidden="true"></i>Fixa</span>' : ''}${contato ? `<span class="nv-tx-meta-optional"><i class="fa-regular fa-address-book" aria-hidden="true"></i>${Utils.escapeHTML(contato.nome)}</span>` : ''}</div></div></div><div class="nv-tx-row-value"><strong class="money num ${valColor}">${sign} ${Utils.formatMoney(t.valor)}</strong><span class="nv-tx-row-kind">${typeLabel} · ${Utils.escapeHTML(reviewLabels[getReviewState(db, t)])}</span><div class="nv-tx-row-actions"><button type="button" data-action="openEditModal" data-id="${Utils.escapeHTML(String(t.id))}" title="Editar transação" aria-label="Editar transação"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Editar</span></button><button type="button" data-action="deleteExpense" data-id="${Utils.escapeHTML(String(t.id))}" title="Apagar transação" aria-label="Apagar transação"><i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Apagar</span></button></div></div></div></div>`;
         }).join('')}</div>`;
     },
 
@@ -452,7 +449,7 @@ export const PageComponents = {
         const adjustments = invoiceRecord?.ajustes || [];
         const pendingAdjustments = adjustments.filter(a => !(a.lancamentoCriado && a.transactionId));
         const bulkEligibleAdjustments = pendingAdjustments.filter(a => a.type !== 'unrecognized_purchase');
-        const reconciliation = calculateReconciliation(monthExpenses, invoiceRecord?.valorFaturaReal, adjustments);
+        const reconciliation = calculateReconciliation(monthExpenses, invoiceRecord?.valorFaturaReal, adjustments, invoiceRecord);
         const totalFatura = reconciliation.explainedTotal;
         const periodo = getInvoicePeriod(card, state.invoiceYear, state.invoiceMonth);
         const statusClasses = { 'em aberto': 'bg-slate-100 text-slate-700', 'aguardando conferência': 'bg-amber-100 text-amber-700', 'diferença encontrada': 'bg-rose-100 text-rose-700', 'conciliada': 'bg-emerald-100 text-emerald-700' };
@@ -796,9 +793,9 @@ export const PageComponents = {
         const orcamentosDoMes = (orcamentos || []).filter(o => o.ano == null || (Number(o.ano) === Number(anoSelecionado) && Number(o.mes) === Number(mesSelecionado)));
         const gastosPorCat = {};
         const transacoesMes = Database.getTransacoesPorMes(anoSelecionado, mesSelecionado);
-        transacoesMes.filter(isExpense).forEach(t => {
+        transacoesMes.filter(isConsumptionExpense).forEach(t => {
             const categoria = t.categoria || 'Outros';
-            gastosPorCat[categoria] = addMoney(gastosPorCat[categoria] || 0, t.valor);
+            gastosPorCat[categoria] = addMoney(gastosPorCat[categoria] || 0, consumptionExpense(t));
         });
         const totalOrcado = orcamentosDoMes.reduce((total, item) => addMoney(total, item.limite), 0);
         const totalGastoMes = Object.values(gastosPorCat).reduce((total, value) => addMoney(total, value), 0);
@@ -886,9 +883,9 @@ export const PageComponents = {
                 <div class="nv-settings-static-row nv-settings-data-action is-danger"><span class="nv-settings-option-icon"><i class="fa-solid fa-trash-can" aria-hidden="true"></i></span><button type="button" data-action="clearAllData" class="nv-settings-inline-action"><strong>Limpar todos os dados</strong><span>irreversível <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></button></div>
                 <div class="nv-settings-action-grid nv-settings-import-tools"><button type="button" data-action="iniciarImportacaoCSV" data-banco-id="${escape(bankId)}" class="nv-settings-action-card" ${bankId === '' ? 'disabled' : ''}><i class="fa-solid fa-file-csv" aria-hidden="true"></i><span><strong>Importar CSV</strong><small>${bankId === '' ? 'Cadastre uma conta antes da importação.' : 'Importar movimentações para uma conta.'}</small></span></button><button type="button" data-action="iniciarImportacaoOFX" data-banco-id="${escape(bankId)}" class="nv-settings-action-card" ${bankId === '' ? 'disabled' : ''}><i class="fa-solid fa-file-import" aria-hidden="true"></i><span><strong>Importar OFX</strong><small>${bankId === '' ? 'Cadastre uma conta antes da importação.' : 'Importar movimentações para uma conta.'}</small></span></button></div>`,
                 security: `
-                <div class="nv-settings-security-list"><article><i class="fa-solid fa-hard-drive" aria-hidden="true"></i><span><strong>Proteção local</strong><small>Os dados ficam armazenados neste navegador; não são enviados por esta tela.</small></span><b>Ativa</b></article><article><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span><strong>Confirmação de exclusão</strong><small>A exclusão de registros e a limpeza integral exigem confirmação explícita.</small></span><b>Ativa</b></article><article><i class="fa-solid fa-broom" aria-hidden="true"></i><span><strong>Limpeza de dados</strong><small>A limpeza integral apaga os dados financeiros deste navegador somente após confirmação e recomenda backup.</small></span><b>Protegida</b></article></div><div class="nv-settings-static-row nv-settings-data-action"><span class="nv-settings-option-icon"><i class="fa-solid fa-stethoscope" aria-hidden="true"></i></span><button type="button" data-action="runIntegrityCheck" class="nv-settings-inline-action"><strong>Verificar integridade financeira</strong><span>contas, lançamentos e referências <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></button></div><div id="integrity-report" class="nv-settings-integrity-report" role="status" aria-live="polite">Nenhuma verificação executada nesta sessão.</div>`,
+                <div class="nv-settings-security-list"><article><i class="fa-solid fa-hard-drive" aria-hidden="true"></i><span><strong>Armazenamento local</strong><small>Dados e histórico de alterações ficam neste navegador. Exporte um backup para guardar uma cópia.</small></span><b>Local</b></article><article><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span><strong>Confirmação de exclusão</strong><small>A exclusão de registros e a limpeza integral exigem confirmação explícita.</small></span><b>Ativa</b></article><article><i class="fa-solid fa-broom" aria-hidden="true"></i><span><strong>Limpeza de dados</strong><small>A limpeza integral apaga os dados financeiros deste navegador somente após confirmação e recomenda backup.</small></span><b>Protegida</b></article></div><div class="nv-settings-static-row nv-settings-data-action"><span class="nv-settings-option-icon"><i class="fa-solid fa-stethoscope" aria-hidden="true"></i></span><button type="button" data-action="runIntegrityCheck" class="nv-settings-inline-action"><strong>Verificar integridade financeira</strong><span>contas, lançamentos e referências <i class="fa-solid fa-chevron-right" aria-hidden="true"></i></span></button></div><div id="integrity-report" class="nv-settings-integrity-report" role="status" aria-live="polite">Nenhuma verificação executada nesta sessão.</div>`,
             anora: `
-                <div class="nv-settings-anora-form"><label class="nv-settings-field"><span>Estilo de recomendação</span><select data-change="updateAnoraPreference" data-preference="style" aria-label="Estilo de recomendação da Anora"><option value="suave" ${preferences.style === 'suave' ? 'selected' : ''}>Suave</option><option value="equilibrado" ${preferences.style === 'equilibrado' ? 'selected' : ''}>Equilibrado</option><option value="rigoroso" ${preferences.style === 'rigoroso' ? 'selected' : ''}>Rigoroso</option></select></label>
+                <div class="nv-settings-anora-form"><label class="nv-settings-field"><span>Estilo de recomendação</span><select data-change="updateAnoraPreference" data-preference="style" aria-label="Estilo de recomendação da Anora"><option value="suave" ${preferences.style === 'suave' ? 'selected' : ''}>Suave</option><option value="equilibrado" ${preferences.style === 'equilibrado' ? 'selected' : ''}>Equilibrado</option><option value="rigoroso" ${preferences.style === 'rigoroso' ? 'selected' : ''}>Direto</option></select></label>
                     <label class="nv-settings-option-row nv-settings-option-row--toggle"><span class="nv-settings-option-icon"><i class="fa-solid fa-lock" aria-hidden="true"></i></span><span class="nv-settings-option-copy"><strong>Telemetria local</strong><small>Registra apenas interações genéricas neste navegador. Desativada por padrão; nada é enviado à rede.</small></span><input type="checkbox" data-change="updateAnoraPreference" data-preference="localTelemetry" ${preferences.localTelemetry ? 'checked' : ''} aria-label="Ativar telemetria local"></label></div>`
         };
 
