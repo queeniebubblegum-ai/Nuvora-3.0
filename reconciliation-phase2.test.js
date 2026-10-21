@@ -9,9 +9,9 @@ describe('Conciliação fase 2 — ajustes explicativos', () => {
     ]);
     expect(result).toMatchObject({ totalRecorded: 100, totalAdjustments: 2, explainedTotal: 102, difference: 3, status: RECONCILIATION_STATUS.DIFFERENCE });
   });
-  it('concilia quando ajustes explicam exatamente a diferença, inclusive ID do cartão textual', () => {
+  it('mantém conferência pendente quando ajustes explicam exatamente a diferença, inclusive ID do cartão textual', () => {
     const result = calculateReconciliation([{ valor: 100 }], 102, [{ amount: 2, effect: 'charge' }]);
-    expect(result.status).toBe(RECONCILIATION_STATUS.RECONCILED);
+    expect(result.status).toBe(RECONCILIATION_STATUS.PENDING);
     expect(calculateAdjustmentTotal([{ amount: 2, sign: -1 }, { amount: 1, effect: 'charge' }])).toBe(-1);
   });
 });

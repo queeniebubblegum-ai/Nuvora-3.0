@@ -1,6 +1,6 @@
 // Increment when local application assets change so installed clients fetch
 // the latest modules, including the shared cent-precision money helpers.
-const APP_CACHE_NAME = 'avenera-app-shell-v32';
+const APP_CACHE_NAME = 'avenera-app-shell-v33';
 // Kept as an explicit migration marker so diagnostics can identify and remove
 // the previous shell version after an update.
 const LEGACY_APP_CACHE_NAME = 'avenera-app-shell-v26';
@@ -61,6 +61,11 @@ const LOCAL_ASSETS = [
     './anora-preferences.js',
     './ofx-balance.js',
     './financial-ledger.js',
+    './invoice-model.js',
+    './conferencing-model.js',
+    './reference-matching.js',
+    './conferencing.js',
+    './financial-experience.css',
     './invoice-provisioning.js',
     './invoice-payment.js',
     './reconciliation.js',
@@ -76,6 +81,7 @@ const LOCAL_ASSETS = [
     './import-errors.js',
     './report-data.js',
     './transaction-filters.js',
+    './transaction-drafts.js',
     './transaction-type-menu.js',
     './view-context.js',
     

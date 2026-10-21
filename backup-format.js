@@ -1,9 +1,11 @@
+import { CURRENT_SCHEMA_VERSION } from './schema-migrations.js';
+
 export const BACKUP_METADATA_KEY = '__aveneraBackup';
 export const BACKUP_FORMAT_ID = 'avenera-backup';
-export const BACKUP_SCHEMA_VERSION = 1;
+export const BACKUP_SCHEMA_VERSION = 2;
 
 const ARRAY_COLLECTIONS = [
-    'transacoes', 'bancos', 'cartoes', 'conciliacoesFaturas', 'metas', 'reservas',
+    'transacoes', 'bancos', 'cartoes', 'conciliacoesFaturas', 'historicoAlteracoes', 'conferencias', 'metas', 'reservas',
     'orcamentos', 'notificacoes', 'agendamentos', 'categorias', 'contatos',
     'historicoMentoria', 'receitasFuturas', 'assinaturas', 'investimentos', 'fechamentosMes',
 ];
@@ -55,12 +57,13 @@ export const normalizeBackupDocument = document => {
         if (!isRecord(metadata) || metadata.format !== BACKUP_FORMAT_ID) {
             throw new Error('O formato do backup não é reconhecido.');
         }
-        if (metadata.schemaVersion !== BACKUP_SCHEMA_VERSION) {
+        if (![1, BACKUP_SCHEMA_VERSION].includes(metadata.schemaVersion)) {
             throw new Error('Esta versão do backup não é compatível com esta versão do Avenera.');
         }
     }
 
     const database = cloneJSON(document);
+    if (Number(database.metadados?.schemaVersion || 0) > CURRENT_SCHEMA_VERSION) throw new Error('O backup usa um esquema de dados mais recente. Atualize a Avenera antes de restaurar.');
     delete database[BACKUP_METADATA_KEY];
     for (const collection of REQUIRED_COLLECTIONS) {
         if (!Array.isArray(database[collection])) {

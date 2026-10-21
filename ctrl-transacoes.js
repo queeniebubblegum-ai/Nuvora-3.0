@@ -1,3 +1,4 @@
+import { discardTransactionDraft, transactionOperationId } from './transaction-drafts.js';
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { App } from './app.js';
@@ -15,6 +16,7 @@ const toggleLoadingState = (form, isLoading, text = "Processando...") => {
 };
 
 const markSaved = form => {
+    discardTransactionDraft(form);
     const modal = form?.closest?.('[id^="modal-"]');
     if (modal && (modal.classList.contains('hidden') || modal.getAttribute('aria-hidden') === 'true')) return;
     SubmitFeedback.set(form, 'success', 'Salvo');
@@ -126,13 +128,15 @@ export const TransacoesController = {
         if (!valor || valor <= 0 || !data) { Utils.showToast('Informe valor e data válidos.', 'error'); return; }
         try {
             await Database.addTransfer({
+                transferId: transactionOperationId(form),
                 sourceAccountId: origemId,
                 destinationAccountId: destinoId,
                 amount: valor,
                 date: data,
                 description: desc
             });
-            showTransactionSavedToast('Transferência registrada sem alterar receitas e despesas.');
+            discardTransactionDraft(form);
+            showTransactionSavedToast(`Transferência de ${Utils.formatMoney(valor)} registrada em ${Utils.formatToBR(data)}. Não altera receitas e despesas. Não conferida.`);
             App.closeModal();
         } catch (error) {
             Utils.showToast(error?.message || 'Não foi possível salvar a transferência.', 'error');
@@ -177,7 +181,7 @@ export const TransacoesController = {
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Salvando...");
 
-        setTimeout(async () => {
+        (async () => {
             try {
             if (isCartao) {
                 const cartaoIdSelect = document.getElementById('input-cartao-trans').value;
@@ -193,7 +197,7 @@ export const TransacoesController = {
                 }
 
                 const saved = await Database.addCardExpense({
-                    desc, total: valorTotal, parcelas, cartaoId: cartaoId, categoria, data, contatoId
+                    id: transactionOperationId(form), desc, total: valorTotal, parcelas, cartaoId: cartaoId, categoria, data, contatoId
                 });
                 if (!saved) throw new Error('Não foi possível salvar a compra no cartão.');
                 showTransactionSavedToast(`Despesa lançada no cartão em ${parcelas}x!`);
@@ -204,7 +208,7 @@ export const TransacoesController = {
                     const valorRecorrente = fromCents(toCents(valor));
 
                     const novaTransacao = {
-                        id: Date.now(),
+                        id: transactionOperationId(form),
                         desc: desc + (parcelasRecorrentes > 1 ? ` (1/${parcelasRecorrentes})` : ''), 
                         valor: valorRecorrente, 
                         tipo, categoria, bancoId,
@@ -245,7 +249,7 @@ export const TransacoesController = {
                     showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} registada e agendada para os próximos ${parcelasRecorrentes - 1} meses!`);
                 } else {
                     const saved = await Database.add('transacoes', {
-                        id: Date.now(),
+                        id: transactionOperationId(form),
                         desc, valor, tipo, categoria, bancoId,
                         isCartao: false,
                         formaPagamento: formaPagamento || 'Não informada',
@@ -255,7 +259,7 @@ export const TransacoesController = {
                         contatoId
                     });
                     if (!saved) throw new Error('Não foi possível salvar a transação.');
-                    showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} adicionada com sucesso!`);
+                    showTransactionSavedToast(`${tipo === 'receita' ? 'Receita' : 'Despesa'} de ${Utils.formatMoney(valor)} registrada em ${Utils.formatBankName(db.bancos.find(b => String(b.id) === bancoId))}, ${Utils.formatToBR(data)}. Não conferida.`);
                 }
             }
 
@@ -268,7 +272,7 @@ export const TransacoesController = {
             } finally {
                 SubmitGuard.release(form);
             }
-        }, 350);
+        })();
     },
 
     submitDespesaCartao: (e) => {
@@ -284,7 +288,7 @@ export const TransacoesController = {
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Registrando...");
 
-        setTimeout(async () => {
+        (async () => {
             try {
             const parcelaSelect = document.getElementById('dc-parcelas');
             const parcelasCustom = document.getElementById('dc-parcelas-custom');
@@ -304,7 +308,7 @@ export const TransacoesController = {
             }
 
             const saved = await Database.addCardExpense({
-                desc, total: valorTotal, parcelas, cartaoId, categoria, data, contatoId: null
+                id: transactionOperationId(form), desc, total: valorTotal, parcelas, cartaoId, categoria, data, contatoId: null
             });
             if (!saved) throw new Error('Não foi possível salvar a compra no cartão.');
             showTransactionSavedToast(`Compra lançada em ${parcelas}x!`);
@@ -317,7 +321,7 @@ export const TransacoesController = {
             } finally {
                 SubmitGuard.release(form);
             }
-        }, 350);
+        })();
     },
 
     submitEditTransaction: (e) => {
@@ -331,7 +335,7 @@ export const TransacoesController = {
         SubmitGuard.hold(form);
         toggleLoadingState(form, true, "Atualizando...");
 
-        setTimeout(async () => {
+        (async () => {
             try {
                 const data = document.getElementById('edit-data').value;
                 const categoria = document.getElementById('edit-categoria').value;
@@ -339,7 +343,9 @@ export const TransacoesController = {
                 const contato = db.contatos.find(item => String(item.id) === String(contatoIdRaw));
                 if (contatoIdRaw && !contato) throw new Error('Selecione uma pessoa válida ou deixe o campo em branco.');
                 const contatoId = contato ? contato.id : null;
-                const updated = await Database.updateTransaction(id, { desc, valor, data, categoria, contatoId });
+                const scope = document.getElementById('edit-purchase-scope')?.value || 'one';
+                const purchaseTotal = document.getElementById('edit-purchase-total')?.value;
+                const updated = await Database.updateTransaction(id, { desc, valor, data, categoria, contatoId, scope, purchaseTotal });
 
                 if (updated) {
                     showTransactionSavedToast('Transação atualizada!');
@@ -356,7 +362,7 @@ export const TransacoesController = {
             } finally {
                 SubmitGuard.release(form);
             }
-        }, 350);
+        })();
     },
 
     deleteExpense: (id) => {
@@ -378,7 +384,8 @@ export const TransacoesController = {
             itemsToDelete = [target];
         }
 
-        executeSoftDelete(itemsToDelete, msg);
+        if (!window.confirm(`Apagar ${itemsToDelete.length} lançamento(s)? ${target.isCartao && target.grupoId ? 'Esta ação remove a compra inteira, incluindo parcelas futuras.' : 'O saldo será recalculado.'} Uma conferência afetada será reaberta. Você poderá desfazer por alguns segundos.`)) return;
+        return executeSoftDelete(itemsToDelete, msg);
     },
     
     deleteSelectedTransactions: () => {

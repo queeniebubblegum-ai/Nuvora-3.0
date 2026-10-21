@@ -1,9 +1,10 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { App } from './app.js';
+import { discardTransactionDraft, transactionOperationId } from './transaction-drafts.js';
 
 export const ContasController = {
-    submitBanco: (e) => {
+    submitBanco: async (e) => {
         e.preventDefault();
         const instElement = document.getElementById('banco-instituicao');
         const instituicao = instElement ? instElement.value : 'Outro';
@@ -31,8 +32,8 @@ export const ContasController = {
         };
         const cor = bankColors[instituicao] || 'var(--c-brand-deep)';
 
-        Database.add('bancos', { 
-            id: Date.now(), 
+        await Database.add('bancos', {
+            id: transactionOperationId(e.target),
             nome, 
             saldo, 
             tipo,
@@ -41,13 +42,14 @@ export const ContasController = {
             dataCriacao: Utils.localISODate() // Data âncora para o saldo inicial
         });
         
+        discardTransactionDraft(e.target);
         Utils.showToast('Conta criada com sucesso!', 'success');
         App.closeModal();
         App.updateBankSelect();
         App.scheduleRender();
     },
 
-    submitCartao: (e) => {
+    submitCartao: async (e) => {
         e.preventDefault();
         // Select values are strings, while persisted bank IDs may be numbers or
         // application-generated strings. Resolve against the stored record and
@@ -96,14 +98,18 @@ export const ContasController = {
             }
         }
 
-        Database.add('cartoes', { id: Date.now(), bancoId, modelo, nome, limite, fechamento, vencimento, cor, final });
-        Utils.showToast('Cartão adicionado com sucesso!', 'success');
+        const editId = document.getElementById('cartao-id')?.value;
+        const cardData = { bancoId, modelo, nome, limite, fechamento, vencimento, cor, final };
+        if (editId) await Database.updateCard(editId, cardData);
+        else await Database.add('cartoes', { id: transactionOperationId(e.target), ...cardData });
+        discardTransactionDraft(e.target);
+        Utils.showToast(editId ? 'Cartão atualizado. Ciclos anteriores preservados.' : 'Cartão adicionado com sucesso!', 'success');
         App.closeModal();
         App.updateBankSelect();
         App.scheduleRender();
     },
 
-    submitCategoria: (e) => {
+    submitCategoria: async (e) => {
         e.preventDefault();
         const id = document.getElementById('nova-categoria-id')?.value || '';
         const nome = String(document.getElementById('nova-categoria-nome')?.value || '').trim();
@@ -132,8 +138,8 @@ export const ContasController = {
         const payload = { nome, grupo, tipo, tipoCategoria: nivel, icone, cor,
             ...(palavrasChave !== undefined ? { palavrasChave } : {}) };
         const saved = id
-            ? Database.updateCategory(id, payload)
-            : Database.add('categorias', { id: 'cat_' + Date.now(), ...payload, fixa: false });
+            ? await Database.updateCategory(id, payload)
+            : await Database.add('categorias', { id: 'cat_' + Date.now(), ...payload, fixa: false });
         if (saved) {
             Utils.showToast(id ? 'Categoria atualizada!' : 'Categoria adicionada!', 'success');
             App.updateCategorySelects();

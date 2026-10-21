@@ -1,7 +1,7 @@
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 const arrayCollections = [
-    'transacoes', 'bancos', 'cartoes', 'conciliacoesFaturas', 'metas', 'reservas',
+    'transacoes', 'bancos', 'cartoes', 'conciliacoesFaturas', 'historicoAlteracoes', 'conferencias', 'metas', 'reservas',
     'orcamentos', 'notificacoes', 'agendamentos', 'categorias', 'contatos',
     'historicoMentoria', 'receitasFuturas', 'assinaturas', 'investimentos', 'fechamentosMes'
 ];

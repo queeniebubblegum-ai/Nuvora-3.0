@@ -30,13 +30,18 @@ describe('formato e recuperação de backups', () => {
             exportedAt: '2026-09-24T12:00:00.000Z',
         });
         expect(normalized.database).toEqual(source);
-        expect(normalized).toMatchObject({ totalRecords: 4, isLegacy: false, schemaVersion: 1 });
+        expect(normalized).toMatchObject({ totalRecords: 4, isLegacy: false, schemaVersion: BACKUP_SCHEMA_VERSION });
     });
 
     it('continua aceitando backup legado sem metadados, desde que tenha as coleções centrais', () => {
         const normalized = normalizeBackupDocument({ transacoes: [], bancos: [{ id: 'bank-legacy', saldo: 0 }] });
         expect(normalized).toMatchObject({ totalRecords: 1, isLegacy: true, schemaVersion: 0 });
         expect(normalized.database.bancos).toHaveLength(1);
+    });
+    it('aceita o formato anterior e recusa um esquema financeiro futuro', () => {
+        const previous = { ...sampleDatabase(), [BACKUP_METADATA_KEY]: { format: BACKUP_FORMAT_ID, schemaVersion: 1 } };
+        expect(normalizeBackupDocument(previous).schemaVersion).toBe(1);
+        expect(() => normalizeBackupDocument({ ...previous, metadados: { schemaVersion: 999 } })).toThrow('mais recente');
     });
 
     it('rejeita backup incompleto, coleções inválidas, registros nulos e versões futuras', () => {
@@ -46,7 +51,7 @@ describe('formato e recuperação de backups', () => {
         expect(() => normalizeBackupDocument({ transacoes: [null], bancos: [] })).toThrow('transacoes está inválida');
         expect(() => normalizeBackupDocument({
             transacoes: [], bancos: [],
-            [BACKUP_METADATA_KEY]: { format: BACKUP_FORMAT_ID, schemaVersion: 2 },
+            [BACKUP_METADATA_KEY]: { format: BACKUP_FORMAT_ID, schemaVersion: BACKUP_SCHEMA_VERSION + 1 },
         })).toThrow('não é compatível');
         expect(() => normalizeBackupDocument({
             transacoes: [], bancos: [],

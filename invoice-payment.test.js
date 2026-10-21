@@ -92,9 +92,8 @@ describe('registro local de pagamento de fatura', () => {
         expect(open.indexOf('paymentDate.value =')).toBeLessThan(open.indexOf("App.openModal('modal-pagar-fatura')"));
         expect(confirm).toContain('isValidInvoicePaymentDate(paymentDate)');
         expect(confirm).toContain('db.bancos.some');
-        expect(payment).toContain('invoicePaymentAgendamentoId');
-        expect(payment).toContain('transactionIdCollision');
-        expect(payment).toContain("status: 'pago', bancoId: bank.id, dataPagamento: transaction.data");
+        expect(payment).toContain('Database.recordInvoicePayment');
+        expect(read('db.js')).toContain('schedule.saldoDevedor = fromCents(remaining - value)');
         expect(invoiceBranch).not.toContain('db.bancos[0]');
         expect(cancellation).not.toContain('Database.');
         expect(app).toContain("cancelInvoicePayment: () => App.closeModal(false, 'modal-pagar-fatura')");

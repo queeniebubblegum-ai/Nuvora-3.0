@@ -2,6 +2,7 @@
  * Mantém a conferência separada do status de pagamento da fatura/agendamento.
  */
 import { addMoney, fromCents, toCents } from './money-math.js';
+import { invoiceItemCents } from './financial-ledger.js';
 
 export const RECONCILIATION_STATUS = Object.freeze({
     OPEN: 'em aberto',
@@ -28,6 +29,7 @@ export function listInvoiceTransactions(transactions, card, year, month) {
     return (transactions || []).filter(t => {
         if (!t || !t.isCartao || t.transferenciaInterna) return false;
         if (String(t.bancoId) !== String(card?.id)) return false;
+        if (t.faturaChave) return t.faturaChave === invoiceReconciliationKey(card.id, year, month);
         const date = asDate(t.data);
         return !Number.isNaN(date.getTime()) && date >= start && date <= end;
     });
@@ -61,18 +63,29 @@ export function calculateAdjustmentTotal(adjustments = []) {
     return fromCents(totalCents);
 }
 
-export function calculateReconciliation(transactions, realInvoiceAmount = null, adjustments = []) {
-    const totalRecordedCents = (transactions || []).reduce((sum, t) => sum + toCents(t?.valor), 0);
+export const reconciliationFingerprint = (transactions = [], amount = null, adjustments = []) => JSON.stringify({
+    amount: amount === null ? null : toCents(amount),
+    items: transactions.map(t => [String(t.id), t.data, t.tipo, toCents(t.valor), t.desc]).sort((a, b) => a[0].localeCompare(b[0])),
+    adjustments: adjustments.map(a => [String(a.id), a.effect, toCents(a.amount), a.description, a.transactionId || null]).sort((a, b) => a[0].localeCompare(b[0]))
+});
+
+export const transactionFingerprint = t => JSON.stringify([String(t.id), t.data, t.tipo, toCents(t.valor), t.desc, String(t.bancoId)]);
+
+export function calculateReconciliation(transactions, realInvoiceAmount = null, adjustments = [], evidence = {}) {
+    const totalRecordedCents = (transactions || []).reduce((sum, t) => sum + invoiceItemCents(t), 0);
     const totalRecorded = fromCents(totalRecordedCents);
-    const totalAdjustments = calculateAdjustmentTotal(adjustments);
+    const postedIds = new Set((transactions || []).map(t => String(t.id)));
+    const totalAdjustments = calculateAdjustmentTotal(adjustments.filter(a => !a.transactionId || !postedIds.has(String(a.transactionId))));
     const explainedTotal = addMoney(totalRecorded, totalAdjustments);
     const hasRealAmount = realInvoiceAmount !== null && realInvoiceAmount !== undefined && realInvoiceAmount !== '' && Number.isFinite(Number(realInvoiceAmount));
     const realAmount = hasRealAmount ? roundCurrency(realInvoiceAmount) : null;
     const difference = realAmount === null ? null : addMoney(realAmount, -explainedTotal);
     let status;
     if (realAmount === null) status = totalRecorded > 0 || adjustments.length ? RECONCILIATION_STATUS.PENDING : RECONCILIATION_STATUS.OPEN;
-    else status = Math.abs(difference) <= 0.01 ? RECONCILIATION_STATUS.RECONCILED : RECONCILIATION_STATUS.DIFFERENCE;
-    return { totalRecorded, totalAdjustments, explainedTotal, realInvoiceAmount: realAmount, difference, status };
+    else if (toCents(difference) !== 0) status = RECONCILIATION_STATUS.DIFFERENCE;
+    else status = evidence.confirmedAt && evidence.confirmedFingerprint === reconciliationFingerprint(transactions, realAmount, adjustments)
+        ? RECONCILIATION_STATUS.RECONCILED : RECONCILIATION_STATUS.PENDING;
+    return { totalRecorded, totalAdjustments, explainedTotal, realInvoiceAmount: realAmount, difference, status, totalMatches: realAmount !== null && toCents(difference) === 0 };
 }
 
 export function invoiceReconciliationKey(cardId, year, month) {

@@ -71,6 +71,7 @@ export const CSVManager = {
         reader.onload = () => {
             try {
                 const rows = CSVImport.parse(reader.result);
+                if (rows.rejectedCount) throw new Error(`${rows.rejectedCount} linha(s) possuem data ou valor inválido. Revise o arquivo antes de importar; nenhum lançamento foi salvo.`);
                 viewState.tipoImportacao = 'CSV';
                 viewState.rawOfxString = null;
                 viewState.ofxPendenteSaldoFinal = null;
@@ -79,7 +80,7 @@ export const CSVManager = {
                 CSVManager.prepareReview(viewState, openModalCallback);
             } catch (error) {
                 const importError = asImportError(error);
-                Utils.showToast(importError.message, 'error', {
+                Utils.showToast(error.message || importError.message, 'error', {
                     action: { action: 'iniciarImportacaoCSV', label: 'Escolher outro arquivo', payload: viewState.bancoAlvoOFX || '' }
                 });
             }

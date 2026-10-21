@@ -1,3 +1,4 @@
+import { isValidTransferDate } from './financial-transfers.js';
 const parseMoney = (raw) => {
     const text = String(raw ?? '').replace(/R\$\s?/gi, '').replace(/\s/g, '');
     if (!text) return 0;
@@ -16,7 +17,7 @@ const parseDate = (raw) => {
         if (date.getFullYear() !== Number(y) || date.getMonth() !== Number(m) - 1 || date.getDate() !== Number(d)) return null;
         return `${y}-${m}-${d}`;
     }
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return isValidTransferDate(value) ? value : null;
     return null;
 };
 
@@ -46,11 +47,13 @@ export const CSVImport = {
         const descIndex = find(['descricao', 'description', 'historico', 'memo']);
         const idIndex = find(['identificador', 'id', 'identifier', 'fitid']);
         if (dateIndex === undefined || valueIndex === undefined) throw new ImportError(IMPORT_ERROR_CODES.CSV_INVALID_FORMAT);
-        const rows = lines.slice(1).map(line => {
+        const candidates = lines.slice(1).map(line => {
             const cells = splitLine(line, delimiter);
             const signed = parseMoney(cells[valueIndex]);
             return { data: parseDate(cells[dateIndex]), identificador: idIndex === undefined ? '' : (cells[idIndex] || ''), desc: cells[descIndex] || 'Lançamento importado', valor: Math.abs(signed), tipo: signed >= 0 ? 'receita' : 'despesa', importadoCSV: true };
-        }).filter(item => item.data && item.valor > 0);
+        });
+        const rows = candidates.filter(item => item.data && item.valor > 0);
+        Object.defineProperty(rows, 'rejectedCount', { value: candidates.length - rows.length });
         if (!rows.length) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
         return rows;
     }

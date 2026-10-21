@@ -1,3 +1,4 @@
+import { isValidTransferDate } from './financial-transfers.js';
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { ImportError, IMPORT_ERROR_CODES, asImportError } from './import-errors.js';
@@ -23,7 +24,7 @@ export const OFXManager = {
                 OFXManager.processarEVerificarDuplicidades(event.target.result, bancoIdPrevio, viewState, renderCallback, openModalCallback);
             } catch (error) {
                 const importError = asImportError(error, IMPORT_ERROR_CODES.OFX_INVALID_FORMAT);
-                Utils.showToast(importError.message, 'error', {
+                Utils.showToast(error.message || importError.message, 'error', {
                     action: { action: 'iniciarImportacaoOFX', label: 'Escolher outro arquivo', payload: bancoIdPrevio }
                 });
             } finally { e.target.value = ''; }
@@ -58,6 +59,7 @@ export const OFXManager = {
         const parsedData = Utils.parseOFX(raw);
         const transacoesOFX = parsedData.transactions;
         if (!transacoesOFX.length) throw new ImportError(IMPORT_ERROR_CODES.EMPTY_FILE);
+        if (transacoesOFX.some(t => !isValidTransferDate(t.data) || !Number.isFinite(t.valor) || t.valor <= 0)) throw new Error('O extrato contém data ou valor inválido. Revise o arquivo; nenhum lançamento foi salvo.');
 
         const selectBanco = document.getElementById('ofx-banco-alvo-id');
         if (selectBanco) {
@@ -114,6 +116,8 @@ export const OFXManager = {
             const isRetroativa = dataCriacaoBanco && dataOfx <= dataCriacaoBanco;
 
             const duplicata = bancoId ? transacoesExistentes.find(t => {
+                if (t.tipo !== ofx.tipo || t.isCartao) return false;
+                if (ofx.identificador && t.codigoRef === ofx.identificador) return true;
                 if (Math.abs(Math.abs(t.valor) - Math.abs(ofx.valor)) > 0.01) return false;
                 
                 const dataT = new Date(t.data + 'T12:00:00');
@@ -291,7 +295,7 @@ export const OFXManager = {
                 valor: item.valor,
                 tipo: item.tipo,
                 categoria: categoriaInferida,
-                bancoId: Number(bancoId),
+                bancoId: bancoAlvo?.id ?? bancoId,
                 isCartao: false,
                 formaPagamento: item.formaPagamento || 'Transferência',
                 observacoes: item.observacao,
@@ -339,7 +343,7 @@ export const OFXManager = {
         document.body.appendChild(undoButton);
         setTimeout(() => undoButton.remove(), 8000);
         const historico = JSON.parse(localStorage.getItem('nuvora_importacoes') || '[]');
-        historico.unshift({ data: new Date().toISOString(), origem: viewState.tipoImportacao, quantidade: transacoesImportadas.length, bancoId: Number(bancoId) });
+        historico.unshift({ data: new Date().toISOString(), origem: viewState.tipoImportacao, quantidade: transacoesImportadas.length, bancoId: bancoAlvo?.id ?? bancoId });
         localStorage.setItem('nuvora_importacoes', JSON.stringify(historico.slice(0, 10)));
 
         Utils.showToast(`${itensParaSalvar.length} transações importadas com sucesso!`, 'success');

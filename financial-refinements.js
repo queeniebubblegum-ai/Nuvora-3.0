@@ -88,7 +88,7 @@ const parseDate = value => {
 
 const startOfDay = date => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const endOfMonth = date => new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59, 999);
-const amount = item => Math.abs(asFiniteNumber(item?.valor ?? item?.value) || 0);
+const amount = item => Math.abs(asFiniteNumber(item?.saldoDevedor ?? item?.valor ?? item?.value) || 0);
 const dateFrom = item => item?.dataVencimento || item?.data || item?.proximaCobranca || item?.dataProximaCobranca;
 const completedStatuses = new Set(['pago', 'recebida', 'recebido', 'concluido', 'concluida', 'quitado', 'quitada', 'realizado', 'realizada', 'cancelado', 'cancelada']);
 

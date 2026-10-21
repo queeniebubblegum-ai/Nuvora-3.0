@@ -23,6 +23,7 @@ export const ChartFluxo = {
             instances.reportsFluxo = null;
         }
         if (!canvas) return;
+        if (typeof Chart === 'undefined') { canvas.setAttribute('aria-label', 'Gráfico indisponível. Consulte os valores e a tabela deste relatório.'); return; }
 
         const model = buildCashflowModel(dbData, state?.reportCashflowPeriod || 1);
         if (!model.hasMovement) return;
