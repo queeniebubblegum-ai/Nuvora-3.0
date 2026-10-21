@@ -49,8 +49,7 @@ describe('navegação direta para agenda, metas e orçamento', () => {
             expect(html).toContain(`data-nav-group="${group}"`);
         }
         expect(html).toContain('nv-sidebar__group-chevron');
-        expect(renderer).toContain("if (!group.dataset.initialized || [...group.querySelectorAll('.nav-item')].some");
-        expect(renderer).toContain("group.dataset.initialized = 'true'");
+        expect(renderer).toContain("group.open = [...group.querySelectorAll('.nav-item')].some");
         expect(css).toContain('.nv-sidebar__group-toggle:focus-visible');
         expect(css).toContain('.nv-sidebar__group[open] .nv-sidebar__group-chevron');
     });

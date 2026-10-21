@@ -11,12 +11,5 @@ if (probe.status !== 0) {
 
 const args = process.argv.slice(2);
 const npxCommand = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-// Windows exposes npx as a .cmd shim. It needs shell resolution when this
-// script is launched through npm; without it spawnSync can return status null
-// and hide the actual Playwright result.
-const result = spawnSync(npxCommand, ['playwright', 'test', '-c', 'playwright.config.js', ...args], {
-    stdio: 'inherit',
-    shell: process.platform === 'win32'
-});
-if (result.error) console.error('Falha ao iniciar os testes visuais:', result.error.message);
+const result = spawnSync(npxCommand, ['playwright', 'test', '-c', 'playwright.config.js', ...args], { stdio: 'inherit' });
 process.exit(result.status ?? 1);

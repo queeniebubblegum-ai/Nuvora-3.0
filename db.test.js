@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { db, Database, BankRepo, CardRepo, CategoryRepo, TransactionsRepo, BudgetRepo, GoalRepo, __setTransactionPersistenceWriterForTests } from './db.js';
+import { db, Database, BankRepo, CardRepo, CategoryRepo, TransactionsRepo, BudgetRepo, GoalRepo } from './db.js';
 import { toCents } from './money-math.js';
 
 // Mock do localStorage para garantir um ambiente limpo isolado do navegador real
@@ -20,7 +20,6 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
     beforeEach(() => {
         // Limpa o mock e reseta o banco de dados na memória antes de cada teste
         window.localStorage.clear();
-        __setTransactionPersistenceWriterForTests();
         db.transacoes = [];
         db.bancos = [
             { id: 1, nome: 'Conta Principal', saldo: 1000, saldoInicial: 1000, cor: 'blue' }
@@ -53,12 +52,12 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(toCents(db.orcamentos.find(o => o.categoria === 'Serviços').limite)).toBe(30);
     });
 
-    it('Deve recalcular corretamente o saldo da conta bancária (Soma de Receitas e Despesas)', async () => {
-        await TransactionsRepo.add({
+    it('Deve recalcular corretamente o saldo da conta bancária (Soma de Receitas e Despesas)', () => {
+        TransactionsRepo.add({
             id: 1, desc: 'Salário', valor: 5000, tipo: 'receita', bancoId: 1, isCartao: false, data: new Date().toISOString().split('T')[0]
         });
         
-        await TransactionsRepo.add({
+        TransactionsRepo.add({
             id: 2, desc: 'Aluguel', valor: 1500, tipo: 'despesa', bancoId: 1, isCartao: false, data: new Date().toISOString().split('T')[0]
         });
 
@@ -66,47 +65,22 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(db.bancos[0].saldo).toBe(4500);
     });
 
-    it('rejeita falha de persistência e restaura transações, saldo, metadados e não emite sucesso', async () => {
-        const previousMetadata = { ultimaAtualizacao: '2026-09-01T00:00:00.000Z' };
-        db.metadados = previousMetadata;
-        const updated = vi.fn();
-        document.addEventListener('db-updated', updated);
-        __setTransactionPersistenceWriterForTests(async () => { throw new Error('quota simulada'); });
-
-        await expect(Database.add('transacoes', {
-            id: 'write-failure', desc: 'Despesa', valor: 25, tipo: 'despesa', bancoId: 1, data: '2026-09-10'
-        })).rejects.toThrow('quota simulada');
-
-        expect(db.transacoes).toEqual([]);
-        expect(db.bancos[0].saldo).toBe(1000);
-        expect(db.metadados).toEqual(previousMetadata);
-        await expect(Database.addTransactionsAtomically([{
-            id: 'anchored-write-failure', desc: 'Importação', valor: 20, tipo: 'despesa', bancoId: 1,
-            saldoIncluidoNoSaldoDoExtrato: true, data: '2026-09-11'
-        }], { bankId: 1, absoluteBalance: 1400 })).rejects.toThrow('quota simulada');
-        expect(db.transacoes).toEqual([]);
-        expect(db.bancos[0].saldo).toBe(1000);
-        expect(db.metadados).toEqual(previousMetadata);
-        expect(updated).not.toHaveBeenCalled();
-        document.removeEventListener('db-updated', updated);
-    });
-
-    it('não reaplica nem reverte transações já incluídas no saldo final confirmado do OFX', async () => {
-        await TransactionsRepo.add({
+    it('não reaplica nem reverte transações já incluídas no saldo final confirmado do OFX', () => {
+        TransactionsRepo.add({
             id: 'ofx-anchored-1', desc: 'Compra do extrato', valor: 100, tipo: 'despesa', bancoId: 1,
             isCartao: false, saldoIncluidoNoSaldoDoExtrato: true, data: '2026-08-02'
         });
         expect(db.bancos[0].saldo).toBe(1000);
 
-        await TransactionsRepo.update('ofx-anchored-1', { valor: 150 });
+        TransactionsRepo.update('ofx-anchored-1', { valor: 150 });
         expect(db.bancos[0].saldo).toBe(1000);
 
-        await TransactionsRepo.delete('ofx-anchored-1');
+        TransactionsRepo.delete('ofx-anchored-1');
         expect(db.bancos[0].saldo).toBe(1000);
     });
 
-    it('Deve isolar transações de cartão de crédito do recálculo de saldo da conta corrente', async () => {
-        await TransactionsRepo.add({
+    it('Deve isolar transações de cartão de crédito do recálculo de saldo da conta corrente', () => {
+        TransactionsRepo.add({
             id: 3, desc: 'Compra Cartão', valor: 300, tipo: 'despesa', bancoId: 99, isCartao: true, data: new Date().toISOString().split('T')[0]
         });
 
@@ -114,7 +88,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(db.bancos[0].saldo).toBe(1000);
     });
 
-    it('Deve dividir corretamente o valor das parcelas do cartão de crédito compensando dízimas periódicas', async () => {
+    it('Deve dividir corretamente o valor das parcelas do cartão de crédito compensando dízimas periódicas', () => {
         const compra = {
             id: 100,
             desc: 'Geladeira',
@@ -125,7 +99,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
             data: new Date().toISOString().split('T')[0]
         };
 
-        await TransactionsRepo.addCardExpense(compra);
+        TransactionsRepo.addCardExpense(compra);
 
         const transacoesCartao = db.transacoes.filter(t => t.grupoId === 100 || t.id === 100);
         
@@ -141,8 +115,8 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         
         expect(t1.valor + t2.valor + t3.valor).toBe(1000);
     });
-    it('divide valores pequenos de compra no cartão sem perder centavos', async () => {
-        await TransactionsRepo.addCardExpense({
+    it('divide valores pequenos de compra no cartão sem perder centavos', () => {
+        TransactionsRepo.addCardExpense({
             id: 'small-purchase', desc: 'Compra pequena', total: 0.1, parcelas: 3,
             cartaoId: 99, categoria: 'Compras', data: '2026-08-10'
         });
@@ -154,8 +128,8 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         expect(parcelas.reduce((sum, t) => sum + toCents(t.valor), 0)).toBe(10);
     });
 
-    it('repete o valor por ocorrência da recorrência, normalizado em centavos', async () => {
-        await TransactionsRepo.addRecurrent({
+    it('repete o valor por ocorrência da recorrência, normalizado em centavos', () => {
+        TransactionsRepo.addRecurrent({
             desc: 'Mensalidade', valor: 0.1, tipo: 'despesa', bancoId: 1,
             isCartao: false, data: '2026-08-31'
         }, 3);
@@ -278,7 +252,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
     });
 
     it('permite remover pagamento de fatura de uma perna sem confundi-lo com transferência órfã', async () => {
-        await TransactionsRepo.add({ id: 'invoice-payment-row', tipo: 'pagamento-fatura', transferenciaInterna: true, valor: 75, bancoId: 1, data: '2026-09-23' });
+        TransactionsRepo.add({ id: 'invoice-payment-row', tipo: 'pagamento-fatura', transferenciaInterna: true, valor: 75, bancoId: 1, data: '2026-09-23' });
         expect(db.bancos[0].saldo).toBe(925);
         await Database.remove('transacoes', 'invoice-payment-row');
         expect(db.transacoes).toHaveLength(0);
@@ -295,7 +269,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
 
     it('remove uma seleção mista de transferências e lançamentos comuns e restaura todo o snapshot', async () => {
         db.bancos.push({ id: 2, nome: 'Conta secundária', saldo: 200 });
-        await TransactionsRepo.add({ id: 'ordinary-row', desc: 'Despesa', valor: 25, tipo: 'despesa', bancoId: 1, data: '2026-09-23' });
+        TransactionsRepo.add({ id: 'ordinary-row', desc: 'Despesa', valor: 25, tipo: 'despesa', bancoId: 1, data: '2026-09-23' });
         const transfer = await Database.addTransfer({ sourceAccountId: 1, destinationAccountId: 2, amount: 100, date: '2026-09-23' });
         const originalBalancesAfterAdds = db.bancos.map(bank => bank.saldo);
         const removed = await Database.removeMultiple('transacoes', ['ordinary-row', transfer.transactions[0].id]);
@@ -312,7 +286,7 @@ describe('Lógica Matemática e Repositórios - db.js', () => {
         const previousTransactions = [...db.transacoes];
         const previousBalances = db.bancos.map(bank => bank.saldo);
         await expect(Database.addTransfer({ sourceAccountId: 1, destinationAccountId: 1, amount: 5, date: '2026-09-23' })).rejects.toThrow();
-        expect(await TransactionsRepo.add({ id: 'orphan-add', transferenciaId: 'transfer-orphan-add', transferenciaInterna: true, tipo: 'despesa', transferenciaEntrada: false, bancoId: 1, valor: 5 })).toBe(false);
+        expect(TransactionsRepo.add({ id: 'orphan-add', transferenciaId: 'transfer-orphan-add', transferenciaInterna: true, tipo: 'despesa', transferenciaEntrada: false, bancoId: 1, valor: 5 })).toBe(false);
         expect(db.transacoes).toEqual(previousTransactions);
         expect(db.bancos.map(bank => bank.saldo)).toEqual(previousBalances);
     });

@@ -1,9 +1,8 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { db, ReconciliationRepo, __setTransactionPersistenceWriterForTests } from './db.js';
+import { db, ReconciliationRepo } from './db.js';
 
 describe('Postagem idempotente dos ajustes de fatura', () => {
   beforeEach(() => {
-    __setTransactionPersistenceWriterForTests();
     db.transacoes = [];
     db.bancos = [{ id: 'bank-1', saldo: 1000 }];
     db.cartoes = [{ id: 'card-1', bancoId: 'bank-1', fechamento: 20, vencimento: 10 }];
@@ -11,10 +10,10 @@ describe('Postagem idempotente dos ajustes de fatura', () => {
     db.categorias = [{ nome: 'Encargos financeiros' }, { nome: 'Reembolso / estorno' }];
   });
 
-  it('creates a linked expense on the due date and does not duplicate on repeat', async () => {
+  it('creates a linked expense on the due date and does not duplicate on repeat', () => {
     const a = ReconciliationRepo.saveAdjustment('card-1', 2026, 7, { id: 'aj-1', type: 'interest', description: 'Juros', amount: 12, effect: 'charge' });
-    const first = await ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, a.id);
-    const second = await ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, a.id);
+    const first = ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, a.id);
+    const second = ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, a.id);
     expect(first.ok).toBe(true);
     expect(second.alreadyExists).toBe(true);
     expect(db.transacoes).toHaveLength(1);
@@ -22,14 +21,14 @@ describe('Postagem idempotente dos ajustes de fatura', () => {
     expect(ReconciliationRepo.listAdjustments('card-1', 2026, 7)[0].lancamentoCriado).toBe(true);
   });
 
-  it('posts a refund as positive income and links it without touching card purchases', async () => {
+  it('posts a refund as positive income and links it without touching card purchases', () => {
     ReconciliationRepo.saveAdjustment('card-1', 2026, 7, { id: 'aj-ref', type: 'refund', description: 'Estorno', amount: 5, effect: 'credit' });
-    const result = await ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, 'aj-ref');
+    const result = ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, 'aj-ref');
     expect(result.transaction).toMatchObject({ tipo: 'receita', valor: 5, isCartao: false, origem: 'conciliacao_fatura' });
     expect(db.bancos[0].saldo).toBe(1005);
   });
 
-  it('normalizes saved invoice amounts and adjustments to exact cents before posting', async () => {
+  it('normalizes saved invoice amounts and adjustments to exact cents before posting', () => {
     ReconciliationRepo.saveAmount('card-1', 2026, 7, 0.1 + 0.2);
     const saved = ReconciliationRepo.saveAdjustment('card-1', 2026, 7, {
       id: 'aj-cents', type: 'interest', description: 'Juros', amount: 0.1 + 0.2, effect: 'charge'
@@ -37,7 +36,7 @@ describe('Postagem idempotente dos ajustes de fatura', () => {
 
     expect(ReconciliationRepo.get('card-1', 2026, 7).valorFaturaReal).toBe(0.3);
     expect(saved.amount).toBe(0.3);
-    const posted = await ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, 'aj-cents');
+    const posted = ReconciliationRepo.createAdjustmentTransaction('card-1', 2026, 7, 'aj-cents');
     expect(posted.transaction.valor).toBe(0.3);
     expect(db.bancos[0].saldo).toBe(999.7);
   });

@@ -1,8 +1,7 @@
 import { db, Database } from './db.js';
 import { Utils } from './utils.js';
 import { ImportError, IMPORT_ERROR_CODES, asImportError } from './import-errors.js';
-import { shouldAnchorImportedTransactionsToStatementBalance, statementBalanceAnchorMetadata, normalizeStatementBalance, statementBalanceAdjustment } from './ofx-balance.js';
-import { CSVManager } from './csv-manager.js';
+import { shouldAnchorImportedTransactionsToStatementBalance, statementBalanceAnchorMetadata, normalizeStatementBalance, statementBalanceAdjustment, reverseStatementBalanceAdjustment } from './ofx-balance.js';
 
 export const OFXManager = {
     iniciarImportacaoOFX: (bancoId, viewState) => {
@@ -39,15 +38,8 @@ export const OFXManager = {
     },
 
     handleOfxBancoChange: (novoBancoId, viewState, renderCallback, openModalCallback) => {
-        viewState.bancoAlvoOFX = novoBancoId || '';
-        if (viewState.tipoImportacao === 'CSV') {
-            CSVManager.handleBancoChange(novoBancoId, viewState, openModalCallback);
-            renderCallback?.();
-            return;
-        }
         if(viewState.rawOfxString) {
             OFXManager.processarEVerificarDuplicidades(viewState.rawOfxString, novoBancoId, viewState, renderCallback, openModalCallback);
-            renderCallback?.();
         }
     },
 
@@ -243,7 +235,7 @@ export const OFXManager = {
         }
     },
 
-    salvarOFXAprovado: async (viewState, closeModalCallback, scheduleRenderCallback) => {
+    salvarOFXAprovado: (viewState, closeModalCallback, scheduleRenderCallback) => {
         const selectBanco = document.getElementById('ofx-banco-alvo-id');
         const bancoId = selectBanco ? selectBanco.value : '';
         const chkSaldo = document.getElementById('ofx-confirmar-saldo');
@@ -262,30 +254,36 @@ export const OFXManager = {
         const saldoFinalAplicado = anchorMetadata.saldoIncluidoNoSaldoDoExtrato === true;
         const itensParaSalvar = viewState.ofxPendente.filter(i => i.selecionado);
         const bancoAlvo = db.bancos.find(b => String(b.id) === String(bancoId));
-        if (saldoFinalAplicado && !bancoAlvo) {
-            Utils.showToast('Não foi possível localizar a conta selecionada.', 'error');
-            return;
+        let saldoAjusteReversivel = 0;
+
+        if (saldoFinalAplicado) {
+            if (!bancoAlvo) {
+                Utils.showToast('Não foi possível localizar a conta selecionada.', 'error');
+                return;
+            }
+            const saldoAnterior = normalizeStatementBalance(bancoAlvo.saldo);
+            bancoAlvo.saldo = normalizeStatementBalance(statementBalance);
+            saldoAjusteReversivel = statementBalanceAdjustment(bancoAlvo.saldo, saldoAnterior);
+            Database.save('bancos');
         }
-        const saldoAjusteReversivel = saldoFinalAplicado
-            ? statementBalanceAdjustment(statementBalance, bancoAlvo?.saldo)
-            : 0;
 
         if (itensParaSalvar.length === 0 && !saldoFinalAplicado) {
             Utils.showToast('Nenhum item selecionado e saldo não atualizado.', 'warning');
             return;
         }
 
-        const transacoesParaSalvar = itensParaSalvar.map(item => {
+        const transacoesImportadas = [];
+        itensParaSalvar.forEach(item => {
             let categoriaInferida = item.categoria || 'Outros';
             const itemDescLimpa = item.desc.toLowerCase();
-
+            
             if (!item.categoria) {
                 if (itemDescLimpa.includes('uber') || itemDescLimpa.includes('posto')) categoriaInferida = 'Transporte';
                 else if (itemDescLimpa.includes('mercado') || itemDescLimpa.includes('ifood')) categoriaInferida = 'Alimentação';
                 else if (itemDescLimpa.includes('salario') || itemDescLimpa.includes('rendimento')) categoriaInferida = 'Salário';
             }
 
-            return {
+            const transacaoImportada = {
                 id: Date.now() + Math.floor(Math.random() * 1000),
                 desc: item.desc,
                 valor: item.valor,
@@ -293,7 +291,7 @@ export const OFXManager = {
                 categoria: categoriaInferida,
                 bancoId: Number(bancoId),
                 isCartao: false,
-                formaPagamento: item.formaPagamento || 'Transferência',
+                formaPagamento: item.formaPagamento || 'Transferência', 
                 observacoes: item.observacao,
                 data: item.data,
                 codigoRef: item.identificador || `OFX-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
@@ -301,20 +299,9 @@ export const OFXManager = {
                 importadoCSV: viewState.tipoImportacao === 'CSV',
                 ...anchorMetadata
             };
+            Database.add('transacoes', transacaoImportada);
+            transacoesImportadas.push(transacaoImportada);
         });
-
-        let transacoesImportadas;
-        try {
-            transacoesImportadas = await Database.addTransactionsAtomically(transacoesParaSalvar, saldoFinalAplicado
-                ? { bankId: bancoAlvo.id, absoluteBalance: normalizeStatementBalance(statementBalance) }
-                : {});
-            if (!Array.isArray(transacoesImportadas) || transacoesImportadas.length !== transacoesParaSalvar.length) {
-                throw new Error('A importação não pôde ser salva integralmente.');
-            }
-        } catch (error) {
-            Utils.showToast(error?.message || 'Não foi possível salvar a importação. Nenhum lançamento foi confirmado.', 'error');
-            return;
-        }
 
         const undoButton = document.createElement('button');
         undoButton.className = 'fixed bottom-10 left-1/2 -translate-x-1/2 bg-brand-deep text-white px-5 py-3 rounded-xl shadow-2xl z-[9999] text-sm font-bold';
@@ -325,9 +312,14 @@ export const OFXManager = {
         undoButton.onclick = async () => {
             undoButton.disabled = true;
             try {
-                await Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id), saldoFinalAplicado && saldoAjusteReversivel !== 0
-                    ? { reverseBalanceAdjustment: { bankId: bancoId, amount: saldoAjusteReversivel } }
-                    : {});
+                await Database.removeMultiple('transacoes', transacoesImportadas.map(t => t.id));
+                if (saldoFinalAplicado && saldoAjusteReversivel !== 0) {
+                    const bancoAtual = db.bancos.find(b => String(b.id) === String(bancoId));
+                    if (bancoAtual) {
+                        bancoAtual.saldo = reverseStatementBalanceAdjustment({ currentBalance: bancoAtual.saldo, adjustment: saldoAjusteReversivel });
+                        Database.save('bancos');
+                    }
+                }
                 undoButton.remove();
                 Utils.showToast('Importação desfeita.', 'success');
                 if (scheduleRenderCallback) scheduleRenderCallback();
